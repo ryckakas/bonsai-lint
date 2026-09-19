@@ -1,0 +1,56 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/bonsai-core",
+    "crates/bonsai-lang-php",
+    "crates/bonsai-lang-ts",
+    "crates/bonsai-lint",
+    "crates/bonsai-cli",
+    "crates/bonsai-testkit",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+license = "MIT"
+repository = "https://github.com/ryckakas/bonsai-lint"
+homepage = "https://github.com/ryckakas/bonsai-lint"
+
+[workspace.dependencies]
+bonsai-core = { path = "crates/bonsai-core", version = "0.1.0" }
+bonsai-lang-php = { path = "crates/bonsai-lang-php", version = "0.1.0" }
+bonsai-lang-ts = { path = "crates/bonsai-lang-ts", version = "0.1.0" }
+bonsai-lint = { path = "crates/bonsai-lint", version = "0.1.0", default-features = false }
+bonsai-testkit = { path = "crates/bonsai-testkit", version = "0.1.0" }
+tree-sitter = "0.27"
+tree-sitter-php = "0.24"
+tree-sitter-typescript = "0.23"
+clap = { version = "4", features = ["derive"] }
+ignore = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+globset = "0.4"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dist]
+inherits = "release"
+lto = "thin"

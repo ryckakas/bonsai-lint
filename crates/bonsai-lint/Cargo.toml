@@ -1,0 +1,28 @@
+[package]
+name = "bonsai-lint"
+description = "Language-agnostic cognitive complexity linter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = ["php", "ts"]
+php = ["dep:bonsai-lang-php"]
+ts = ["dep:bonsai-lang-ts"]
+
+[dependencies]
+bonsai-core = { workspace = true }
+bonsai-lang-php = { workspace = true, optional = true }
+bonsai-lang-ts = { workspace = true, optional = true }
+tree-sitter = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+globset = { workspace = true }
+ignore = { workspace = true }
+
+[lints]
+workspace = true

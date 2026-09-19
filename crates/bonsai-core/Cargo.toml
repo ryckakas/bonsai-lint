@@ -1,0 +1,15 @@
+[package]
+name = "bonsai-core"
+description = "Language-agnostic cognitive complexity scoring over tree-sitter trees"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+tree-sitter = { workspace = true }
+
+[lints]
+workspace = true

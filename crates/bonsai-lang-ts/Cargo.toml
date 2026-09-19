@@ -1,0 +1,20 @@
+[package]
+name = "bonsai-lang-ts"
+description = "JavaScript and TypeScript language support for bonsai-lint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+bonsai-core = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-typescript = { workspace = true }
+
+[dev-dependencies]
+bonsai-testkit = { workspace = true }
+
+[lints]
+workspace = true
