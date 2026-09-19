@@ -2,14 +2,14 @@
 
 ![bonsai-lint — cognitive complexity linter for PHP, JavaScript and TypeScript](docs/images/cover-hero.png)
 
-**Find the code that's hard to read — in seconds, across your whole monorepo.**
+**Find the code that's hard to read — in seconds, in one project or a whole monorepo.**
 
 *Bonsai — the art of keeping a tree small enough to take in at a glance. Same idea, applied to
 your syntax trees.*
 
-A cognitive complexity linter written in Rust. One static binary for PHP, JavaScript and
-TypeScript. No PHP runtime, no Node runtime, no Composer entry, nothing added to your project.
-Scans **1.25 million lines in 3.5 seconds**.
+A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript and
+TypeScript — use it for any one of them, or all three at once. No PHP runtime, no Node runtime,
+no Composer entry, nothing added to your project. Scans **1.25 million lines in 3.5 seconds**.
 
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bonsai-lint?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/bonsai-lint)
@@ -19,11 +19,12 @@ Scans **1.25 million lines in 3.5 seconds**.
 
 ## Why this one
 
-- **One tool for the whole repo.** A PHP backend and a TypeScript frontend score on the same
-  metric, in one pass, with one number. The same logic written in either language gets the
-  same score — that is the point, and it is tested.
-- **No runtime, no plugins, no conflicts.** Nothing to wire into your PHPStan or ESLint setup,
-  no plugin versions to keep in step, no Composer entry. A 6 MB binary, 1 MB to download — or
+- **One language, or all of them.** Point it at a PHP project and it is a PHP linter; point it
+  at a TypeScript one and it is a TypeScript linter. Nothing to configure either way. Point it at
+  both and they score on one metric in one pass — the same logic written in either language gets
+  the same number, and that is tested.
+- **No runtime, no plugins, no conflicts.** Nothing to wire into a PHPStan or ESLint setup, no
+  plugin versions to keep in step, no Composer entry. A 6 MB binary, 1 MB to download — or
   `npx bonsai-lint` and install nothing at all.
 - **Never executes your code.** Syntax-only: no autoloader, no reflection, no module
   resolution. Safe to point at third-party or untrusted source.
