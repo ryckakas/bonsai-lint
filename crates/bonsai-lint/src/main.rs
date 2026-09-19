@@ -11,7 +11,7 @@ use clap::{Parser as ClapParser, ValueEnum};
 
 #[derive(ClapParser)]
 #[command(
-    name = "bonsai",
+    name = "bonsai-lint",
     version,
     about = "Cognitive complexity linter for PHP, JS and TS"
 )]

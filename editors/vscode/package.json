@@ -1,6 +1,6 @@
 {
   "name": "bonsai-lint",
-  "displayName": "bonsai \u2014 cognitive complexity for PHP, JS and TS",
+  "displayName": "bonsai-lint \u2014 cognitive complexity for PHP, JS and TS",
   "description": "Flags functions that are hard to read, across PHP, JavaScript and TypeScript. Rust-powered, no runtime required.",
   "version": "0.1.0",
   "publisher": "RicardasKauneckas",
@@ -36,19 +36,19 @@
   "main": "./out/extension.js",
   "contributes": {
     "configuration": {
-      "title": "bonsai",
+      "title": "bonsai-lint",
       "properties": {
-        "bonsai.enable": {
+        "bonsai-lint.enable": {
           "type": "boolean",
           "default": true,
           "description": "Report cognitive complexity."
         },
-        "bonsai.path": {
+        "bonsai-lint.path": {
           "type": "string",
           "default": "",
-          "description": "Path to a bonsai binary. Leave empty to use the bundled one, falling back to PATH."
+          "description": "Path to a bonsai-lint binary. Leave empty to use the bundled one, falling back to PATH."
         },
-        "bonsai.languages": {
+        "bonsai-lint.languages": {
           "type": "array",
           "items": {
             "type": "string"
@@ -62,14 +62,14 @@
           ],
           "description": "Editor language identifiers to analyse."
         },
-        "bonsai.threshold": {
+        "bonsai-lint.threshold": {
           "type": [
             "number",
             "null"
           ],
           "default": null,
           "minimum": 1,
-          "markdownDescription": "Override the threshold for every language. Left unset, the repository's `bonsai.toml` decides, so the editor agrees with CI."
+          "markdownDescription": "Override the threshold for every language. Left unset, the repository's `bonsai-lint.toml` decides, so the editor agrees with CI."
         }
       }
     }

@@ -6,7 +6,7 @@ const node_child_process_1 = require("node:child_process");
  * The buffer is piped in rather than read from disk, so an unsaved edit is analysed as typed.
  *
  * `--over` is passed only when the user explicitly set a threshold. Passing it unconditionally
- * would silently override the repository's `bonsai.toml`, and the editor would then disagree
+ * would silently override the repository's `bonsai-lint.toml`, and the editor would then disagree
  * with CI — which is the one thing this integration must never do.
  *
  * `--all` is deliberately not passed: the editor should show exactly what CI would fail on,

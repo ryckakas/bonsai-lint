@@ -54,12 +54,12 @@ and Node only launches it. The analysis itself is pure Rust.
 ## Use it
 
 ```bash
-bonsai src/                     # fail on anything above 15
-bonsai --over 10 src/           # stricter
-bonsai --all src/               # every unit, ranked
-bonsai --format json src/       # for editors and CI
-bonsai --write-baseline src/    # record today's findings, exit 0
-bonsai --lang php src/          # one language only
+bonsai-lint src/                     # fail on anything above 15
+bonsai-lint --over 10 src/           # stricter
+bonsai-lint --all src/               # every unit, ranked
+bonsai-lint --format json src/       # for editors and CI
+bonsai-lint --write-baseline src/    # record today's findings, exit 0
+bonsai-lint --lang php src/          # one language only
 ```
 
 ```text
@@ -111,7 +111,7 @@ monorepo.
 ## Configure it, or don't
 
 Nothing on disk is required. Defaults are a threshold of 15 for every language, `.gitignore`
-respected, top-level code scored. One `bonsai.toml` at the repository root covers a normal
+respected, top-level code scored. One `bonsai-lint.toml` at the repository root covers a normal
 project:
 
 ```toml
@@ -130,20 +130,20 @@ shared file. The root declares *where* domains may live, so a stray config canno
 create one.
 
 ```toml
-# bonsai.toml at the repository root
+# bonsai-lint.toml at the repository root
 domains   = ["packages/*", "services/*"]
 threshold = 15
 ```
 
 ```toml
-# packages/web/bonsai.toml
+# packages/web/bonsai-lint.toml
 name      = "web"
 threshold = 20
 ```
 
 ```text
-packages/web/.bonsai-baseline.json       # each domain keeps its own
-services/billing/.bonsai-baseline.json
+packages/web/.bonsai-lint-baseline.json       # each domain keeps its own
+services/billing/.bonsai-lint-baseline.json
 ```
 
 `--write-baseline` then writes one file per domain and prints what it wrote. Baseline keys are
@@ -155,7 +155,7 @@ relative to the domain root, so they survive being checked out anywhere, on any 
 <summary><b>Baselines — adopt it without fixing everything first</b></summary>
 
 ```bash
-bonsai --write-baseline src/
+bonsai-lint --write-baseline src/
 ```
 
 Records everything currently above the threshold as accepted. Later runs fail only on scores
@@ -170,7 +170,7 @@ cannot quietly rot into a permanent exemption.
 <summary><b>Suppressing a finding — with a reason, or not at all</b></summary>
 
 ```php
-// bonsai-ignore: hand-tuned state machine, splitting it hurts more than it helps
+// bonsai-lint-ignore: hand-tuned state machine, splitting it hurts more than it helps
 function parse(string $input): Ast { /* ... */ }
 ```
 
@@ -192,7 +192,7 @@ shorthand that doesn't break reading flow is free; **+1** for each break in line
 <summary><b>Code outside a function is still code</b></summary>
 
 Most complexity tools only score functions and methods, so a 200-line procedural template, a
-route table or a module-level bootstrap is invisible to them. bonsai scores whatever is left
+route table or a module-level bootstrap is invisible to them. bonsai-lint scores whatever is left
 over as a `<toplevel>` unit, one per file:
 
 ```text
@@ -210,7 +210,7 @@ Files with no top-level logic report nothing, so this costs you no noise. Turn i
 <details>
 <summary><b>How it differs from eslint-plugin-sonarjs</b></summary>
 
-Numbers from bonsai will not always match `eslint-plugin-sonarjs`. Every difference is a
+Numbers from bonsai-lint will not always match `eslint-plugin-sonarjs`. Every difference is a
 deliberate choice, and this is all of them, so you can judge which suits you:
 
 | | `eslint-plugin-sonarjs` | bonsai-lint |
@@ -228,9 +228,9 @@ callbacks costs almost nothing:
 if (a) { for (const x of xs) { xs.forEach(item => { if (b) { … } }); } }
 ```
 
-bonsai reports that as a single unit scoring **7**. Scored per function it is two units, at 3
+bonsai-lint reports that as a single unit scoring **7**. Scored per function it is two units, at 3
 and 1. Neither is wrong — they answer different questions. Per-function tells you how hard each
-piece is on its own; bonsai tells you how hard the whole thing is to read where it stands. If
+piece is on its own; bonsai-lint tells you how hard the whole thing is to read where it stands. If
 you care about callback depth, the second is the more useful number.
 
 Migrating? Expect your numbers to move, mostly upward, for these reasons and no others.
@@ -244,7 +244,7 @@ Migrating? Expect your numbers to move, mostly upward, for these reasons and no 
 The [VS Code extension](editors/vscode) reports diagnostics for all five language IDs. It
 analyses the buffer as you type, not the file on disk, and it deliberately does **not** pass a
 threshold unless you set one — so the editor shows exactly what CI would fail on, your
-`bonsai.toml` and baselines included.
+`bonsai-lint.toml` and baselines included.
 
 ## Performance
 

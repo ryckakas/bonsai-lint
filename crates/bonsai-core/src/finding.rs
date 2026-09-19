@@ -1,6 +1,6 @@
 use tree_sitter::Node;
 
-pub const SUPPRESSION_MARKER: &str = "bonsai-ignore";
+pub const SUPPRESSION_MARKER: &str = "bonsai-lint-ignore";
 pub const TOPLEVEL_UNIT: &str = "<toplevel>";
 pub const ANONYMOUS_UNIT: &str = "<anonymous>";
 

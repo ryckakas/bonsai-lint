@@ -6,7 +6,7 @@ const node_os_1 = require("node:os");
 const node_path_1 = require("node:path");
 const node_test_1 = require("node:test");
 const run_1 = require("./run");
-const scripts = (0, node_fs_1.mkdtempSync)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "bonsai-fake-cli-"));
+const scripts = (0, node_fs_1.mkdtempSync)((0, node_path_1.join)((0, node_os_1.tmpdir)(), "bonsai-lint-fake-cli-"));
 let counter = 0;
 /**
  * A stand-in for the CLI. It has to be a script file rather than `node -e`, because node reads

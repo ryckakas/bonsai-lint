@@ -3,7 +3,7 @@ import { resolveBinary, type Binary } from "./binary";
 import { scan, type Finding } from "./run";
 import { diagnosticSpan } from "./span";
 
-const MISSING_BINARY_DISMISSED = "bonsai.missingBinaryDismissed";
+const MISSING_BINARY_DISMISSED = "bonsai-lint.missingBinaryDismissed";
 
 /**
  * Coalesces keystrokes. TypeScript projects keep far more files open than PHP ones, and one
@@ -23,7 +23,7 @@ interface Settings {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  diagnostics = vscode.languages.createDiagnosticCollection("bonsai");
+  diagnostics = vscode.languages.createDiagnosticCollection("bonsai-lint");
   context.subscriptions.push(diagnostics);
 
   binary = await resolveBinary(settings().path);
@@ -37,7 +37,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidChangeTextDocument((event) => schedule(event.document)),
     vscode.workspace.onDidCloseTextDocument((document) => forget(document)),
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("bonsai")) {
+      if (event.affectsConfiguration("bonsai-lint")) {
         binary = await resolveBinary(settings().path);
         await refreshAll();
       }
@@ -56,7 +56,7 @@ export function deactivate(): void {
 }
 
 function settings(): Settings {
-  const config = vscode.workspace.getConfiguration("bonsai");
+  const config = vscode.workspace.getConfiguration("bonsai-lint");
   const threshold = config.get<number | null>("threshold", null);
 
   return {
@@ -129,7 +129,7 @@ async function refresh(document: vscode.TextDocument): Promise<void> {
   } catch (error) {
     // A broken scan should not leave stale diagnostics implying the file is clean.
     diagnostics.delete(document.uri);
-    console.error("bonsai:", error);
+    console.error("bonsai-lint:", error);
   }
 }
 
@@ -143,7 +143,7 @@ function toDiagnostic(document: vscode.TextDocument, finding: Finding): vscode.D
     `${finding.name} has a cognitive complexity of ${finding.score}`,
     vscode.DiagnosticSeverity.Warning,
   );
-  diagnostic.source = "bonsai";
+  diagnostic.source = "bonsai-lint";
   diagnostic.code = "cognitive-complexity";
 
   return diagnostic;
@@ -162,7 +162,7 @@ async function reportMissingBinary(context: vscode.ExtensionContext): Promise<vo
   const dismiss = "Don't show again";
 
   const choice = await vscode.window.showWarningMessage(
-    "bonsai was not found. Install it, or set `bonsai.path` to an existing binary.",
+    "bonsai-lint was not found. Install it, or set `bonsai-lint.path` to an existing binary.",
     install,
     dismiss,
   );

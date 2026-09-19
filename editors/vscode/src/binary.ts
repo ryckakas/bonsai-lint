@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 
 /**
- * How to invoke bonsai. The npm package ships a Node wrapper rather than a bare
+ * How to invoke bonsai-lint. The npm package ships a Node wrapper rather than a bare
  * executable, so a resolved command may need `node` in front of it.
  */
 export interface Binary {
@@ -29,8 +29,8 @@ export async function resolveBinary(configured: string): Promise<Binary | undefi
     return { command: process.execPath, prefixArgs: [bundled], source: "bundled" };
   }
 
-  if (await isOnPath("bonsai")) {
-    return { command: "bonsai", prefixArgs: [], source: "path" };
+  if (await isOnPath("bonsai-lint")) {
+    return { command: "bonsai-lint", prefixArgs: [], source: "path" };
   }
 
   return undefined;
@@ -38,7 +38,7 @@ export async function resolveBinary(configured: string): Promise<Binary | undefi
 
 function resolveBundled(): string | undefined {
   try {
-    return require.resolve("bonsai-lint/run-bonsai.js");
+    return require.resolve("bonsai-lint/run-bonsai-lint.js");
   } catch {
     return undefined;
   }

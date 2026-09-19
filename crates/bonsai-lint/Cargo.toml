@@ -11,7 +11,7 @@ keywords = ["linter", "static-analysis", "complexity", "php", "typescript"]
 categories = ["development-tools"]
 
 [[bin]]
-name = "bonsai"
+name = "bonsai-lint"
 path = "src/main.rs"
 
 [features]

@@ -39,7 +39,7 @@ const vscode = __importStar(require("vscode"));
 const binary_1 = require("./binary");
 const run_1 = require("./run");
 const span_1 = require("./span");
-const MISSING_BINARY_DISMISSED = "bonsai.missingBinaryDismissed";
+const MISSING_BINARY_DISMISSED = "bonsai-lint.missingBinaryDismissed";
 /**
  * Coalesces keystrokes. TypeScript projects keep far more files open than PHP ones, and one
  * process per keystroke is felt immediately.
@@ -49,14 +49,14 @@ let diagnostics;
 let binary;
 const pending = new Map();
 async function activate(context) {
-    diagnostics = vscode.languages.createDiagnosticCollection("bonsai");
+    diagnostics = vscode.languages.createDiagnosticCollection("bonsai-lint");
     context.subscriptions.push(diagnostics);
     binary = await (0, binary_1.resolveBinary)(settings().path);
     if (binary === undefined) {
         await reportMissingBinary(context);
     }
     context.subscriptions.push(vscode.workspace.onDidOpenTextDocument((document) => void refresh(document)), vscode.workspace.onDidSaveTextDocument((document) => void refresh(document)), vscode.workspace.onDidChangeTextDocument((event) => schedule(event.document)), vscode.workspace.onDidCloseTextDocument((document) => forget(document)), vscode.workspace.onDidChangeConfiguration(async (event) => {
-        if (event.affectsConfiguration("bonsai")) {
+        if (event.affectsConfiguration("bonsai-lint")) {
             binary = await (0, binary_1.resolveBinary)(settings().path);
             await refreshAll();
         }
@@ -71,7 +71,7 @@ function deactivate() {
     diagnostics?.dispose();
 }
 function settings() {
-    const config = vscode.workspace.getConfiguration("bonsai");
+    const config = vscode.workspace.getConfiguration("bonsai-lint");
     const threshold = config.get("threshold", null);
     return {
         enable: config.get("enable", true),
@@ -132,7 +132,7 @@ async function refresh(document) {
     catch (error) {
         // A broken scan should not leave stale diagnostics implying the file is clean.
         diagnostics.delete(document.uri);
-        console.error("bonsai:", error);
+        console.error("bonsai-lint:", error);
     }
 }
 function toDiagnostic(document, finding) {
@@ -140,7 +140,7 @@ function toDiagnostic(document, finding) {
     const span = (0, span_1.diagnosticSpan)(lines, finding.line - 1);
     const range = new vscode.Range(span.line, span.start, span.line, span.end);
     const diagnostic = new vscode.Diagnostic(range, `${finding.name} has a cognitive complexity of ${finding.score}`, vscode.DiagnosticSeverity.Warning);
-    diagnostic.source = "bonsai";
+    diagnostic.source = "bonsai-lint";
     diagnostic.code = "cognitive-complexity";
     return diagnostic;
 }
@@ -154,7 +154,7 @@ async function reportMissingBinary(context) {
     }
     const install = "Installation instructions";
     const dismiss = "Don't show again";
-    const choice = await vscode.window.showWarningMessage("bonsai was not found. Install it, or set `bonsai.path` to an existing binary.", install, dismiss);
+    const choice = await vscode.window.showWarningMessage("bonsai-lint was not found. Install it, or set `bonsai-lint.path` to an existing binary.", install, dismiss);
     if (choice === install) {
         await vscode.env.openExternal(vscode.Uri.parse("https://github.com/ryckakas/bonsai-lint#install"));
     }

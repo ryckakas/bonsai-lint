@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 
-pub const CONFIG_FILE: &str = "bonsai.toml";
-pub const BASELINE_FILE: &str = ".bonsai-baseline.json";
+pub const CONFIG_FILE: &str = "bonsai-lint.toml";
+pub const BASELINE_FILE: &str = ".bonsai-lint-baseline.json";
 pub const DEFAULT_THRESHOLD: u32 = 15;
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -97,7 +97,7 @@ impl std::fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-/// No `bonsai.toml` anywhere above the starting directory means zero-config: built-in defaults,
+/// No `bonsai-lint.toml` anywhere above the starting directory means zero-config: built-in defaults,
 /// one implicit domain, nothing read from disk.
 pub fn discover(start: &Path, known_languages: &[&str]) -> Result<Workspace, ConfigError> {
     let Some(root) = find_workspace_root(start) else {

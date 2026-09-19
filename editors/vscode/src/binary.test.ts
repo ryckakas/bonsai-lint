@@ -6,8 +6,8 @@ import { test } from "node:test";
 import { resolveBinary } from "./binary";
 
 test("an existing configured path wins", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "bonsai-binary-"));
-  const file = join(directory, "bonsai");
+  const directory = mkdtempSync(join(tmpdir(), "bonsai-lint-binary-"));
+  const file = join(directory, "bonsai-lint");
   writeFileSync(file, "#!/bin/sh\nexit 0\n");
   chmodSync(file, 0o755);
 
@@ -19,6 +19,6 @@ test("an existing configured path wins", async () => {
 });
 
 test("a configured path that does not exist falls through", async () => {
-  const binary = await resolveBinary("/nowhere/bonsai");
+  const binary = await resolveBinary("/nowhere/bonsai-lint");
   assert.notEqual(binary?.source, "setting");
 });

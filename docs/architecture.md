@@ -8,7 +8,7 @@ crates/
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
 ├── bonsai-engine/      registry, configuration, domains, baselines, the scan driver
-├── bonsai-lint/        the CLI, producing the `bonsai` binary
+├── bonsai-lint/        the CLI, producing the `bonsai-lint` binary
 └── bonsai-testkit/     the grammar contract harness, used by every language crate
 ```
 
@@ -87,8 +87,12 @@ target, generates the installers and publishes a GitHub Release. Preview with `d
 `.github/workflows/release.yml` is generated — edit `dist-workspace.toml` and re-run
 `dist generate` rather than hand-editing it.
 
-The CLI crate is named `bonsai-lint` deliberately: `dist` names the artifacts, the Homebrew
-formula and the npm package after the package, while the binary it installs is `bonsai`.
+**Every user-facing name is `bonsai-lint`** — the crate, the binary, `bonsai-lint.toml`,
+`.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker and the extension's
+`bonsai-lint.*` settings. The bare `bonsai` namespace belongs to unrelated projects on
+crates.io, npm and the VS Code Marketplace, so nothing here claims it. Naming the crate and the
+binary alike also keeps `dist` honest: it names the artifacts, the Homebrew formula and the npm
+package after the package, so the command users get matches the thing they installed.
 
 **The VS Code extension versions independently** of the CLI, and the two numbers are not
 expected to match. Publishing is manual — `vsce` needs an Azure DevOps PAT.
@@ -103,5 +107,5 @@ first release. After the first tag:
 cd editors/vscode && npm install --save bonsai-lint@^0.1.0
 ```
 
-Until then the extension resolves the binary from `bonsai.path` or from `PATH`, which is the
+Until then the extension resolves the binary from `bonsai-lint.path` or from `PATH`, which is the
 same fallback chain it always uses.

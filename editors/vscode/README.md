@@ -1,4 +1,4 @@
-# bonsai for VS Code
+# bonsai-lint for VS Code
 
 Flags functions that are hard to read, across PHP, JavaScript and TypeScript. Powered by
 [bonsai-lint](https://github.com/ryckakas/bonsai-lint) — a single Rust binary, with no PHP
@@ -25,22 +25,22 @@ as `<toplevel>`, rather than skipped for living outside a function.
 ## It agrees with CI, by design
 
 The extension deliberately does **not** pass a threshold unless you set one. Your repository's
-`bonsai.toml`, its per-domain thresholds, its baselines and your `bonsai-ignore` markers all
-apply exactly as they do on the command line. What you see in the editor is what the build will
-fail on — nothing more, nothing less.
+`bonsai-lint.toml`, its per-domain thresholds, its baselines and your `bonsai-lint-ignore`
+markers all apply exactly as they do on the command line. What you see in the editor is what
+the build will fail on — nothing more, nothing less.
 
 ## Settings
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `bonsai.enable` | `true` | Report cognitive complexity. |
-| `bonsai.languages` | all five | Editor language ids to analyse. |
-| `bonsai.path` | `""` | Path to a `bonsai` binary. Empty uses the bundled one, then `PATH`. |
-| `bonsai.threshold` | unset | Override every language. **Leave unset** so the repository decides. |
+| `bonsai-lint.enable` | `true` | Report cognitive complexity. |
+| `bonsai-lint.languages` | all five | Editor language ids to analyse. |
+| `bonsai-lint.path` | `""` | Path to a binary. Empty uses the bundled one, then `PATH`. |
+| `bonsai-lint.threshold` | unset | Force one threshold. **Leave unset** so the repository wins. |
 
 ## Requirements
 
-Install the CLI with `brew install ryckakas/tap/bonsai-lint`, or set `bonsai.path` to a binary
+Install the CLI with `brew install ryckakas/tap/bonsai-lint`, or set `bonsai-lint.path` to a binary
 you already have. The extension will tell you once if it cannot find one.
 
 ## License

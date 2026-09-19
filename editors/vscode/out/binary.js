@@ -18,14 +18,14 @@ async function resolveBinary(configured) {
     if (bundled !== undefined) {
         return { command: process.execPath, prefixArgs: [bundled], source: "bundled" };
     }
-    if (await isOnPath("bonsai")) {
-        return { command: "bonsai", prefixArgs: [], source: "path" };
+    if (await isOnPath("bonsai-lint")) {
+        return { command: "bonsai-lint", prefixArgs: [], source: "path" };
     }
     return undefined;
 }
 function resolveBundled() {
     try {
-        return require.resolve("bonsai-lint/run-bonsai.js");
+        return require.resolve("bonsai-lint/run-bonsai-lint.js");
     }
     catch {
         return undefined;

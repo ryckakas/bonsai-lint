@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { scan, type ScanOptions } from "./run";
 import type { Binary } from "./binary";
 
-const scripts = mkdtempSync(join(tmpdir(), "bonsai-fake-cli-"));
+const scripts = mkdtempSync(join(tmpdir(), "bonsai-lint-fake-cli-"));
 let counter = 0;
 
 /**
