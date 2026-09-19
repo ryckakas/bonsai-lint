@@ -253,11 +253,9 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             // Only a lone callable argument is unwrapped, so `app.get('/x', fn)` — where the
             // call is nobody's value — still falls through to a positional key.
             "arguments" if is_sole_callable_argument(parent, current) => {
-                let call = parent.parent()?;
-                if call.kind() != "call_expression" {
-                    return None;
-                }
-                current = call;
+                current = parent
+                    .parent()
+                    .filter(|call| call.kind() == "call_expression")?;
             }
             kind if TRANSPARENT.contains(&kind) => current = parent,
             _ => return None,

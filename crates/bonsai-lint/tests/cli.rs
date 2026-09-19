@@ -13,6 +13,8 @@ const BUSY_PHP_TOO: &str =
     "<?php\nfunction busier($a, $b) {\n    if ($a) { if ($b) { return 1; } }\n    return 0;\n}\n";
 const CALM_PHP: &str = "<?php\nfunction calm() { return 1; }\n";
 const CALM_TS: &str = "function calm() { return 1; }\n";
+const BUSY_TS: &str =
+    "function busy(a, b) {\n    if (a) { if (b) { return 1; } }\n    return 0;\n}\n";
 
 struct Project {
     _dir: tempfile::TempDir,
@@ -82,15 +84,33 @@ fn report(output: &Output) -> serde_json::Value {
         .unwrap_or_else(|error| panic!("{error}\nstdout:\n{}", stdout(output)))
 }
 
-fn scores(output: &Output) -> Vec<u64> {
-    let mut scores: Vec<u64> = report(output)["findings"]
+fn ranked_scores(output: &Output) -> Vec<u64> {
+    report(output)["findings"]
         .as_array()
         .expect("findings is an array")
         .iter()
         .map(|finding| finding["score"].as_u64().expect("score is a number"))
-        .collect();
+        .collect()
+}
+
+fn scores(output: &Output) -> Vec<u64> {
+    let mut scores = ranked_scores(output);
     scores.sort_unstable();
     scores
+}
+
+fn paths(output: &Output) -> Vec<String> {
+    report(output)["findings"]
+        .as_array()
+        .expect("findings is an array")
+        .iter()
+        .map(|finding| {
+            finding["path"]
+                .as_str()
+                .expect("path is a string")
+                .to_string()
+        })
+        .collect()
 }
 
 #[test]
@@ -408,4 +428,156 @@ fn a_reader_closing_the_pipe_early_is_not_a_failure() {
 
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(!stderr(&output).contains("panicked"), "{}", stderr(&output));
+}
+
+/// A per-app CI job, a pre-commit hook and a developer inside one package all point the CLI at
+/// a domain directory. The answer must be the one the root scan gives.
+#[test]
+fn a_scan_started_inside_a_domain_agrees_with_one_from_the_root() {
+    let project = Project::new();
+    project
+        .file(
+            "bonsai-lint.toml",
+            "domains = [\"apps/*\"]\nthreshold = 15\nexclude = [\"**/*.spec.ts\"]\n",
+        )
+        .file(
+            "apps/wallet/bonsai-lint.toml",
+            "name = \"wallet\"\nthreshold = 2\n",
+        )
+        .file("apps/wallet/src/a.ts", BUSY_TS)
+        .file("apps/wallet/src/a.spec.ts", BUSY_TS)
+        .file("src/calm.ts", CALM_TS);
+
+    let from_root = project.run(&["--format", "json", "."]);
+    let from_domain = project.run(&["--format", "json", "apps/wallet"]);
+    let from_file = project.run(&["--format", "json", "apps/wallet/src/a.ts"]);
+
+    for output in [&from_root, &from_domain, &from_file] {
+        assert_eq!(code(output), 1, "{}", stderr(output));
+        assert_eq!(report(output)["breaches"], 1);
+        assert_eq!(
+            paths(output),
+            vec!["apps/wallet/src/a.ts"],
+            "spec files stay excluded"
+        );
+    }
+
+    // The thresholds a report claims are the ones that gated it: the root's across domains,
+    // the domain's own when the scan stayed inside one.
+    assert_eq!(report(&from_root)["thresholds"]["typescript"], 15);
+    assert_eq!(report(&from_domain)["thresholds"]["typescript"], 2);
+    assert_eq!(report(&from_file)["thresholds"]["typescript"], 2);
+}
+
+#[test]
+fn stdin_resolves_the_same_workspace_as_a_file_scan() {
+    let project = Project::new();
+    project
+        .file(
+            "bonsai-lint.toml",
+            "domains = [\"apps/*\"]\nthreshold = 15\n",
+        )
+        .file("apps/wallet/bonsai-lint.toml", "threshold = 2\n")
+        .file("apps/wallet/src/a.ts", BUSY_TS);
+
+    let from_disk = project.run(&["--format", "json", "apps/wallet/src/a.ts"]);
+    let from_stdin = project.run_with_stdin(
+        &[
+            "--format",
+            "json",
+            "--stdin",
+            "--stdin-path",
+            "apps/wallet/src/a.ts",
+        ],
+        BUSY_TS,
+    );
+
+    assert_eq!(code(&from_disk), 1);
+    assert_eq!(code(&from_stdin), 1, "{}", stderr(&from_stdin));
+    assert_eq!(
+        report(&from_disk)["thresholds"],
+        report(&from_stdin)["thresholds"]
+    );
+    assert_eq!(paths(&from_disk), paths(&from_stdin));
+}
+
+#[test]
+fn a_stray_config_is_reported_only_when_the_scan_passed_through_it() {
+    let project = Project::new();
+    project
+        .file(
+            "bonsai-lint.toml",
+            "domains = [\"apps/*\"]\nthreshold = 15\n",
+        )
+        .file("packages/stray/bonsai-lint.toml", "threshold = 1\n")
+        .file("packages/stray/src/a.php", CALM_PHP)
+        .file("packages/clean/src/a.php", CALM_PHP);
+
+    let through = project.run(&["packages/stray/src"]);
+    let elsewhere = project.run(&["packages/clean"]);
+
+    assert!(
+        stderr(&through).contains("not a declared domain"),
+        "{}",
+        stderr(&through)
+    );
+    assert!(stderr(&elsewhere).is_empty(), "{}", stderr(&elsewhere));
+}
+
+#[test]
+fn write_baseline_says_so_when_there_is_nothing_to_record() {
+    let project = Project::new();
+    project.file("src/calm.php", CALM_PHP);
+
+    let output = project.run(&["--write-baseline", "."]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("no baseline written"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(!project.root.join(".bonsai-lint-baseline.json").exists());
+}
+
+#[test]
+fn stdin_ranks_units_like_a_scan_from_disk() {
+    let source = "<?php\nfunction calm() { return 1; }\nfunction busy($a, $b) {\n    if ($a) { if ($b) { return 1; } }\n    return 0;\n}\n";
+    let project = Project::new();
+    project.file("src/a.php", source);
+
+    let from_disk = project.run(&["--all", "--format", "json", "src/a.php"]);
+    let from_stdin = project.run_with_stdin(
+        &[
+            "--all",
+            "--format",
+            "json",
+            "--stdin",
+            "--stdin-path",
+            "src/a.php",
+        ],
+        source,
+    );
+
+    assert_eq!(ranked_scores(&from_disk), vec![3, 0]);
+    assert_eq!(ranked_scores(&from_stdin), ranked_scores(&from_disk));
+}
+
+#[test]
+fn paths_print_the_same_however_the_scan_root_is_spelled() {
+    let project = Project::new();
+    project.file("src/a.php", BUSY_PHP);
+
+    let spellings = [".", "./src", "src", "src/", "./src/a.php"];
+    for spelling in spellings {
+        let output = project.run(&["--format", "json", "--over", "1", spelling]);
+        assert_eq!(paths(&output), vec!["src/a.php"], "spelled as {spelling}");
+    }
+
+    let text = project.run(&["--over", "1", "."]);
+    assert!(
+        stdout(&text).contains("  src/a.php:2  "),
+        "{}",
+        stdout(&text)
+    );
 }

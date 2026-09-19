@@ -1,0 +1,2 @@
+# `excessive_nesting` is silent until a threshold is set; 3 is the value its own documentation uses.
+excessive-nesting-threshold = 3

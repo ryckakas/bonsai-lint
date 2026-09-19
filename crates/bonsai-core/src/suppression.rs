@@ -16,26 +16,22 @@ pub fn suppression(node: Node<'_>, src: &[u8], lang: &Language) -> Suppression {
 /// declaration and inside its docblock. Attributes and decorators are stepped over; anything
 /// else ends the search.
 fn leading(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Suppression> {
-    let mut sibling = node.prev_sibling();
+    std::iter::successors(node.prev_sibling(), Node::prev_sibling)
+        .take_while(|current| belongs_above(*current, lang))
+        .filter(|current| lang.role(*current) == Role::Trivia)
+        .find_map(|current| marker_of(current, src))
+}
 
-    while let Some(current) = sibling {
-        let info = lang.info(current.kind_id());
-
-        if info.role == Role::Trivia {
-            if trails_previous_sibling(current, lang) {
-                break;
-            }
-            if let Some(found) = current.utf8_text(src).ok().and_then(parse_marker) {
-                return Some(found);
-            }
-        } else if !info.flags.has(Flags::LEADING_TRIVIA) {
-            break;
-        }
-
-        sibling = current.prev_sibling();
+fn belongs_above(node: Node<'_>, lang: &Language) -> bool {
+    let info = lang.info(node.kind_id());
+    match info.role {
+        Role::Trivia => !trails_previous_sibling(node, lang),
+        _ => info.flags.has(Flags::LEADING_TRIVIA),
     }
+}
 
-    None
+fn marker_of(comment: Node<'_>, src: &[u8]) -> Option<Suppression> {
+    comment.utf8_text(src).ok().and_then(parse_marker)
 }
 
 /// A comment on the same row as the previous sibling's end trails that sibling, not this one.
@@ -50,24 +46,6 @@ fn trails_previous_sibling(comment: Node<'_>, lang: &Language) -> bool {
 /// taught people to reach. Descent stops at the first node starting on a later row, so the body
 /// is never searched and a marker cannot leak out of its own declaration.
 fn trailing(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Suppression> {
-    fn on_row(node: Node<'_>, row: usize, src: &[u8], lang: &Language) -> Option<Suppression> {
-        if node.start_position().row > row {
-            return None;
-        }
-
-        if lang.role(node) == Role::Trivia && node.start_position().row == row {
-            if let Some(found) = node.utf8_text(src).ok().and_then(parse_marker) {
-                return Some(found);
-            }
-        }
-
-        let mut cursor = node.walk();
-        let found = node
-            .children(&mut cursor)
-            .find_map(|child| on_row(child, row, src, lang));
-        found
-    }
-
     let row = declaration_row(node, lang);
     let mut cursor = node.walk();
     let inside = node
@@ -84,12 +62,29 @@ fn trailing(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Suppression> 
         if lang.role(current) != Role::Trivia {
             break;
         }
-        if let Some(found) = current.utf8_text(src).ok().and_then(parse_marker) {
+        if let Some(found) = marker_of(current, src) {
             return Some(found);
         }
         sibling = current.next_sibling();
     }
     None
+}
+
+fn on_row(node: Node<'_>, row: usize, src: &[u8], lang: &Language) -> Option<Suppression> {
+    if node.start_position().row > row {
+        return None;
+    }
+    if lang.role(node) == Role::Trivia && node.start_position().row == row {
+        if let Some(found) = marker_of(node, src) {
+            return Some(found);
+        }
+    }
+
+    let mut cursor = node.walk();
+    let found = node
+        .children(&mut cursor)
+        .find_map(|child| on_row(child, row, src, lang));
+    found
 }
 
 fn parse_marker(comment: &str) -> Option<Suppression> {

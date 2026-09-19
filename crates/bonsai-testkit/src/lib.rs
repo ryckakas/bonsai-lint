@@ -127,15 +127,7 @@ impl GrammarFixture {
 
         let mut offenders = Vec::new();
         visit(tree.root_node(), &mut |node| {
-            if language.role(node) != Role::If {
-                return;
-            }
-            let mut cursor = node.walk();
-            for alt in node.children_by_field_id(alternative, &mut cursor) {
-                if !matches!(language.role(alt), Role::Else | Role::ElseIf) {
-                    offenders.push(alt.kind().to_string());
-                }
-            }
+            collect_odd_alternatives(node, &language, alternative, &mut offenders);
         });
         offenders.sort_unstable();
         offenders.dedup();
@@ -180,4 +172,21 @@ fn visit(node: Node<'_>, f: &mut impl FnMut(Node<'_>)) {
     for child in node.children(&mut cursor) {
         visit(child, f);
     }
+}
+
+fn collect_odd_alternatives(
+    node: tree_sitter::Node<'_>,
+    language: &bonsai_core::Language,
+    alternative: std::num::NonZeroU16,
+    offenders: &mut Vec<String>,
+) {
+    if language.role(node) != Role::If {
+        return;
+    }
+    let mut cursor = node.walk();
+    let odd = node
+        .children_by_field_id(alternative, &mut cursor)
+        .filter(|alt| !matches!(language.role(*alt), Role::Else | Role::ElseIf))
+        .map(|alt| alt.kind().to_string());
+    offenders.extend(odd);
 }

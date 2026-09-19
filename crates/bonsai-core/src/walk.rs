@@ -113,18 +113,20 @@ fn walk_if(node: Node<'_>, nesting: u32, flat: bool, cx: &WalkCx<'_>, score: &mu
     let mut cursor = node.walk();
     for alt in node.children_by_field_id(alternative, &mut cursor) {
         match lang.role(alt) {
-            Role::ElseIf => {
-                *score += 1;
-                if let Some(condition) = field(alt, lang.fields.condition) {
-                    walk(condition, nesting, cx, score);
-                }
-                if let Some(body) = field(alt, lang.fields.body) {
-                    walk(body, nesting + 1, cx, score);
-                }
-            }
+            Role::ElseIf => walk_else_if(alt, nesting, cx, score),
             Role::Else => walk_else(alt, nesting, cx, score),
             _ => walk(alt, nesting, cx, score),
         }
+    }
+}
+
+fn walk_else_if(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
+    *score += 1;
+    if let Some(condition) = field(node, cx.lang.fields.condition) {
+        walk(condition, nesting, cx, score);
+    }
+    if let Some(body) = field(node, cx.lang.fields.body) {
+        walk(body, nesting + 1, cx, score);
     }
 }
 
@@ -162,8 +164,7 @@ fn walk_control(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) 
         if child.is_named() {
             let is_header = cx.lang.is_header_field(cursor.field_id())
                 || body_start.is_some_and(|start| child.end_byte() <= start);
-            let child_nesting = if is_header { nesting } else { nesting + 1 };
-            walk(child, child_nesting, cx, score);
+            walk(child, nesting + u32::from(!is_header), cx, score);
         }
         if !cursor.goto_next_sibling() {
             break;

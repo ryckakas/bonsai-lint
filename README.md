@@ -172,12 +172,21 @@ packages/web/.bonsai-lint-baseline.json       # each domain keeps its own
 services/billing/.bonsai-lint-baseline.json
 ```
 
-`--write-baseline` then writes one file per domain and prints what it wrote. Baseline keys are
-relative to the domain root, so they survive being checked out anywhere, on any platform. A
-domain's own `exclude` is relative to its root too; the root's applies everywhere.
+`--write-baseline` then writes one file per domain and prints what it wrote, or says that there
+was nothing to record. Baseline keys are relative to the domain root, so they survive being
+checked out anywhere, on any platform. A domain's own `exclude` is relative to its root too; the
+root's applies everywhere.
 
 `--baseline PATH` keeps every domain in one file of your choosing instead. Its keys are relative
-to the repository root, so two domains with a `src/index.ts` cannot collide.
+to the repository root, so two domains with a `src/index.ts` cannot collide. Which to use is
+your call: one file is simpler for a small repository, while per-domain files stay short and
+put each team's accepted debt in the directory that team owns.
+
+Wherever you point the CLI, the workspace is the same one. Discovery walks up from the first
+scanned path and takes the outermost `bonsai-lint.toml` that declares `domains` as the root, so
+`bonsai-lint packages/web` applies the same root excludes, inherited thresholds and domain list
+as `bonsai-lint .`, and so does an editor buffer. Without a `domains` declaration anywhere, the
+nearest config is the root. `--config PATH` starts the walk somewhere else.
 
 </details>
 

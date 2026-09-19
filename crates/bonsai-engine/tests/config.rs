@@ -253,10 +253,107 @@ fn an_undeclared_config_is_reported_only_on_request() {
     let workspace = discover(&root);
 
     assert!(workspace.warnings.is_empty(), "{:?}", workspace.warnings);
-    let warnings = workspace.undeclared_config_warnings();
+    let warnings = workspace.undeclared_config_warnings(std::slice::from_ref(&root));
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(
         warnings[0].contains("not a declared domain"),
         "{warnings:?}"
     );
+}
+
+/// A stray config elsewhere in the repository never touched the files being scanned; one above
+/// or below them might have.
+#[test]
+fn undeclared_configs_are_reported_only_where_the_scan_looked() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "threshold = 10\n");
+    write(&root, "packages/stray/bonsai-lint.toml", "threshold = 1\n");
+    write(&root, "packages/stray/src/a.php", "<?php\n");
+    write(&root, "packages/clean/src/a.php", "<?php\n");
+
+    let workspace = discover(&root);
+
+    let elsewhere = workspace.undeclared_config_warnings(&[root.join("packages/clean")]);
+    assert!(elsewhere.is_empty(), "{elsewhere:?}");
+
+    let above = workspace.undeclared_config_warnings(&[root.join("packages/stray/src")]);
+    assert_eq!(above.len(), 1, "{above:?}");
+
+    let both =
+        workspace.undeclared_config_warnings(&[root.join("packages/stray/src"), root.clone()]);
+    assert_eq!(both.len(), 1, "{both:?}");
+}
+
+/// The root is the config that declares `domains`. Starting the scan inside a domain must not
+/// promote the domain's own config to root, or the root's excludes, inherited thresholds and
+/// sibling domains would silently vanish.
+#[test]
+fn a_scan_started_inside_a_domain_keeps_the_root() {
+    let (_dir, root) = project();
+    write(
+        &root,
+        "bonsai-lint.toml",
+        "domains = [\"apps/*\", \"packages/*\"]\nthreshold = 20\nexclude = [\"**/*.spec.ts\"]\n",
+    );
+    write(
+        &root,
+        "apps/wallet/bonsai-lint.toml",
+        "name = \"wallet\"\nthreshold = 8\n",
+    );
+    write(&root, "packages/calc/bonsai-lint.toml", "name = \"calc\"\n");
+
+    for start in ["apps/wallet", "apps/wallet/src", "packages/calc"] {
+        let workspace = discover(&root.join(start));
+        assert_eq!(workspace.root, root, "started at {start}");
+        assert_eq!(domain_names(&workspace), vec!["root", "wallet", "calc"]);
+        assert!(workspace.is_excluded(&root.join("apps/wallet/a.spec.ts")));
+    }
+
+    let workspace = discover(&root.join("packages/calc"));
+    let calc = &workspace.domains[workspace.domain_for(&root.join("packages/calc/a.ts"))];
+    assert_eq!(
+        calc.threshold, 20,
+        "inherits the root, not the built-in default"
+    );
+    let wallet = &workspace.domains[workspace.domain_for(&root.join("apps/wallet/a.ts"))];
+    assert_eq!(wallet.threshold, 8);
+}
+
+#[test]
+fn a_domain_declaring_domains_of_its_own_does_not_become_the_root() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "domains = [\"apps/*\"]\n");
+    write(
+        &root,
+        "apps/wallet/bonsai-lint.toml",
+        "domains = [\"packages/*\"]\n",
+    );
+    write(&root, "apps/wallet/packages/x/a.ts", "");
+
+    let workspace = discover(&root.join("apps/wallet/packages/x"));
+
+    assert_eq!(workspace.root, root);
+    assert_eq!(domain_names(&workspace), vec!["root", "apps/wallet"]);
+    assert!(
+        workspace
+            .warnings
+            .iter()
+            .any(|w| w.contains("only read from the root config")),
+        "{:?}",
+        workspace.warnings
+    );
+}
+
+/// Without a `domains` declaration nothing claims the nested config, so the nearest one is the
+/// project, exactly as a root scan's undeclared-config warning says it is being ignored there.
+#[test]
+fn without_a_declaring_config_the_nearest_one_is_the_root() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "threshold = 10\n");
+    write(&root, "packages/own/bonsai-lint.toml", "threshold = 1\n");
+
+    let workspace = discover(&root.join("packages/own"));
+
+    assert_eq!(workspace.root, root.join("packages/own"));
+    assert_eq!(workspace.domains[0].threshold, 1);
 }

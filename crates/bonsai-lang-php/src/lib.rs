@@ -206,11 +206,7 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             // A factory call hands its own binding to a lone callable argument; a call that is
             // nobody's value falls through to a positional key.
             "arguments" if is_sole_callable_argument(parent, current) => {
-                let call = parent.parent()?;
-                if !CALL.contains(&call.kind()) {
-                    return None;
-                }
-                current = call;
+                current = parent.parent().filter(|call| CALL.contains(&call.kind()))?;
             }
             "argument" | "parenthesized_expression" => current = parent,
             _ => return None,

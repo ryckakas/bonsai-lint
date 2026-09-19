@@ -64,10 +64,11 @@ impl Baseline {
     }
 
     pub fn save(&self, path: &Path) -> io::Result<()> {
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            fs::create_dir_all(parent)?;
         }
         let mut text = serde_json::to_string_pretty(self)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -94,15 +95,12 @@ impl Baseline {
             .map(|located| (located.key_path.as_str(), located.finding.qualified_name()))
             .collect();
 
-        let mut stale = Vec::new();
-        for (path, units) in &self.entries {
-            for unit in units.keys() {
-                if !seen.contains(&(path.as_str(), unit.clone())) {
-                    stale.push(format!("{path}: {unit}"));
-                }
-            }
-        }
-        stale
+        self.entries
+            .iter()
+            .flat_map(|(path, units)| units.keys().map(move |unit| (path, unit)))
+            .filter(|(path, unit)| !seen.contains(&(path.as_str(), (*unit).clone())))
+            .map(|(path, unit)| format!("{path}: {unit}"))
+            .collect()
     }
 
     #[must_use]

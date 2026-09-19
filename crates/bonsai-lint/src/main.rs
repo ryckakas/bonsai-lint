@@ -7,7 +7,7 @@ use bonsai_core::Suppression;
 use bonsai_engine::config::{self, Workspace};
 use bonsai_engine::finding::normalize_key;
 use bonsai_engine::report::{Report, ReportedFinding};
-use bonsai_engine::scan::{decode, resolve};
+use bonsai_engine::scan::{decode, display_path, rank, resolve};
 use bonsai_engine::{registry, Baseline, Located, ScanOutcome, ScanStats, Scanner};
 use clap::{Parser as ClapParser, ValueEnum};
 
@@ -110,11 +110,25 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     let mut workspace = config::discover(&start, &known).map_err(|error| error.to_string())?;
     apply_overrides(args, &mut workspace)?;
 
+    let domain_filter = args
+        .domain
+        .as_ref()
+        .map(|wanted| {
+            workspace
+                .domains
+                .iter()
+                .position(|domain| &domain.name == wanted)
+                .ok_or_else(|| format!("no domain named `{wanted}`"))
+        })
+        .transpose()?;
+
+    let scan_roots: Vec<PathBuf> = args.paths.iter().map(|path| resolve(path)).collect();
+
     for warning in &workspace.warnings {
         eprintln!("{warning}");
     }
     if !args.stdin {
-        for warning in workspace.undeclared_config_warnings() {
+        for warning in workspace.undeclared_config_warnings(&scan_roots) {
             eprintln!("{warning}");
         }
     }
@@ -137,12 +151,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
         eprintln!("{message}");
     }
 
-    if let Some(wanted) = &args.domain {
-        let index = workspace
-            .domains
-            .iter()
-            .position(|domain| &domain.name == wanted)
-            .ok_or_else(|| format!("no domain named `{wanted}`"))?;
+    if let Some(index) = domain_filter {
         located.retain(|item| item.domain == index);
     }
 
@@ -169,16 +178,24 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     }
 
     let baselines = load_baselines(args, &workspace)?;
-    report_stale_entries(&baselines, &located, &workspace, args);
+    report_stale_entries(&baselines, &located, &workspace, args, &scan_roots);
 
     let breaches: Vec<&Located> = over_threshold
         .iter()
         .filter(|item| is_regression(item, &baselines, args))
         .collect();
 
+    let gated_by = domain_filter.unwrap_or_else(|| only_visited_domain(&stats));
     let printed = match args.format {
         Format::Text => print_text(&located, args, &workspace, &baselines),
-        Format::Json => print_json(&located, args, &workspace, &baselines, breaches.len()),
+        Format::Json => print_json(
+            &located,
+            args,
+            &workspace,
+            &baselines,
+            breaches.len(),
+            gated_by,
+        ),
     };
     tolerate_closed_pipe(printed)?;
 
@@ -259,42 +276,41 @@ fn scan_stdin(
     let source = decode(bytes, &path, &mut outcome.warnings);
     let key_path = normalize_key(&absolute, &domain.root);
 
+    let shown = display_path(&path);
     outcome.located = scanner
         .analyze_source(descriptor, &source, domain.toplevel)
         .into_iter()
         .map(|finding| Located {
-            path: path.clone(),
+            path: shown.clone(),
             key_path: key_path.clone(),
             domain: index,
             finding,
         })
         .collect();
+    rank(&mut outcome.located);
 
     Ok(outcome)
+}
+
+/// The thresholds a report claims must be the ones the scan was gated by. That is one answer
+/// for an editor buffer or a single package; a scan across domains falls back to the root's.
+fn only_visited_domain(stats: &ScanStats) -> usize {
+    match stats.domains.iter().copied().collect::<Vec<_>>()[..] {
+        [only] => only,
+        _ => 0,
+    }
 }
 
 fn apply_overrides(args: &Args, workspace: &mut Workspace) -> Result<(), String> {
     let mut global: Option<u32> = None;
     let mut per_language: BTreeMap<String, u32> = BTreeMap::new();
 
-    for value in &args.over {
-        for part in value.split(',') {
-            match part.split_once('=') {
-                Some((language, number)) => {
-                    let parsed = number
-                        .trim()
-                        .parse::<u32>()
-                        .map_err(|_| format!("--over: `{number}` is not a number"))?;
-                    per_language.insert(language.trim().to_string(), parsed);
-                }
-                None => {
-                    global = Some(
-                        part.trim()
-                            .parse::<u32>()
-                            .map_err(|_| format!("--over: `{part}` is not a number"))?,
-                    );
-                }
+    for part in args.over.iter().flat_map(|value| value.split(',')) {
+        match part.split_once('=') {
+            Some((language, number)) => {
+                per_language.insert(language.trim().to_string(), parse_threshold(number)?);
             }
+            None => global = Some(parse_threshold(part)?),
         }
     }
 
@@ -314,6 +330,12 @@ fn apply_overrides(args: &Args, workspace: &mut Workspace) -> Result<(), String>
     }
 
     Ok(())
+}
+
+fn parse_threshold(text: &str) -> Result<u32, String> {
+    text.trim()
+        .parse()
+        .map_err(|_| format!("--over: `{text}` is not a number"))
 }
 
 /// One shared baseline spans every domain, so its keys are workspace-relative; two domains each
@@ -395,6 +417,7 @@ fn write_baselines(
         by_domain.entry(item.domain).or_default().push(item.clone());
     }
 
+    let mut written = 0;
     for (index, domain) in workspace.domains.iter().enumerate() {
         let items = by_domain.remove(&index).unwrap_or_default();
         if items.is_empty() && !domain.baseline.exists() {
@@ -405,6 +428,15 @@ fn write_baselines(
             .save(&domain.baseline)
             .map_err(|error| format!("{}: {error}", domain.baseline.display()))?;
         report_written(&baseline, &domain.baseline)?;
+        written += 1;
+    }
+
+    // Silence here would read the same as a wrong path or a wrong config.
+    if written == 0 {
+        tolerate_closed_pipe(writeln!(
+            io::stdout().lock(),
+            "nothing above the threshold; no baseline written"
+        ))?;
     }
 
     Ok(ExitCode::SUCCESS)
@@ -426,12 +458,12 @@ fn report_stale_entries(
     located: &[Located],
     workspace: &Workspace,
     args: &Args,
+    scan_roots: &[PathBuf],
 ) {
     if args.stdin || args.domain.is_some() || !args.lang.is_empty() {
         return;
     }
-    let scanned: Vec<PathBuf> = args.paths.iter().map(|path| resolve(path)).collect();
-    let covered = |root: &Path| scanned.iter().any(|path| root.starts_with(path));
+    let covered = |root: &Path| scan_roots.iter().any(|path| root.starts_with(path));
 
     for (index, baseline) in baselines {
         let (name, root, scoped) = if args.baseline.is_some() {
@@ -540,6 +572,7 @@ fn print_json(
     workspace: &Workspace,
     baselines: &BTreeMap<usize, Baseline>,
     breaches: usize,
+    gated_by: usize,
 ) -> io::Result<()> {
     let findings: Vec<ReportedFinding> = located
         .iter()
@@ -558,7 +591,7 @@ fn print_json(
     for id in registry::language_ids() {
         let value = workspace
             .domains
-            .first()
+            .get(gated_by)
             .map_or(config::DEFAULT_THRESHOLD, |domain| domain.threshold_for(id));
         thresholds.insert(id.to_string(), value);
     }

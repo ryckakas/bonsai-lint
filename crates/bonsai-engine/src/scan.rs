@@ -1,8 +1,8 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use bonsai_core::LanguageDescriptor;
-use ignore::WalkBuilder;
+use ignore::{DirEntry, WalkBuilder};
 use tree_sitter::Parser;
 
 use crate::config::Workspace;
@@ -26,6 +26,35 @@ pub struct ScanOutcome {
     pub errors: Vec<String>,
     /// Files that were read but not exactly as written; the scan still stands.
     pub warnings: Vec<String>,
+}
+
+impl ScanOutcome {
+    fn fail(&mut self, message: String) {
+        self.errors.push(message);
+        self.stats.errors += 1;
+    }
+}
+
+/// What one `scan` call accumulates across all its paths.
+struct Pass<'a> {
+    workspace: &'a Workspace,
+    languages: Option<&'a [String]>,
+    /// `bonsai-lint src src/a.php` names `a.php` twice and must report it once.
+    seen: HashSet<PathBuf>,
+    outcome: ScanOutcome,
+}
+
+/// Pure path arithmetic per file; only the scan root paid for a `canonicalize`.
+struct ScanRoot<'a> {
+    given: &'a Path,
+    resolved: PathBuf,
+}
+
+impl ScanRoot<'_> {
+    fn absolute(&self, path: &Path) -> PathBuf {
+        path.strip_prefix(self.given)
+            .map_or_else(|_| resolve(path), |relative| self.resolved.join(relative))
+    }
 }
 
 /// A parser is expensive to build and `set_language` resets its state, so one is kept per
@@ -78,99 +107,109 @@ impl Scanner {
         workspace: &Workspace,
         languages: Option<&[String]>,
     ) -> ScanOutcome {
-        let mut outcome = ScanOutcome::default();
-        let mut seen = HashSet::new();
+        let mut pass = Pass {
+            workspace,
+            languages,
+            seen: HashSet::new(),
+            outcome: ScanOutcome::default(),
+        };
 
         for path in paths {
-            self.scan_one(path, workspace, languages, &mut seen, &mut outcome);
+            self.scan_one(path, &mut pass);
         }
 
-        outcome.located.sort_by(|left, right| {
-            right
-                .finding
-                .score
-                .cmp(&left.finding.score)
-                .then_with(|| left.path.cmp(&right.path))
-                .then_with(|| left.finding.line.cmp(&right.finding.line))
-        });
-
-        outcome
+        rank(&mut pass.outcome.located);
+        pass.outcome
     }
 
-    fn scan_one(
-        &mut self,
-        root: &Path,
-        workspace: &Workspace,
-        languages: Option<&[String]>,
-        seen: &mut HashSet<PathBuf>,
-        outcome: &mut ScanOutcome,
-    ) {
-        let resolved_root = resolve(root);
-
-        for entry in WalkBuilder::new(root).build() {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(error) => {
-                    outcome.errors.push(error.to_string());
-                    outcome.stats.errors += 1;
-                    continue;
-                }
-            };
-
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
-                continue;
-            }
-
-            let path = entry.path();
-            let Some(descriptor) = registry::for_path(path) else {
-                continue;
-            };
-
-            if languages.is_some_and(|wanted| !wanted.iter().any(|id| id == descriptor.spec.id)) {
-                continue;
-            }
-
-            // Pure path arithmetic per file; only the scan root paid for a `canonicalize`.
-            let absolute = path
-                .strip_prefix(root)
-                .map_or_else(|_| resolve(path), |relative| resolved_root.join(relative));
-
-            // `bonsai-lint src src/a.php` names `a.php` twice and must report it once.
-            if !seen.insert(absolute.clone()) {
-                continue;
-            }
-
-            if workspace.is_excluded(&absolute) {
-                continue;
-            }
-
-            let source = match std::fs::read(path) {
-                Ok(bytes) => decode(bytes, path, &mut outcome.warnings),
-                Err(error) => {
-                    outcome.errors.push(format!("{}: {error}", path.display()));
-                    outcome.stats.errors += 1;
-                    continue;
-                }
-            };
-
-            outcome.stats.files += 1;
-
-            // Domain roots are absolute, so a relative scan path has to be matched absolutely
-            // or every file would fall back to the root domain.
-            let index = workspace.domain_for(&absolute);
-            outcome.stats.domains.insert(index);
-            let domain = &workspace.domains[index];
-            let key_path = normalize_key(&absolute, &domain.root);
-
-            for finding in self.analyze_source(descriptor, &source, domain.toplevel) {
-                outcome.located.push(Located {
-                    path: path.to_path_buf(),
-                    key_path: key_path.clone(),
-                    domain: index,
-                    finding,
-                });
-            }
+    fn scan_one(&mut self, given: &Path, pass: &mut Pass<'_>) {
+        let root = ScanRoot {
+            given,
+            resolved: resolve(given),
+        };
+        for entry in WalkBuilder::new(given).build() {
+            self.scan_entry(entry, &root, pass);
         }
+    }
+
+    fn scan_entry(
+        &mut self,
+        entry: Result<DirEntry, ignore::Error>,
+        root: &ScanRoot<'_>,
+        pass: &mut Pass<'_>,
+    ) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => return pass.outcome.fail(error.to_string()),
+        };
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+            return;
+        }
+
+        let path = entry.path();
+        let Some(descriptor) = registry::for_path(path) else {
+            return;
+        };
+        let wanted = |ids: &[String]| ids.iter().any(|id| id == descriptor.spec.id);
+        if pass.languages.is_some_and(|ids| !wanted(ids)) {
+            return;
+        }
+
+        let absolute = root.absolute(path);
+        if !pass.seen.insert(absolute.clone()) || pass.workspace.is_excluded(&absolute) {
+            return;
+        }
+
+        let shown = display_path(path);
+        let source = match std::fs::read(path) {
+            Ok(bytes) => decode(bytes, &shown, &mut pass.outcome.warnings),
+            Err(error) => return pass.outcome.fail(format!("{}: {error}", shown.display())),
+        };
+        pass.outcome.stats.files += 1;
+
+        // Domain roots are absolute, so a relative scan path has to be matched absolutely or
+        // every file would fall back to the root domain.
+        let index = pass.workspace.domain_for(&absolute);
+        pass.outcome.stats.domains.insert(index);
+        let domain = &pass.workspace.domains[index];
+        let key_path = normalize_key(&absolute, &domain.root);
+
+        for finding in self.analyze_source(descriptor, &source, domain.toplevel) {
+            pass.outcome.located.push(Located {
+                path: shown.clone(),
+                key_path: key_path.clone(),
+                domain: index,
+                finding,
+            });
+        }
+    }
+}
+
+/// Highest score first, then by position, so the worst offender heads every report whichever
+/// way the files were read.
+pub fn rank(located: &mut [Located]) {
+    located.sort_by(|left, right| {
+        right
+            .finding
+            .score
+            .cmp(&left.finding.score)
+            .then_with(|| left.path.cmp(&right.path))
+            .then_with(|| left.finding.line.cmp(&right.finding.line))
+    });
+}
+
+/// `bonsai-lint .` and `bonsai-lint src` must print `src/a.php` the same way, so the `./` a
+/// walk from the current directory prepends is dropped.
+#[must_use]
+pub fn display_path(path: &Path) -> PathBuf {
+    let tidy: PathBuf = path
+        .components()
+        .filter(|component| *component != Component::CurDir)
+        .collect();
+    if tidy.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        tidy
     }
 }
 

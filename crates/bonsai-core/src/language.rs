@@ -169,64 +169,10 @@ impl LanguageSpec {
 
     pub fn compile(&'static self, ts: TsLanguage) -> Result<Language, SpecErrors> {
         let mut errors = SpecErrors::default();
-        let kind_count = ts.node_kind_count();
-        let mut kinds = vec![KindInfo::default(); kind_count];
-
-        let roles: [(&'static [&'static str], Role); 9] = [
-            (self.kinds.if_statement, Role::If),
-            (self.kinds.else_if_clause, Role::ElseIf),
-            (self.kinds.else_clause, Role::Else),
-            (self.kinds.nesting_control, Role::Control),
-            (self.kinds.jump, Role::Jump),
-            (self.kinds.unconditional_jump, Role::Goto),
-            (self.kinds.logical, Role::Logical),
-            (self.kinds.call, Role::Call),
-            (self.kinds.comment, Role::Trivia),
-        ];
-
-        for (list, role) in roles {
-            for kind in list {
-                match named_kind_id(&ts, kind, kind_count) {
-                    Some(id) => {
-                        let slot = &mut kinds[id];
-                        if slot.role != Role::Other && slot.role != role {
-                            errors.conflicting_roles.push((kind, slot.role, role));
-                        }
-                        slot.role = role;
-                    }
-                    None => self.note_unknown_kind(kind, &mut errors),
-                }
-            }
-        }
-
-        let flags: [(&'static [&'static str], Flags); 5] = [
-            (self.kinds.unit, Flags::UNIT),
-            (self.kinds.container, Flags::CONTAINER),
-            (self.kinds.nesting_function, Flags::NESTING_FN),
-            (self.kinds.leading_trivia, Flags::LEADING_TRIVIA),
-            (self.kinds.parenthesis, Flags::PARENTHESIS),
-        ];
-
-        for (list, flag) in flags {
-            for kind in list {
-                match named_kind_id(&ts, kind, kind_count) {
-                    Some(id) => kinds[id].flags = kinds[id].flags.with(flag),
-                    None => self.note_unknown_kind(kind, &mut errors),
-                }
-            }
-        }
-
-        let mut header_field = vec![false; ts.field_count() + 1];
-        for name in self.fields.control_header {
-            match ts.field_id_for_name(name) {
-                Some(id) => {
-                    if let Some(slot) = header_field.get_mut(id.get() as usize) {
-                        *slot = true;
-                    }
-                }
-                None => errors.unknown_fields.push(name),
-            }
-        }
+        let mut kinds = vec![KindInfo::default(); ts.node_kind_count()];
+        self.assign_roles(&ts, &mut kinds, &mut errors);
+        self.assign_flags(&ts, &mut kinds, &mut errors);
+        let header_field = self.header_fields(&ts, &mut errors);
 
         let f = &self.fields;
         let fields = FieldIds {
@@ -260,6 +206,81 @@ impl LanguageSpec {
             header_field: header_field.into_boxed_slice(),
         })
     }
+
+    fn assign_roles(
+        &'static self,
+        ts: &TsLanguage,
+        kinds: &mut [KindInfo],
+        errors: &mut SpecErrors,
+    ) {
+        let roles: [(&'static [&'static str], Role); 9] = [
+            (self.kinds.if_statement, Role::If),
+            (self.kinds.else_if_clause, Role::ElseIf),
+            (self.kinds.else_clause, Role::Else),
+            (self.kinds.nesting_control, Role::Control),
+            (self.kinds.jump, Role::Jump),
+            (self.kinds.unconditional_jump, Role::Goto),
+            (self.kinds.logical, Role::Logical),
+            (self.kinds.call, Role::Call),
+            (self.kinds.comment, Role::Trivia),
+        ];
+
+        for (kind, role) in each_kind(&roles) {
+            match named_kind_id(ts, kind, kinds.len()) {
+                Some(id) => claim_role(&mut kinds[id], kind, role, errors),
+                None => self.note_unknown_kind(kind, errors),
+            }
+        }
+    }
+
+    fn assign_flags(
+        &'static self,
+        ts: &TsLanguage,
+        kinds: &mut [KindInfo],
+        errors: &mut SpecErrors,
+    ) {
+        let flags: [(&'static [&'static str], Flags); 5] = [
+            (self.kinds.unit, Flags::UNIT),
+            (self.kinds.container, Flags::CONTAINER),
+            (self.kinds.nesting_function, Flags::NESTING_FN),
+            (self.kinds.leading_trivia, Flags::LEADING_TRIVIA),
+            (self.kinds.parenthesis, Flags::PARENTHESIS),
+        ];
+
+        for (kind, flag) in each_kind(&flags) {
+            match named_kind_id(ts, kind, kinds.len()) {
+                Some(id) => kinds[id].flags = kinds[id].flags.with(flag),
+                None => self.note_unknown_kind(kind, errors),
+            }
+        }
+    }
+
+    /// Field ids run from 1 to `field_count`, so the table has one slot per id.
+    fn header_fields(&self, ts: &TsLanguage, errors: &mut SpecErrors) -> Vec<bool> {
+        let mut header_field = vec![false; ts.field_count() + 1];
+        for name in self.fields.control_header {
+            match ts.field_id_for_name(name) {
+                Some(id) => header_field[id.get() as usize] = true,
+                None => errors.unknown_fields.push(name),
+            }
+        }
+        header_field
+    }
+}
+
+fn each_kind<'a, T: Copy + 'a>(
+    lists: &'a [(&'static [&'static str], T)],
+) -> impl Iterator<Item = (&'static str, T)> + 'a {
+    lists
+        .iter()
+        .flat_map(|(list, value)| list.iter().map(move |kind| (*kind, *value)))
+}
+
+fn claim_role(slot: &mut KindInfo, kind: &'static str, role: Role, errors: &mut SpecErrors) {
+    if slot.role != Role::Other && slot.role != role {
+        errors.conflicting_roles.push((kind, slot.role, role));
+    }
+    slot.role = role;
 }
 
 /// Symbol 0 is tree-sitter's end-of-input marker, so it doubles as the "no such kind" answer

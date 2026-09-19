@@ -39,10 +39,7 @@ fn collect(
         let info = lang.info(child.kind_id());
 
         if info.flags.has(Flags::UNIT) {
-            // A bodyless (abstract or interface) method would only ever report a zero.
-            if field(child, lang.fields.body).is_some() {
-                findings.push(score_unit(child, src, lang, container));
-            }
+            findings.extend(score_unit(child, src, lang, container));
         } else if info.flags.has(Flags::CONTAINER) {
             let nested = container_path(child, src, lang, container);
             collect(child, src, lang, nested.as_deref(), findings);
@@ -65,7 +62,14 @@ fn container_path(
     }
 }
 
-fn score_unit(node: Node<'_>, src: &[u8], lang: &Language, container: Option<&str>) -> Finding {
+/// A bodyless (abstract or interface) method would only ever report a zero.
+fn score_unit(
+    node: Node<'_>,
+    src: &[u8],
+    lang: &Language,
+    container: Option<&str>,
+) -> Option<Finding> {
+    field(node, lang.fields.body)?;
     let name = (lang.spec.hooks.unit_name)(node, src);
 
     let score = {
@@ -79,7 +83,7 @@ fn score_unit(node: Node<'_>, src: &[u8], lang: &Language, container: Option<&st
         field(node, lang.fields.body).map_or(0, |body| score_node(body, &cx))
     };
 
-    Finding {
+    Some(Finding {
         container: container.map(ToString::to_string),
         name: name.text,
         origin: name.origin,
@@ -87,7 +91,7 @@ fn score_unit(node: Node<'_>, src: &[u8], lang: &Language, container: Option<&st
         score,
         suppression: suppression(node, src, lang),
         language: lang.spec.id,
-    }
+    })
 }
 
 /// A declaration node starts at its attributes or decorators, not at its signature line.
