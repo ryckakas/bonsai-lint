@@ -1,5 +1,5 @@
 {
-  "name": "bonsai",
+  "name": "bonsai-lint",
   "displayName": "bonsai \u2014 cognitive complexity for PHP, JS and TS",
   "description": "Flags functions that are hard to read, across PHP, JavaScript and TypeScript. Rust-powered, no runtime required.",
   "version": "0.1.0",

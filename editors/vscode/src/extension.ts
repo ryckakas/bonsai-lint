@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { resolveBinary, type Binary } from "./binary";
 import { scan, type Finding } from "./run";
+import { diagnosticSpan } from "./span";
 
 const MISSING_BINARY_DISMISSED = "bonsai.missingBinaryDismissed";
 
@@ -133,8 +134,9 @@ async function refresh(document: vscode.TextDocument): Promise<void> {
 }
 
 function toDiagnostic(document: vscode.TextDocument, finding: Finding): vscode.Diagnostic {
-  const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
-  const range = document.lineAt(line).range;
+  const lines = document.getText().split(/\r?\n/);
+  const span = diagnosticSpan(lines, finding.line - 1);
+  const range = new vscode.Range(span.line, span.start, span.line, span.end);
 
   const diagnostic = new vscode.Diagnostic(
     range,

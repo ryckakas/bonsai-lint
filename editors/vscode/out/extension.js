@@ -38,6 +38,7 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const binary_1 = require("./binary");
 const run_1 = require("./run");
+const span_1 = require("./span");
 const MISSING_BINARY_DISMISSED = "bonsai.missingBinaryDismissed";
 /**
  * Coalesces keystrokes. TypeScript projects keep far more files open than PHP ones, and one
@@ -135,8 +136,9 @@ async function refresh(document) {
     }
 }
 function toDiagnostic(document, finding) {
-    const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
-    const range = document.lineAt(line).range;
+    const lines = document.getText().split(/\r?\n/);
+    const span = (0, span_1.diagnosticSpan)(lines, finding.line - 1);
+    const range = new vscode.Range(span.line, span.start, span.line, span.end);
     const diagnostic = new vscode.Diagnostic(range, `${finding.name} has a cognitive complexity of ${finding.score}`, vscode.DiagnosticSeverity.Warning);
     diagnostic.source = "bonsai";
     diagnostic.code = "cognitive-complexity";

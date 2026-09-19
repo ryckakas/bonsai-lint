@@ -4,6 +4,8 @@ Flags functions that are hard to read, across PHP, JavaScript and TypeScript. Po
 [bonsai-lint](https://github.com/ryckakas/bonsai-lint) — a single Rust binary, with no PHP
 runtime and no Node runtime involved in the analysis.
 
+![A cognitive complexity warning underlining a TypeScript function name, with the Problems panel showing one diagnostic](https://github.com/ryckakas/bonsai-lint/raw/HEAD/editors/vscode/images/diagnostic.png)
+
 ## What it does
 
 Reports one warning per function that scores above the threshold, on the declaration line.
@@ -12,6 +14,13 @@ how hard it is to *test*.
 
 It analyses the buffer **as you type**, not the file on disk, so a diagnostic appears before you
 save. Analysis is debounced, and each file is scored in a single short-lived process.
+
+## It sees code other tools miss
+
+Procedural scripts, templates, route files and module-level bootstrap are scored too, reported
+as `<toplevel>`, rather than skipped for living outside a function.
+
+![A cognitive complexity warning on a PHP template whose logic sits at file scope, reported as <toplevel>](https://github.com/ryckakas/bonsai-lint/raw/HEAD/editors/vscode/images/toplevel.png)
 
 ## It agrees with CI, by design
 

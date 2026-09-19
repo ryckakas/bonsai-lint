@@ -1,6 +1,6 @@
 # bonsai-lint
 
-<img src="docs/images/cover-hero.png" alt="bonsai-lint — cognitive complexity linter for PHP, JavaScript and TypeScript" width="720">
+![bonsai-lint — cognitive complexity linter for PHP, JavaScript and TypeScript](docs/images/cover-hero.png)
 
 **Find the code that's hard to read — in seconds, across your whole monorepo.**
 
@@ -18,21 +18,20 @@ Scans **1.25 million lines in 3.5 seconds**.
 
 - **One tool for the whole repo.** A PHP backend and a TypeScript frontend score on the same
   metric, in one pass, with one number. The same logic written in either language gets the
-  same score — that is the point, and it is [tested](#the-same-code-scores-the-same).
+  same score — that is the point, and it is tested.
 - **No runtime, no plugins, no conflicts.** Nothing to wire into your PHPStan or ESLint setup,
   no plugin versions to keep in step, no Composer entry. A 6 MB binary, 1 MB to download — or
   `npx bonsai-lint` and install nothing at all.
 - **Never executes your code.** Syntax-only: no autoloader, no reflection, no module
   resolution. Safe to point at third-party or untrusted source.
-- **Correct where the reference JavaScript analyser isn't.** SonarSource ships two
-  implementations that disagree with each other; we follow the specification and the Java
-  reference. See [Divergences](#divergences-from-eslint-plugin-sonarjs).
+- **Complexity compounds through callbacks.** A closure inside a loop inside a condition is
+  scored at the depth it actually sits at, so a callback pyramid shows up as one hard function
+  instead of several innocent-looking ones.
 - **Sees the code other tools miss.** Procedural scripts, templates, route files and
-  module-level initialisation are scored too, not skipped for living outside a function. On one
-  production PHP backend that surfaced **321 units no function-based scanner reports** — the
-  worst of them scoring **173**.
+  module-level initialisation are scored too, not skipped for living outside a function. On a
+  legacy codebase that is often where the worst of it has been hiding.
 - **Adoptable on day one.** Baseline your existing violations and gate on regressions, instead
-  of being told to fix 400 functions before you can turn it on.
+  of being told to fix hundreds of functions before you can turn it on.
 
 Cognitive complexity measures how hard code is to *read*, where cyclomatic complexity measures
 how hard it is to *test*. A `switch` with twenty arms is cyclomatically awful and cognitively
@@ -42,14 +41,11 @@ fine; three nested `if`s are the reverse. The metric is
 ## Install
 
 ```bash
-npx bonsai-lint --over 15 src/           # run it without installing anything
-npm install -D bonsai-lint               # or pin it in the project
-```
-
-```bash
-brew install ryckakas/tap/bonsai-lint    # macOS and Linux
+npx bonsai-lint --over 15 src/            # run it without installing anything
+npm install -D bonsai-lint                # or pin it in the project
+brew install ryckakas/tap/bonsai-lint     # macOS and Linux
+cargo install bonsai-lint                 # from source
 curl -LsSf https://github.com/ryckakas/bonsai-lint/releases/latest/download/bonsai-lint-installer.sh | sh
-cargo install bonsai-lint                # from source
 ```
 
 The npm package fetches the prebuilt binary for your platform on install — nothing is compiled,
@@ -76,7 +72,8 @@ A clean run prints nothing and exits 0. Exit 1 means a breach — or that the sc
 untrustworthy, because a path could not be read or matched no supported file. A gate that
 cannot read what it was pointed at must not report success.
 
-### Languages
+<details>
+<summary><b>Supported languages and extensions</b></summary>
 
 | Extensions | Parsed as |
 | --- | --- |
@@ -88,7 +85,10 @@ cannot read what it was pointed at must not report success.
 `.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
 annotations are the one thing this misparses.
 
-### The same code scores the same
+</details>
+
+<details>
+<summary><b>The same code scores the same in every language</b></summary>
 
 ```php
 foreach ($orders as $order) {          //  +1
@@ -103,12 +103,16 @@ foreach ($orders as $order) {          //  +1
   12  frontend/orders.ts:1   syncLineItems
 ```
 
-## Zero config, until you need it
+Identical logic, identical number. That is what makes one threshold meaningful across a
+monorepo.
+
+</details>
+
+## Configure it, or don't
 
 Nothing on disk is required. Defaults are a threshold of 15 for every language, `.gitignore`
-respected, top-level code scored.
-
-One `bonsai.toml` at the repository root covers a normal project:
+respected, top-level code scored. One `bonsai.toml` at the repository root covers a normal
+project:
 
 ```toml
 threshold = 15
@@ -118,7 +122,8 @@ exclude   = ["vendor/**", "**/*.generated.ts"]
 threshold = 20
 ```
 
-### Monorepos
+<details>
+<summary><b>Monorepos — per-team thresholds and baselines</b></summary>
 
 Add `domains` and each team owns its own thresholds and its own baseline, without editing a
 shared file. The root declares *where* domains may live, so a stray config cannot quietly
@@ -136,7 +141,7 @@ name      = "web"
 threshold = 20
 ```
 
-```
+```text
 packages/web/.bonsai-baseline.json       # each domain keeps its own
 services/billing/.bonsai-baseline.json
 ```
@@ -144,21 +149,10 @@ services/billing/.bonsai-baseline.json
 `--write-baseline` then writes one file per domain and prints what it wrote. Baseline keys are
 relative to the domain root, so they survive being checked out anywhere, on any platform.
 
-## Code outside a function is still code
+</details>
 
-Most complexity tools only score functions and methods, so a 200-line procedural template, a
-route table or a module-level bootstrap is invisible to them. bonsai scores whatever is left
-over as a `<toplevel>` unit, one per file:
-
-```text
- 173  services/api/templates/report/summary.php:1  <toplevel>
-  95  services/api/scripts/migrate-tenants.php:1  <toplevel>
-```
-
-Files with no top-level logic report nothing, so this costs you no noise. Turn it off with
-`--no-toplevel` or `toplevel = false`.
-
-## Baselines
+<details>
+<summary><b>Baselines — adopt it without fixing everything first</b></summary>
 
 ```bash
 bonsai --write-baseline src/
@@ -170,7 +164,10 @@ regression, never as an acceptance — a renamed function is reported rather tha
 inheriting someone else's amnesty. Entries that match nothing are reported too, so a baseline
 cannot quietly rot into a permanent exemption.
 
-## Suppression
+</details>
+
+<details>
+<summary><b>Suppressing a finding — with a reason, or not at all</b></summary>
 
 ```php
 // bonsai-ignore: hand-tuned state machine, splitting it hurts more than it helps
@@ -182,45 +179,67 @@ supported language. **A marker without a reason is refused**, reported on stderr
 finding stands. Suppression hides a finding but never changes a score, and `--all` always shows
 the real number.
 
+</details>
+
 ## Scoring
 
 Three rules from the [specification](https://www.sonarsource.com/resources/cognitive-complexity/):
 shorthand that doesn't break reading flow is free; **+1** for each break in linear flow;
-**+nesting** when a flow-breaker sits inside other flow-breakers.
+**+nesting** when a flow-breaker sits inside other flow-breakers. Full table in
+[docs/scoring-rules.md](docs/scoring-rules.md).
 
-Full table in [docs/scoring-rules.md](docs/scoring-rules.md).
+<details>
+<summary><b>Code outside a function is still code</b></summary>
 
-### Divergences from eslint-plugin-sonarjs
+Most complexity tools only score functions and methods, so a 200-line procedural template, a
+route table or a module-level bootstrap is invisible to them. bonsai scores whatever is left
+over as a `<toplevel>` unit, one per file:
 
-SonarSource ships two implementations of its own specification that disagree.
-`sonar-java` — the reference for the language the specification was written against — rolls
-nested functions up with a nesting increment. `eslint-plugin-sonarjs` scores every function
-independently from zero. **We follow the specification and the Java reference.**
+```text
+  84  services/api/templates/report/summary.php:1  <toplevel>
+  37  services/api/scripts/migrate-tenants.php:1  <toplevel>
+```
 
-| | Specification / `sonar-java` | `eslint-plugin-sonarjs` | bonsai-lint |
-| --- | --- | --- | --- |
-| Closure inside a function | rolls up, `+nesting` | scored separately from 0 | rolls up |
-| `??`, `a?.b` | free — "ignore shorthand" | **+1** | free |
-| `a && (b && c)` | 1 — parentheses are skipped | 1 | 1 |
-| JSX `{cond && <X/>}` | — | exempt | **+1**, like the ternary |
-| `const x = a \|\| []` | — | exempt | **+1** |
-| Code outside any function | initialiser blocks scored | not scored | scored as `<toplevel>` |
+<img src="editors/vscode/images/toplevel.png" alt="A cognitive complexity warning on a PHP template whose logic sits at file scope, reported as toplevel" width="720">
 
-The rollup difference is the one that matters. Resetting the nesting level at every function
-boundary means a callback pyramid costs almost nothing:
+Files with no top-level logic report nothing, so this costs you no noise. Turn it off with
+`--no-toplevel` or `toplevel = false`.
+
+</details>
+
+<details>
+<summary><b>How it differs from eslint-plugin-sonarjs</b></summary>
+
+Numbers from bonsai will not always match `eslint-plugin-sonarjs`. Every difference is a
+deliberate choice, and this is all of them, so you can judge which suits you:
+
+| | `eslint-plugin-sonarjs` | bonsai-lint |
+| --- | --- | --- |
+| Closure inside a function | scored separately, from zero | carries the nesting it sits at |
+| `??`, `a?.b` | +1 | free |
+| JSX `{cond && <X/>}` | exempt | +1, the same as the equivalent ternary |
+| `const x = a \|\| []` | exempt | +1 |
+| Code outside any function | not scored | scored as `<toplevel>` |
+
+The first row moves numbers the most. Scoring every function from zero means a pyramid of
+callbacks costs almost nothing:
 
 ```js
 if (a) { for (const x of xs) { xs.forEach(item => { if (b) { … } }); } }
 ```
 
-bonsai scores that **7** — one function, visibly a pyramid. Scoring each function from zero
-reports it as two easy functions at 3 and 1. Callback nesting is how JavaScript becomes
-unreadable, and a tool that cannot see it has missed the point of measuring JavaScript.
+bonsai reports that as a single unit scoring **7**. Scored per function it is two units, at 3
+and 1. Neither is wrong — they answer different questions. Per-function tells you how hard each
+piece is on its own; bonsai tells you how hard the whole thing is to read where it stands. If
+you care about callback depth, the second is the more useful number.
 
-Migrating from `eslint-plugin-sonarjs`? Expect your numbers to move, mostly upward, for these
-reasons and no others.
+Migrating? Expect your numbers to move, mostly upward, for these reasons and no others.
+
+</details>
 
 ## Editor
+
+<img src="editors/vscode/images/diagnostic.png" alt="A cognitive complexity warning underlining a TypeScript function name, with the Problems panel showing one diagnostic" width="720">
 
 The [VS Code extension](editors/vscode) reports diagnostics for all five language IDs. It
 analyses the buffer as you type, not the file on disk, and it deliberately does **not** pass a
@@ -229,15 +248,15 @@ threshold unless you set one — so the editor shows exactly what CI would fail 
 
 ## Performance
 
-| Corpus | Files | Lines | Units scored | Time |
-| --- | --- | --- | --- | --- |
-| Production monorepo, PHP + JS + TS | 12,145 | 1,254,938 | 47,245 | **3.5s** |
+| Corpus | Time |
+| --- | --- |
+| 1.25 million lines of PHP, JavaScript and TypeScript | **3.5s** |
 
 Roughly **360,000 lines per second**, across three languages, in a single pass, on an M-series
 Mac. No warm-up, no daemon, no language server — one process, start to finish.
 
-The binary is 6.1 MB and about 1 MB to download. A PHP-only build
-(`--no-default-features --features php`) is 3.4 MB, should you ever want it.
+One binary, 6.1 MB on disk and about 1 MB to download, with every language built in. There is
+no variant to choose and nothing to enable.
 
 ## Documentation
 

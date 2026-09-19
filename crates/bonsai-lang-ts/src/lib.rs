@@ -244,10 +244,33 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
                 return text(parent.child_by_field_name("left")?, src).map(|left| normalize(&left));
             }
             "export_statement" if is_value("value") => return Some("default".to_string()),
+            // A factory or wrapper call takes the name of whatever the call itself is bound to:
+            // `const useCart = defineStore('cart', () => {})` is `useCart`, not `defineStore#1`.
+            // Only a lone callable argument is unwrapped, so `app.get('/x', fn)` — where the
+            // call is nobody's value — still falls through to a positional key.
+            "arguments" if is_sole_callable_argument(parent, current) => {
+                let call = parent.parent()?;
+                if call.kind() != "call_expression" {
+                    return None;
+                }
+                current = call;
+            }
             kind if TRANSPARENT.contains(&kind) => current = parent,
             _ => return None,
         }
     }
+}
+
+fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {
+    let mut cursor = arguments.walk();
+    let mut callables = arguments
+        .named_children(&mut cursor)
+        .filter(|argument| UNIT.contains(&argument.kind()) || argument.kind() == "call_expression");
+
+    callables
+        .next()
+        .is_some_and(|first| first.id() == candidate.id())
+        && callables.next().is_none()
 }
 
 /// A callback that is nobody's value still needs a stable key, so it takes the call it belongs

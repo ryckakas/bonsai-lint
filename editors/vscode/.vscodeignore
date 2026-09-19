@@ -6,3 +6,7 @@ tsconfig.json
 
 # tests are compiled alongside the sources but have no business shipping
 out/**/*.test.js
+
+# The marketplace renders README images from the repository over HTTPS, never from inside the
+# package, so shipping them is dead weight. The icon lives at the package root and still ships.
+images/**

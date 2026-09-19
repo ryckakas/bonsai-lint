@@ -119,3 +119,44 @@ fn positional_names_stay_short() {
         assert!(name.len() < 40, "unreasonably long unit key: {name}");
     }
 }
+
+/// A store or component factory should take the name the call is bound to, not a positional key
+/// invented from the callee.
+#[test]
+fn a_factory_call_passes_its_binding_to_the_callback() {
+    let source = "export const useCartStore = defineStore('cart', () => { if (a) { f(); } });";
+    assert!(
+        names(source).contains(&"useCartStore".to_string()),
+        "{:?}",
+        names(source)
+    );
+}
+
+#[test]
+fn nested_wrapper_calls_still_reach_the_binding() {
+    let source = "const Button = React.memo(forwardRef((props, ref) => { if (a) { f(); } }));";
+    assert!(
+        names(source).contains(&"Button".to_string()),
+        "{:?}",
+        names(source)
+    );
+}
+
+/// A call that is nobody's value has no name to borrow, so the positional key stands.
+#[test]
+fn a_bare_call_does_not_borrow_a_name() {
+    let source = "app.get('/x', (req, res) => { if (a) { f(); } });";
+    assert!(
+        names(source).contains(&"app.get#1".to_string()),
+        "{:?}",
+        names(source)
+    );
+}
+
+/// Two callbacks in one call are ambiguous, so neither may claim the binding.
+#[test]
+fn an_ambiguous_call_keeps_positional_keys() {
+    let source = "const pair = combine(() => { if (a) { f(); } }, () => { if (b) { g(); } });";
+    let names = names(source);
+    assert!(names.iter().any(|n| n.starts_with("combine#")), "{names:?}");
+}

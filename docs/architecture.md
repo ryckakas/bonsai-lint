@@ -75,6 +75,11 @@ subset — including none. CI builds all four combinations.
 cargo build -p bonsai-lint --no-default-features --features php
 ```
 
+Feature subsets exist so that adding or removing a language stays a clean operation and the
+`#[cfg]` seams keep being exercised. **They are not a shipping option.** `dist` publishes one
+binary with every language built in; there is no slim artifact and no variant for a user to
+choose.
+
 ## Releasing
 
 Releasing is [`dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag builds every

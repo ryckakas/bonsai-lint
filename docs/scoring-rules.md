@@ -33,14 +33,13 @@ $a && ($b && $c)            // +1  parentheses are skipped, not treated as a bou
 $a && !($b && $c)           // +2  a negation is not a logical expression, so it ends the run
 ```
 
-Parentheses being transparent is what the reference implementation does
-(`ExpressionUtils.skipParentheses`), and it is why `!A && (B || C) && D` costs **3**: reading it,
-you switch operator mode three times.
+Grouping alone does not start a new run, which is why `!A && (B || C) && D` costs **3**: reading
+it, you switch operator mode three times.
 
 ## Nesting compounds across function boundaries
 
 A closure scores nothing itself but raises the nesting level, and its cost lands on the unit
-that contains it. This is the specification's own worked example:
+that contains it:
 
 ```java
 void myMethod2() {
@@ -77,8 +76,14 @@ are written:
 | `class F { field = () => {} }` | `F::field` |
 | `const api = { onClick() {} }` | `api::onClick` |
 | `export default function () {}` | `default` |
+| `const useCart = defineStore('cart', () => {})` | `useCart` |
 | `app.get('/x', (req, res) => {})` | `app.get#1` |
 | anything else | `<anonymous>` |
+
+A factory or wrapper call hands its own binding to the callback, so a Pinia store or a
+`React.memo(...)` component is named after the thing it is assigned to. Only a lone callable
+argument is unwrapped — a call that is nobody's value, such as `app.get('/x', fn)` or
+`describe('…', fn)`, keeps a positional key of `<callee>#<zero-based argument index>`.
 
 Keys never contain line numbers, so editing above a function does not invalidate its baseline
 entry. Where two positional or anonymous keys collide, the later one gains a `~2` suffix.
@@ -107,16 +112,19 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
 
 ## Divergences from eslint-plugin-sonarjs
 
-SonarSource ships two implementations of its own specification that disagree with each other.
-`sonar-java` — the reference for the language the specification was written against — rolls
-nested functions up with a nesting increment, in `visitLambdaExpression`. `eslint-plugin-sonarjs`
-pushes a fresh scope per function at nesting zero. We follow the specification and the Java
-reference.
+Implementations of cognitive complexity make different choices in a handful of places, and
+those choices change the numbers. Here is every one bonsai makes differently from
+`eslint-plugin-sonarjs`, so anyone comparing output can see exactly where a gap comes from.
 
-| | Specification / `sonar-java` | `eslint-plugin-sonarjs` | bonsai-lint |
-| --- | --- | --- | --- |
-| Closure inside a function | rolls up, `+nesting` | scored separately from 0 | rolls up |
-| `??`, `a?.b` | free | +1 | free |
-| JSX `{cond && <X/>}` | — | exempt | +1 |
-| `const x = a \|\| []` | — | exempt | +1 |
-| Code outside any function | initialiser blocks scored | not scored | scored as `<toplevel>` |
+The first is the one that moves numbers: bonsai scores a nested function at the depth it sits
+at and rolls it into the unit that contains it, where `eslint-plugin-sonarjs` scores each
+function from zero on its own. Per-function says how hard each piece is in isolation;
+rolling up says how hard the whole thing is to read in place.
+
+| | `eslint-plugin-sonarjs` | bonsai-lint |
+| --- | --- | --- |
+| Closure inside a function | scored separately, from zero | carries the nesting it sits at |
+| `??`, `a?.b` | +1 | free |
+| JSX `{cond && <X/>}` | exempt | +1, the same as the equivalent ternary |
+| `const x = a \|\| []` | exempt | +1 |
+| Code outside any function | not scored | scored as `<toplevel>` |
