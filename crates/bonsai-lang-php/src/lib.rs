@@ -44,6 +44,7 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         call: CALL,
         comment: &["comment"],
         leading_trivia: &["attribute_list"],
+        preamble: &["php_tag"],
     },
     fields: FieldNames {
         name: "name",

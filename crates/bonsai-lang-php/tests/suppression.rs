@@ -102,3 +102,58 @@ fn a_marker_above_an_assigned_closure_is_honoured() {
         Suppression::Reasoned("hand-tuned".to_string())
     );
 }
+
+/// File-level code is reported on line 1, so its marker trails the open tag or sits in the
+/// comment block at the top of the file.
+#[test]
+fn a_marker_on_the_open_tag_line_suppresses_the_file() {
+    let source =
+        "<?php // bonsai-lint-ignore: legacy bootstrap script\nif ($a) { if ($b) { echo 1; } }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("legacy bootstrap script".to_string())
+    );
+}
+
+#[test]
+fn a_marker_in_a_top_of_file_docblock_suppresses_the_file() {
+    let source = "<?php\n/**\n * Template.\n * bonsai-lint-ignore: rendered markup\n */\nif ($a) { echo 1; }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("rendered markup".to_string())
+    );
+}
+
+#[test]
+fn a_bare_marker_on_the_open_tag_line_is_refused_for_the_file() {
+    let source = "<?php // bonsai-lint-ignore\nif ($a) { echo 1; }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::MissingReason
+    );
+}
+
+/// One comment silences one unit: a marker directly above the first function is that function's,
+/// while one trailing the open tag can only be the file's.
+#[test]
+fn a_marker_above_the_first_function_belongs_to_it_not_the_file() {
+    let source = "<?php\n// bonsai-lint-ignore: reason\nfunction target() { if ($a) { echo 1; } }\nif ($b) { echo 2; }\n";
+    assert_eq!(
+        suppression_of(source, "target"),
+        Suppression::Reasoned("reason".to_string())
+    );
+    assert_eq!(suppression_of(source, "<toplevel>"), Suppression::None);
+
+    let on_tag = "<?php // bonsai-lint-ignore: reason\nfunction target() { if ($a) { echo 1; } }\nif ($b) { echo 2; }\n";
+    assert_eq!(suppression_of(on_tag, "target"), Suppression::None);
+    assert_eq!(
+        suppression_of(on_tag, "<toplevel>"),
+        Suppression::Reasoned("reason".to_string())
+    );
+}
+
+#[test]
+fn a_marker_after_the_first_statement_does_not_suppress_the_file() {
+    let source = "<?php\n$x = 1;\n// bonsai-lint-ignore: reason\nif ($a) { echo 1; }\n";
+    assert_eq!(suppression_of(source, "<toplevel>"), Suppression::None);
+}

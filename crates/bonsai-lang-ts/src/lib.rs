@@ -62,6 +62,7 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         call: &["call_expression"],
         comment: &["comment"],
         leading_trivia: &["decorator"],
+        preamble: &["hash_bang_line"],
     },
     fields: FieldNames {
         name: "name",

@@ -581,3 +581,39 @@ fn paths_print_the_same_however_the_scan_root_is_spelled() {
         stdout(&text)
     );
 }
+
+#[test]
+fn a_file_level_marker_is_honoured_and_a_bare_one_refused_out_loud() {
+    let project = Project::new();
+    project
+        .file(
+            "src/bootstrap.php",
+            "<?php // bonsai-lint-ignore: legacy bootstrap\nif ($a) { if ($b) { echo 1; } }\n",
+        )
+        .file(
+            "src/bare.php",
+            "<?php // bonsai-lint-ignore\nif ($a) { if ($b) { echo 1; } }\n",
+        );
+
+    let honoured = project.run(&["--over", "1", "src/bootstrap.php"]);
+    assert_eq!(code(&honoured), 0, "{}", stderr(&honoured));
+    assert!(stdout(&honoured).is_empty(), "{}", stdout(&honoured));
+
+    let refused = project.run(&["--over", "1", "src/bare.php"]);
+    assert_eq!(code(&refused), 1);
+    assert!(
+        stderr(&refused).contains("needs a reason"),
+        "{}",
+        stderr(&refused)
+    );
+    assert!(
+        stderr(&refused).contains("<toplevel>"),
+        "{}",
+        stderr(&refused)
+    );
+    assert!(
+        stdout(&refused).contains("<toplevel>"),
+        "{}",
+        stdout(&refused)
+    );
+}

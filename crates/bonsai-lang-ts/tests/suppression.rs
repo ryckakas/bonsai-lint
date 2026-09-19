@@ -123,3 +123,51 @@ fn a_decorator_does_not_move_the_reported_line() {
     let source = "class A {\n  @Get('/x')\n  @Auth()\n  handler() { if (a) { f(); } }\n}\n";
     assert_eq!(line_of(source, "handler"), 4);
 }
+
+/// File-level code is reported on line 1, so its marker sits in the comment block at the top of
+/// the file, behind a shebang if there is one.
+#[test]
+fn a_marker_on_the_first_line_suppresses_the_file() {
+    let source = "// bonsai-lint-ignore: module bootstrap\nif (a) { if (b) { run(); } }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("module bootstrap".to_string())
+    );
+}
+
+#[test]
+fn a_marker_behind_a_shebang_suppresses_the_file() {
+    let source = "#!/usr/bin/env node\n// bonsai-lint-ignore: cli entry point\nif (a) { run(); }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("cli entry point".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_the_imports_suppresses_the_file() {
+    let source = "// bonsai-lint-ignore: route table\nimport { app } from './app';\nif (a) { app.use(b); }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("route table".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_the_first_function_belongs_to_it_not_the_file() {
+    let source = "// bonsai-lint-ignore: reason\nfunction target() { if (a) { run(); } }\nif (b) { run(); }\n";
+    assert_eq!(
+        suppression_of(source, "target"),
+        Suppression::Reasoned("reason".to_string())
+    );
+    assert_eq!(suppression_of(source, "<toplevel>"), Suppression::None);
+}
+
+#[test]
+fn a_bare_marker_at_the_top_of_the_file_is_refused() {
+    let source = "// bonsai-lint-ignore\nif (a) { run(); }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::MissingReason
+    );
+}

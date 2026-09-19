@@ -1,23 +1,22 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use tree_sitter::{Node, Tree};
 
 use crate::finding::{Finding, NameOrigin, Suppression, TOPLEVEL_UNIT};
 use crate::language::{field, Flags, Language, Role};
-use crate::suppression::suppression;
+use crate::suppression::{toplevel_suppression, unit_marker};
 use crate::walk::{score_node, score_nodes, WalkCx};
 
 #[must_use]
 pub fn analyze(tree: &Tree, src: &[u8], lang: &Language, toplevel: bool) -> Vec<Finding> {
     let mut findings = Vec::new();
+    let mut claimed = HashSet::new();
     let root = tree.root_node();
 
-    collect(root, src, lang, None, &mut findings);
+    collect(root, src, lang, None, &mut findings, &mut claimed);
 
     if toplevel {
-        if let Some(finding) = toplevel_finding(root, src, lang) {
-            findings.push(finding);
-        }
+        findings.extend(toplevel_finding(root, src, lang, &claimed));
     }
 
     disambiguate(&mut findings);
@@ -33,18 +32,19 @@ fn collect(
     lang: &Language,
     container: Option<&str>,
     findings: &mut Vec<Finding>,
+    claimed: &mut HashSet<usize>,
 ) {
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         let info = lang.info(child.kind_id());
 
         if info.flags.has(Flags::UNIT) {
-            findings.extend(score_unit(child, src, lang, container));
+            findings.extend(score_unit(child, src, lang, container, claimed));
         } else if info.flags.has(Flags::CONTAINER) {
             let nested = container_path(child, src, lang, container);
-            collect(child, src, lang, nested.as_deref(), findings);
+            collect(child, src, lang, nested.as_deref(), findings, claimed);
         } else {
-            collect(child, src, lang, container, findings);
+            collect(child, src, lang, container, findings, claimed);
         }
     }
 }
@@ -68,9 +68,14 @@ fn score_unit(
     src: &[u8],
     lang: &Language,
     container: Option<&str>,
+    claimed: &mut HashSet<usize>,
 ) -> Option<Finding> {
     field(node, lang.fields.body)?;
     let name = (lang.spec.hooks.unit_name)(node, src);
+    let marker = unit_marker(node, src, lang);
+    if let Some((comment, _)) = &marker {
+        claimed.insert(*comment);
+    }
 
     let score = {
         let cx = WalkCx {
@@ -89,7 +94,7 @@ fn score_unit(
         origin: name.origin,
         line: declaration_row(node, lang) + 1,
         score,
-        suppression: suppression(node, src, lang),
+        suppression: marker.map_or(Suppression::None, |(_, found)| found),
         language: lang.spec.id,
     })
 }
@@ -110,7 +115,12 @@ pub fn declaration_row(node: Node<'_>, lang: &Language) -> usize {
 /// Code outside any function is invisible to a purely unit-based scan, which is exactly where
 /// procedural scripts and module-level initialisation hide. A zero score is not reported, since
 /// most files legitimately have no top-level logic and emitting them all would be noise.
-fn toplevel_finding(root: Node<'_>, src: &[u8], lang: &Language) -> Option<Finding> {
+fn toplevel_finding(
+    root: Node<'_>,
+    src: &[u8],
+    lang: &Language,
+    claimed: &HashSet<usize>,
+) -> Option<Finding> {
     let cx = WalkCx {
         lang,
         src,
@@ -132,7 +142,7 @@ fn toplevel_finding(root: Node<'_>, src: &[u8], lang: &Language) -> Option<Findi
         origin: NameOrigin::TopLevel,
         line: 1,
         score,
-        suppression: Suppression::None,
+        suppression: toplevel_suppression(root, src, lang, claimed),
         language: lang.spec.id,
     })
 }

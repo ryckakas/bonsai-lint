@@ -35,6 +35,7 @@ impl Flags {
     pub const NESTING_FN: Self = Self(1 << 2);
     pub const LEADING_TRIVIA: Self = Self(1 << 3);
     pub const PARENTHESIS: Self = Self(1 << 4);
+    pub const PREAMBLE: Self = Self(1 << 5);
 
     #[must_use]
     pub const fn has(self, other: Self) -> bool {
@@ -239,12 +240,13 @@ impl LanguageSpec {
         kinds: &mut [KindInfo],
         errors: &mut SpecErrors,
     ) {
-        let flags: [(&'static [&'static str], Flags); 5] = [
+        let flags: [(&'static [&'static str], Flags); 6] = [
             (self.kinds.unit, Flags::UNIT),
             (self.kinds.container, Flags::CONTAINER),
             (self.kinds.nesting_function, Flags::NESTING_FN),
             (self.kinds.leading_trivia, Flags::LEADING_TRIVIA),
             (self.kinds.parenthesis, Flags::PARENTHESIS),
+            (self.kinds.preamble, Flags::PREAMBLE),
         ];
 
         for (kind, flag) in each_kind(&flags) {

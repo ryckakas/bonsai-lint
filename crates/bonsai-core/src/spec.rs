@@ -30,6 +30,9 @@ pub struct KindSets {
     pub call: &'static [&'static str],
     pub comment: &'static [&'static str],
     pub leading_trivia: &'static [&'static str],
+    /// What may precede code at the top of a file: an open tag, a shebang. A file-level marker
+    /// is searched for behind these.
+    pub preamble: &'static [&'static str],
 }
 
 impl KindSets {
@@ -49,6 +52,7 @@ impl KindSets {
             self.call,
             self.comment,
             self.leading_trivia,
+            self.preamble,
         ]
         .into_iter()
         .flatten()

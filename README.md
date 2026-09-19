@@ -223,6 +223,11 @@ marker after a closing brace on its own line belongs to nobody. **A marker witho
 refused**, reported on stderr, and the finding stands. Suppression hides a finding but never
 changes a score, and `--all` always shows the real number.
 
+A `<toplevel>` finding is reported on line 1, so its marker goes in the comment block at the top
+of the file: trailing `<?php`, in the file's docblock, or on the first line of a script, behind a
+shebang if there is one. One comment silences one unit, so a marker directly above the first
+function is that function's; write it on the `<?php` line to address the file instead.
+
 </details>
 
 ## Scoring

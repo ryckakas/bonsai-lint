@@ -71,7 +71,9 @@ unit. Whatever is left over at file scope — procedural code, templates, route 
 module-level bootstrap, the values of a configuration object — is scored as a single
 `<toplevel>` unit per file, and reported only when it scores above zero.
 
-A unit is reported on its signature line, below any `#[Attribute]` or `@decorator`.
+A unit is reported on its signature line, below any `#[Attribute]` or `@decorator`. The
+`<toplevel>` unit is reported on line 1, and a suppression marker for it lives in the comment
+block at the top of the file, behind the open tag or shebang.
 
 Units are named from wherever they are bound, since most closures are anonymous where they are
 written:
