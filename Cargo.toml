@@ -43,8 +43,8 @@ rust_2018_idioms = { level = "warn", priority = -1 }
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
-excessive_nesting = "warn"
-too_many_lines = "warn"
+excessive_nesting = "deny"
+too_many_lines = "deny"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 module_name_repetitions = "allow"

@@ -4,6 +4,9 @@
 
 **Find the code that's hard to read — in seconds, across your whole monorepo.**
 
+*Bonsai — the art of keeping a tree small enough to take in at a glance. Same idea, applied to
+your syntax trees.*
+
 A cognitive complexity linter written in Rust. One static binary for PHP, JavaScript and
 TypeScript. No PHP runtime, no Node runtime, no Composer entry, nothing added to your project.
 Scans **1.25 million lines in 3.5 seconds**.
@@ -62,7 +65,8 @@ bonsai-lint --write-baseline src/    # record today's findings, exit 0
 bonsai-lint --lang php src/          # one language only: `php` or `typescript`
 ```
 
-The rest of the flags, for monorepos and editors:
+<details>
+<summary><b>The rest of the flags — monorepos, CI and editors</b></summary>
 
 ```bash
 bonsai-lint --domain web                       # one declared domain only
@@ -71,6 +75,8 @@ bonsai-lint --config packages/web src/         # discover config from here, not 
 bonsai-lint --no-toplevel src/                 # skip code outside any function
 bonsai-lint --stdin --stdin-path src/a.php < buffer   # score an unsaved buffer as that file
 ```
+
+</details>
 
 ```text
   69  packages/billing/src/invoice-mapper.service.ts:47  InvoiceMapperService::mapLineItems
@@ -136,6 +142,9 @@ exclude   = ["vendor/**", "**/*.generated.ts"]
 threshold = 20
 ```
 
+<details>
+<summary><b>Every configuration key</b></summary>
+
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `threshold` | `15` | Fail above this score. A `[php]` or `[typescript]` section overrides it per language. |
@@ -147,6 +156,8 @@ threshold = 20
 
 A misspelt key is an error rather than a silent default, and so is a negated glob: `!pattern`
 is not supported.
+
+</details>
 
 <details>
 <summary><b>Monorepos — per-team thresholds and baselines</b></summary>

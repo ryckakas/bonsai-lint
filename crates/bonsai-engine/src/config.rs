@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 
+use crate::finding::normalize_key;
+
 pub const CONFIG_FILE: &str = "bonsai-lint.toml";
 pub const BASELINE_FILE: &str = ".bonsai-lint-baseline.json";
 pub const DEFAULT_THRESHOLD: u32 = 15;
@@ -199,11 +201,9 @@ fn declared_domains(
             ));
         }
 
-        let fallback = directory
-            .strip_prefix(root)
-            .unwrap_or(&directory)
-            .to_string_lossy()
-            .to_string();
+        // A domain's name reaches the user through reports and `--domain`, so it is spelled
+        // with forward slashes on every platform rather than the host separator.
+        let fallback = normalize_key(&directory, root);
         let own_exclude = build_globset(child.exclude.as_deref().unwrap_or_default())?;
         domains.push(domain_from(
             &child,

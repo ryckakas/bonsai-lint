@@ -199,7 +199,9 @@ pub fn rank(located: &mut [Located]) {
 }
 
 /// `bonsai-lint .` and `bonsai-lint src` must print `src/a.php` the same way, so the `./` a
-/// walk from the current directory prepends is dropped.
+/// walk from the current directory prepends is dropped. The separator is forward slash on every
+/// platform too: these paths are read out of JSON by editors and compared in CI, where a report
+/// that changes shape with the host is a report nobody can assert on.
 #[must_use]
 pub fn display_path(path: &Path) -> PathBuf {
     let tidy: PathBuf = path
@@ -207,10 +209,9 @@ pub fn display_path(path: &Path) -> PathBuf {
         .filter(|component| *component != Component::CurDir)
         .collect();
     if tidy.as_os_str().is_empty() {
-        PathBuf::from(".")
-    } else {
-        tidy
+        return PathBuf::from(".");
     }
+    PathBuf::from(tidy.to_string_lossy().replace('\\', "/"))
 }
 
 /// Legacy Latin-1 sources still parse; the replaced bytes sit in strings and comments, which do

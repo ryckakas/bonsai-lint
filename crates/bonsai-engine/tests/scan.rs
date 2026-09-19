@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bonsai_engine::config;
-use bonsai_engine::scan::ScanOutcome;
+use bonsai_engine::scan::{display_path, ScanOutcome};
 use bonsai_engine::Scanner;
 
 const KNOWN: &[&str] = &["php", "typescript"];
@@ -99,4 +99,17 @@ fn unreadable_paths_are_errors_that_taint_the_scan() {
 
     assert_eq!(outcome.stats.errors, 1);
     assert_eq!(outcome.stats.files, 0);
+}
+
+#[test]
+fn reported_paths_use_one_separator_on_every_platform() {
+    assert_eq!(
+        display_path(Path::new("./src/a.php")),
+        Path::new("src/a.php")
+    );
+    assert_eq!(
+        display_path(Path::new(r"packages\web\src\a.ts")).to_string_lossy(),
+        "packages/web/src/a.ts"
+    );
+    assert_eq!(display_path(Path::new(".")), Path::new("."));
 }
