@@ -25,9 +25,12 @@ as `<toplevel>`, rather than skipped for living outside a function.
 ## It agrees with CI, by design
 
 The extension deliberately does **not** pass a threshold unless you set one. Your repository's
-`bonsai-lint.toml`, its per-domain thresholds, its baselines and your `bonsai-lint-ignore`
-markers all apply exactly as they do on the command line. What you see in the editor is what
-the build will fail on — nothing more, nothing less.
+`bonsai-lint.toml`, its per-domain thresholds, its excludes, its baselines and your
+`bonsai-lint-ignore` markers all apply exactly as they do on the command line. What you see in
+the editor is what the build will fail on — nothing more, nothing less.
+
+Anything that goes wrong — a broken `bonsai-lint.toml`, a binary that will not start — is written
+to the `bonsai-lint` output channel, and the first occurrence of each problem pops up once.
 
 ## Settings
 
@@ -35,13 +38,14 @@ the build will fail on — nothing more, nothing less.
 | --- | --- | --- |
 | `bonsai-lint.enable` | `true` | Report cognitive complexity. |
 | `bonsai-lint.languages` | all five | Editor language ids to analyse. |
-| `bonsai-lint.path` | `""` | Path to a binary. Empty uses the bundled one, then `PATH`. |
-| `bonsai-lint.threshold` | unset | Force one threshold. **Leave unset** so the repository wins. |
+| `bonsai-lint.path` | `""` | Path to a binary, absolute or relative to the workspace folder. Empty uses the bundled one, then `PATH`. |
+| `bonsai-lint.threshold` | unset | Force one whole-number threshold. **Leave unset** so the repository wins. |
 
 ## Requirements
 
-Install the CLI with `brew install ryckakas/tap/bonsai-lint`, or set `bonsai-lint.path` to a binary
-you already have. The extension will tell you once if it cannot find one.
+VS Code 1.90 or newer. Install the CLI with `brew install ryckakas/tap/bonsai-lint`, or set
+`bonsai-lint.path` to a binary you already have. The extension will tell you once if it cannot
+find one.
 
 ## License
 

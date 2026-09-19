@@ -58,6 +58,9 @@ export function scan(options: ScanOptions): Promise<Finding[]> {
       reject(new Error(stderr.trim() !== "" ? stderr.trim() : (error?.message ?? "no output")));
     });
 
+    // The CLI exits before reading when the path has no supported extension; the write then
+    // fails with EPIPE, and the exit callback already explains it better than a crash would.
+    child.stdin?.on("error", () => undefined);
     child.stdin?.end(text);
   });
 }

@@ -12,8 +12,10 @@ const MISSING_BINARY_DISMISSED = "bonsai-lint.missingBinaryDismissed";
 const DEBOUNCE_MS = 300;
 
 let diagnostics: vscode.DiagnosticCollection;
+let output: vscode.OutputChannel;
 let binary: Binary | undefined;
 const pending = new Map<string, NodeJS.Timeout>();
+const reported = new Set<string>();
 
 interface Settings {
   enable: boolean;
@@ -24,9 +26,10 @@ interface Settings {
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   diagnostics = vscode.languages.createDiagnosticCollection("bonsai-lint");
-  context.subscriptions.push(diagnostics);
+  output = vscode.window.createOutputChannel("bonsai-lint");
+  context.subscriptions.push(diagnostics, output);
 
-  binary = await resolveBinary(settings().path);
+  binary = await locateBinary();
   if (binary === undefined) {
     await reportMissingBinary(context);
   }
@@ -38,7 +41,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidCloseTextDocument((document) => forget(document)),
     vscode.workspace.onDidChangeConfiguration(async (event) => {
       if (event.affectsConfiguration("bonsai-lint")) {
-        binary = await resolveBinary(settings().path);
+        binary = await locateBinary();
         await refreshAll();
       }
     }),
@@ -71,6 +74,18 @@ function settings(): Settings {
     ]),
     threshold: typeof threshold === "number" ? threshold : undefined,
   };
+}
+
+async function locateBinary(): Promise<Binary | undefined> {
+  const { path } = settings();
+  const found = await resolveBinary(path, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+  if (path.trim() !== "" && found?.source !== "setting") {
+    report(
+      `bonsai-lint.path is set to "${path}" but nothing exists there; ` +
+        `using ${found === undefined ? "nothing" : `the ${found.source} binary`} instead.`,
+    );
+  }
+  return found;
 }
 
 function schedule(document: vscode.TextDocument): void {
@@ -116,25 +131,36 @@ async function refresh(document: vscode.TextDocument): Promise<void> {
     return;
   }
 
+  const version = document.version;
+  const text = document.getText();
+
   try {
     const findings = await scan({
       binary,
       file: document.uri.fsPath,
       workspaceRoot: workspace.uri.fsPath,
       threshold,
-      text: document.getText(),
+      text,
     });
 
-    diagnostics.set(document.uri, findings.map((finding) => toDiagnostic(document, finding)));
+    // A save and a debounced edit can overlap; the slower, older result must not win.
+    if (document.isClosed || document.version !== version) {
+      return;
+    }
+
+    const lines = text.split(/\r?\n/);
+    diagnostics.set(document.uri, findings.map((finding) => toDiagnostic(lines, finding)));
   } catch (error) {
+    if (document.isClosed || document.version !== version) {
+      return;
+    }
     // A broken scan should not leave stale diagnostics implying the file is clean.
     diagnostics.delete(document.uri);
-    console.error("bonsai-lint:", error);
+    report(error instanceof Error ? error.message : String(error));
   }
 }
 
-function toDiagnostic(document: vscode.TextDocument, finding: Finding): vscode.Diagnostic {
-  const lines = document.getText().split(/\r?\n/);
+function toDiagnostic(lines: string[], finding: Finding): vscode.Diagnostic {
   const span = diagnosticSpan(lines, finding.line - 1);
   const range = new vscode.Range(span.line, span.start, span.line, span.end);
 
@@ -147,6 +173,25 @@ function toDiagnostic(document: vscode.TextDocument, finding: Finding): vscode.D
   diagnostic.code = "cognitive-complexity";
 
   return diagnostic;
+}
+
+/**
+ * Every problem lands in the output channel; the popup fires once per distinct message, or a
+ * broken `bonsai-lint.toml` would nag on every keystroke.
+ */
+function report(message: string): void {
+  output.appendLine(message);
+  if (reported.has(message)) {
+    return;
+  }
+  reported.add(message);
+
+  const show = "Show output";
+  void vscode.window.showWarningMessage(`bonsai-lint: ${message}`, show).then((choice) => {
+    if (choice === show) {
+      output.show(true);
+    }
+  });
 }
 
 /**

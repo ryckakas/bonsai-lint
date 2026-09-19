@@ -22,12 +22,17 @@ pub fn descriptors() -> &'static [&'static LanguageDescriptor] {
     })
 }
 
+/// The ids a user names in `--lang`, `--over` and a config section. Two descriptors can share
+/// one spec — `.ts` and `.tsx` are one language parsed by two grammars — so this deduplicates.
 #[must_use]
-pub fn by_id(id: &str) -> Option<&'static LanguageDescriptor> {
-    descriptors()
-        .iter()
-        .copied()
-        .find(|descriptor| descriptor.id == id)
+pub fn language_ids() -> Vec<&'static str> {
+    let mut ids = Vec::new();
+    for descriptor in descriptors() {
+        if !ids.contains(&descriptor.spec.id) {
+            ids.push(descriptor.spec.id);
+        }
+    }
+    ids
 }
 
 /// Declaration files hold only signatures, so every unit in them scores zero and they are pure

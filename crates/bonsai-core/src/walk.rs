@@ -40,8 +40,15 @@ pub fn score_nodes<'t>(nodes: impl Iterator<Item = Node<'t>>, cx: &WalkCx<'_>) -
 fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
     let info = cx.lang.info(node.kind_id());
 
-    if cx.skip_units && (info.flags.has(Flags::UNIT) || info.flags.has(Flags::CONTAINER)) {
-        return;
+    if cx.skip_units {
+        if info.flags.has(Flags::UNIT) {
+            return;
+        }
+        // A container's body is file-level code too; only the units inside it are reported apart.
+        if info.flags.has(Flags::CONTAINER) {
+            walk_children(node, nesting, cx, score);
+            return;
+        }
     }
 
     // Must be tested ahead of the role match: PHP's `function_definition` is both a unit kind
@@ -140,10 +147,12 @@ fn walk_else(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
     }
 }
 
-/// Branch bodies nest; the controlling header does not. Exempting every child that carries a
-/// header field rather than only the first matters for grammars where the field is `multiple`,
-/// as TypeScript's `for_statement.condition` is.
+/// Branch bodies nest; the controlling header does not. Anything before the body is header too,
+/// because PHP's `foreach` subject has no field name. Every header-field child is exempted, not
+/// just the first, since TypeScript's `for_statement.condition` is `multiple`.
 fn walk_control(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
+    let body_start = field(node, cx.lang.fields.body).map(|body| body.start_byte());
+
     let mut cursor = node.walk();
     if !cursor.goto_first_child() {
         return;
@@ -151,11 +160,9 @@ fn walk_control(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) 
     loop {
         let child = cursor.node();
         if child.is_named() {
-            let child_nesting = if cx.lang.is_header_field(cursor.field_id()) {
-                nesting
-            } else {
-                nesting + 1
-            };
+            let is_header = cx.lang.is_header_field(cursor.field_id())
+                || body_start.is_some_and(|start| child.end_byte() <= start);
+            let child_nesting = if is_header { nesting } else { nesting + 1 };
             walk(child, child_nesting, cx, score);
         }
         if !cursor.goto_next_sibling() {

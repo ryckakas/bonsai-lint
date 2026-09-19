@@ -1,5 +1,6 @@
 use tree_sitter::Node;
 
+use crate::collect::declaration_row;
 use crate::finding::{Suppression, SUPPRESSION_MARKER};
 use crate::language::{Flags, Language, Role};
 
@@ -21,6 +22,9 @@ fn leading(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Suppression> {
         let info = lang.info(current.kind_id());
 
         if info.role == Role::Trivia {
+            if trails_previous_sibling(current, lang) {
+                break;
+            }
             if let Some(found) = current.utf8_text(src).ok().and_then(parse_marker) {
                 return Some(found);
             }
@@ -32,6 +36,14 @@ fn leading(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Suppression> {
     }
 
     None
+}
+
+/// A comment on the same row as the previous sibling's end trails that sibling, not this one.
+fn trails_previous_sibling(comment: Node<'_>, lang: &Language) -> bool {
+    comment.prev_sibling().is_some_and(|previous| {
+        lang.role(previous) != Role::Trivia
+            && previous.end_position().row == comment.start_position().row
+    })
 }
 
 /// The signature line itself, which is where `eslint-disable-line` and `phpcs:ignore` have
@@ -56,12 +68,28 @@ fn trailing(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Suppression> 
         found
     }
 
-    let row = node.start_position().row;
+    let row = declaration_row(node, lang);
     let mut cursor = node.walk();
-    let found = node
+    let inside = node
         .children(&mut cursor)
         .find_map(|child| on_row(child, row, src, lang));
-    found
+    if inside.is_some() {
+        return inside;
+    }
+
+    // A one-line declaration's trailing comment is a child in some grammars and a sibling in
+    // others; both spellings must agree.
+    let mut sibling = node.next_sibling();
+    while let Some(current) = sibling.filter(|next| next.start_position().row == row) {
+        if lang.role(current) != Role::Trivia {
+            break;
+        }
+        if let Some(found) = current.utf8_text(src).ok().and_then(parse_marker) {
+            return Some(found);
+        }
+        sibling = current.next_sibling();
+    }
+    None
 }
 
 fn parse_marker(comment: &str) -> Option<Suppression> {

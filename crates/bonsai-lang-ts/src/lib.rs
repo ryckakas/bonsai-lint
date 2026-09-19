@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
 };
@@ -197,7 +198,8 @@ fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
 }
 
 /// Climbs to the declaration a marker would sit above. For `const handler = () => {}` the
-/// comment precedes the whole declaration, not the arrow function.
+/// comment precedes the whole declaration, not the arrow function; a class field or object pair
+/// is the declaration for the arrow it holds.
 fn suppression_anchor(node: Node<'_>) -> Node<'_> {
     let mut current = node;
     loop {
@@ -209,7 +211,9 @@ fn suppression_anchor(node: Node<'_>) -> Node<'_> {
             | "lexical_declaration"
             | "variable_declaration"
             | "export_statement"
-            | "expression_statement" => current = parent,
+            | "expression_statement"
+            | "public_field_definition"
+            | "pair" => current = parent,
             kind if TRANSPARENT.contains(&kind) => current = parent,
             _ => return current,
         }
@@ -241,7 +245,7 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
                 return text(parent.child_by_field_name("name")?, src).map(|n| strip_quotes(&n));
             }
             "assignment_expression" if is_value("right") => {
-                return text(parent.child_by_field_name("left")?, src).map(|left| normalize(&left));
+                return text(parent.child_by_field_name("left")?, src).map(|left| compact(&left));
             }
             "export_statement" if is_value("value") => return Some("default".to_string()),
             // A factory or wrapper call takes the name of whatever the call itself is bound to:
@@ -299,26 +303,9 @@ fn positional_name(node: Node<'_>, src: &[u8]) -> Option<String> {
         .named_children(&mut cursor)
         .position(|argument| argument.id() == node.id())?;
 
-    Some(format!("{}#{index}", normalize(&callee)))
+    Some(format!("{}#{index}", compact(&callee)))
 }
 
 fn text(node: Node<'_>, src: &[u8]) -> Option<String> {
     node.utf8_text(src).ok().map(ToString::to_string)
-}
-
-fn strip_quotes(text: &str) -> String {
-    let trimmed = text.trim();
-    let unquoted = trimmed
-        .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-        .or_else(|| {
-            trimmed
-                .strip_prefix('\'')
-                .and_then(|rest| rest.strip_suffix('\''))
-        });
-    unquoted.unwrap_or(trimmed).to_string()
-}
-
-fn normalize(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join("")
 }

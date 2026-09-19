@@ -55,11 +55,21 @@ and Node only launches it. The analysis itself is pure Rust.
 
 ```bash
 bonsai-lint src/                     # fail on anything above 15
-bonsai-lint --over 10 src/           # stricter
+bonsai-lint --over 10 src/           # stricter; `--over php=10,typescript=20` per language
 bonsai-lint --all src/               # every unit, ranked
 bonsai-lint --format json src/       # for editors and CI
 bonsai-lint --write-baseline src/    # record today's findings, exit 0
-bonsai-lint --lang php src/          # one language only
+bonsai-lint --lang php src/          # one language only: `php` or `typescript`
+```
+
+The rest of the flags, for monorepos and editors:
+
+```bash
+bonsai-lint --domain web                       # one declared domain only
+bonsai-lint --baseline shared.json .           # one baseline for every domain, keyed from the root
+bonsai-lint --config packages/web src/         # discover config from here, not from the first path
+bonsai-lint --no-toplevel src/                 # skip code outside any function
+bonsai-lint --stdin --stdin-path src/a.php < buffer   # score an unsaved buffer as that file
 ```
 
 ```text
@@ -75,12 +85,16 @@ cannot read what it was pointed at must not report success.
 <details>
 <summary><b>Supported languages and extensions</b></summary>
 
-| Extensions | Parsed as |
-| --- | --- |
-| `.php`, `.phtml` | PHP |
-| `.ts`, `.mts`, `.cts` | TypeScript |
-| `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX |
-| `*.d.ts` | skipped — signatures only |
+| Extensions | Parsed as | Language id |
+| --- | --- | --- |
+| `.php`, `.phtml` | PHP | `php` |
+| `.ts`, `.mts`, `.cts` | TypeScript | `typescript` |
+| `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
+| `*.d.ts` | skipped — signatures only | |
+
+The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
+`typescript` covers every JavaScript and TypeScript file however it is parsed. An id that is not
+one of these is an error, not a silent no-op.
 
 `.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
 annotations are the one thing this misparses.
@@ -122,6 +136,18 @@ exclude   = ["vendor/**", "**/*.generated.ts"]
 threshold = 20
 ```
 
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `threshold` | `15` | Fail above this score. A `[php]` or `[typescript]` section overrides it per language. |
+| `exclude` | `[]` | Globs, relative to the config's own directory. `*` stops at `/` and `**` crosses it, as in `.gitignore`. |
+| `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
+| `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |
+| `domains` | — | Root config only: globs naming directories that own their own config and baseline. |
+| `name` | the directory | A domain's name in output and for `--domain`. |
+
+A misspelt key is an error rather than a silent default, and so is a negated glob: `!pattern`
+is not supported.
+
 <details>
 <summary><b>Monorepos — per-team thresholds and baselines</b></summary>
 
@@ -147,7 +173,11 @@ services/billing/.bonsai-lint-baseline.json
 ```
 
 `--write-baseline` then writes one file per domain and prints what it wrote. Baseline keys are
-relative to the domain root, so they survive being checked out anywhere, on any platform.
+relative to the domain root, so they survive being checked out anywhere, on any platform. A
+domain's own `exclude` is relative to its root too; the root's applies everywhere.
+
+`--baseline shared.json` keeps every domain in one file instead, keyed from the repository root
+so two domains with a `src/index.ts` cannot collide.
 
 </details>
 
@@ -162,7 +192,11 @@ Records everything currently above the threshold as accepted. Later runs fail on
 that got worse, or on units the baseline has never seen. An unknown key is treated as a
 regression, never as an acceptance — a renamed function is reported rather than silently
 inheriting someone else's amnesty. Entries that match nothing are reported too, so a baseline
-cannot quietly rot into a permanent exemption.
+cannot quietly rot into a permanent exemption — but only by a scan that covered the whole
+domain, so a single file from a pre-commit hook or an editor buffer never cries stale.
+
+Without a `bonsai-lint.toml`, the directory holding the baseline is the project root, so
+`bonsai-lint --write-baseline .` followed by `bonsai-lint src/Foo.php` finds the same entries.
 
 </details>
 
@@ -175,9 +209,10 @@ function parse(string $input): Ast { /* ... */ }
 ```
 
 Works above the declaration, inside the docblock, or trailing the signature line, in every
-supported language. **A marker without a reason is refused**, reported on stderr, and the
-finding stands. Suppression hides a finding but never changes a score, and `--all` always shows
-the real number.
+supported language — for a `$handler = function () {}` or `const handler = () => {}` too. A
+marker after a closing brace on its own line belongs to nobody. **A marker without a reason is
+refused**, reported on stderr, and the finding stands. Suppression hides a finding but never
+changes a score, and `--all` always shows the real number.
 
 </details>
 

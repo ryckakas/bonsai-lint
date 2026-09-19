@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use bonsai_core::LanguageDescriptor;
@@ -18,12 +18,14 @@ pub struct ScanStats {
     pub domains: BTreeSet<usize>,
 }
 
-impl ScanStats {
-    fn absorb(&mut self, other: Self) {
-        self.files += other.files;
-        self.errors += other.errors;
-        self.domains.extend(other.domains);
-    }
+#[derive(Debug, Default)]
+pub struct ScanOutcome {
+    pub located: Vec<Located>,
+    pub stats: ScanStats,
+    /// Paths that could not be read. Any of these makes the scan untrustworthy.
+    pub errors: Vec<String>,
+    /// Files that were read but not exactly as written; the scan still stands.
+    pub warnings: Vec<String>,
 }
 
 /// A parser is expensive to build and `set_language` resets its state, so one is kept per
@@ -75,17 +77,15 @@ impl Scanner {
         paths: &[PathBuf],
         workspace: &Workspace,
         languages: Option<&[String]>,
-    ) -> (Vec<Located>, ScanStats, Vec<String>) {
-        let mut located = Vec::new();
-        let mut stats = ScanStats::default();
-        let mut errors = Vec::new();
+    ) -> ScanOutcome {
+        let mut outcome = ScanOutcome::default();
+        let mut seen = HashSet::new();
 
         for path in paths {
-            let partial = self.scan_one(path, workspace, languages, &mut located, &mut errors);
-            stats.absorb(partial);
+            self.scan_one(path, workspace, languages, &mut seen, &mut outcome);
         }
 
-        located.sort_by(|left, right| {
+        outcome.located.sort_by(|left, right| {
             right
                 .finding
                 .score
@@ -94,7 +94,7 @@ impl Scanner {
                 .then_with(|| left.finding.line.cmp(&right.finding.line))
         });
 
-        (located, stats, errors)
+        outcome
     }
 
     fn scan_one(
@@ -102,17 +102,17 @@ impl Scanner {
         root: &Path,
         workspace: &Workspace,
         languages: Option<&[String]>,
-        located: &mut Vec<Located>,
-        errors: &mut Vec<String>,
-    ) -> ScanStats {
-        let mut stats = ScanStats::default();
+        seen: &mut HashSet<PathBuf>,
+        outcome: &mut ScanOutcome,
+    ) {
+        let resolved_root = resolve(root);
 
         for entry in WalkBuilder::new(root).build() {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(error) => {
-                    errors.push(error.to_string());
-                    stats.errors += 1;
+                    outcome.errors.push(error.to_string());
+                    outcome.stats.errors += 1;
                     continue;
                 }
             };
@@ -126,38 +126,44 @@ impl Scanner {
                 continue;
             };
 
-            if languages.is_some_and(|wanted| !wanted.iter().any(|id| id == descriptor.id)) {
+            if languages.is_some_and(|wanted| !wanted.iter().any(|id| id == descriptor.spec.id)) {
                 continue;
             }
 
-            // `absolute` is pure path arithmetic; `canonicalize` would be a syscall per file,
-            // which on a large repository costs more than the parsing does.
-            let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+            // Pure path arithmetic per file; only the scan root paid for a `canonicalize`.
+            let absolute = path
+                .strip_prefix(root)
+                .map_or_else(|_| resolve(path), |relative| resolved_root.join(relative));
+
+            // `bonsai-lint src src/a.php` names `a.php` twice and must report it once.
+            if !seen.insert(absolute.clone()) {
+                continue;
+            }
 
             if workspace.is_excluded(&absolute) {
                 continue;
             }
 
-            let source = match std::fs::read_to_string(path) {
-                Ok(source) => source,
+            let source = match std::fs::read(path) {
+                Ok(bytes) => decode(bytes, path, &mut outcome.warnings),
                 Err(error) => {
-                    errors.push(format!("{}: {error}", path.display()));
-                    stats.errors += 1;
+                    outcome.errors.push(format!("{}: {error}", path.display()));
+                    outcome.stats.errors += 1;
                     continue;
                 }
             };
 
-            stats.files += 1;
+            outcome.stats.files += 1;
 
-            // Scan paths are usually relative while domain roots are absolute, so matching has
-            // to happen on an absolute path or every file would fall back to the root domain.
+            // Domain roots are absolute, so a relative scan path has to be matched absolutely
+            // or every file would fall back to the root domain.
             let index = workspace.domain_for(&absolute);
-            stats.domains.insert(index);
+            outcome.stats.domains.insert(index);
             let domain = &workspace.domains[index];
             let key_path = normalize_key(&absolute, &domain.root);
 
             for finding in self.analyze_source(descriptor, &source, domain.toplevel) {
-                located.push(Located {
+                outcome.located.push(Located {
                     path: path.to_path_buf(),
                     key_path: key_path.clone(),
                     domain: index,
@@ -165,7 +171,34 @@ impl Scanner {
                 });
             }
         }
+    }
+}
 
-        stats
+/// Legacy Latin-1 sources still parse; the replaced bytes sit in strings and comments, which do
+/// not score, so the file is decoded leniently and the loss reported.
+pub fn decode(bytes: Vec<u8>, path: &Path, warnings: &mut Vec<String>) -> String {
+    String::from_utf8(bytes).unwrap_or_else(|error| {
+        warnings.push(format!(
+            "{}: not valid UTF-8, undecodable bytes were replaced",
+            path.display()
+        ));
+        String::from_utf8_lossy(error.as_bytes()).into_owned()
+    })
+}
+
+/// Every path that is compared against a domain root goes through here, so `/tmp` and
+/// `/private/tmp` cannot end up on opposite sides of a `starts_with`. A file that does not exist
+/// yet, an unsaved editor buffer, resolves through its directory.
+#[must_use]
+pub fn resolve(path: &Path) -> PathBuf {
+    if let Ok(canonical) = path.canonicalize() {
+        return canonical;
+    }
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    match (absolute.parent(), absolute.file_name()) {
+        (Some(parent), Some(name)) => parent
+            .canonicalize()
+            .map_or(absolute.clone(), |parent| parent.join(name)),
+        _ => absolute,
     }
 }

@@ -48,3 +48,23 @@ fn a_file_without_top_level_logic_reports_nothing() {
         None
     );
 }
+
+/// A routes file is a list of closures; each is its own unit, exactly as in JavaScript, and the
+/// file itself has no logic left over.
+#[test]
+fn file_scope_closures_are_units_not_file_logic() {
+    let source = "<?php\nRoute::get('/a', function () { if ($a) { echo 1; } });\nRoute::get('/b', function () { if ($b) { echo 1; } });\n";
+    assert_eq!(toplevel_score(source), None);
+
+    let scores: Vec<(String, u32)> = findings(source)
+        .into_iter()
+        .map(|finding| (finding.qualified_name(), finding.score))
+        .collect();
+    assert_eq!(
+        scores,
+        vec![
+            ("Route::get#1".to_string(), 1),
+            ("Route::get#1~2".to_string(), 1)
+        ]
+    );
+}

@@ -130,3 +130,16 @@ fn direct_recursion_costs_one() {
 fn a_linear_function_scores_zero() {
     assert_scores(&[("$a = 1; $b = 2; return $a + $b;", 0)]);
 }
+
+/// A loop header is read before its body, so a ternary in the `foreach` subject or in a `for`
+/// initialiser sits at the loop's own nesting level, not one deeper.
+#[test]
+fn loop_headers_do_not_nest() {
+    assert_scores(&[
+        ("foreach ($a ? $xs : [] as $x) { echo $x; }", 2),
+        (
+            "for ($i = $a ? 0 : 1; $i < 3; $i = $b ? $i + 1 : $i + 2) { echo $i; }",
+            3,
+        ),
+    ]);
+}

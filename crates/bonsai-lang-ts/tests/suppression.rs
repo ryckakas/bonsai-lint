@@ -1,0 +1,125 @@
+//! A marker without a reason is refused rather than obeyed, so silencing a finding stays a
+//! documented decision. Every binding shape the namer knows must also be suppressible.
+
+mod common;
+
+use bonsai_core::Suppression;
+use common::findings;
+
+fn suppression_of(source: &str, name: &str) -> Suppression {
+    findings(source)
+        .into_iter()
+        .find(|finding| finding.name == name)
+        .unwrap_or_else(|| panic!("no finding named {name} in:\n{source}"))
+        .suppression
+}
+
+fn line_of(source: &str, name: &str) -> usize {
+    findings(source)
+        .into_iter()
+        .find(|finding| finding.name == name)
+        .unwrap_or_else(|| panic!("no finding named {name} in:\n{source}"))
+        .line
+}
+
+#[test]
+fn a_reasoned_marker_above_the_declaration_is_honoured() {
+    let source =
+        "// bonsai-lint-ignore: parser state machine\nfunction target() { if (a) { f(); } }\n";
+    assert_eq!(
+        suppression_of(source, "target"),
+        Suppression::Reasoned("parser state machine".to_string())
+    );
+}
+
+#[test]
+fn a_reasoned_marker_in_a_docblock_is_honoured() {
+    let source = "/**\n * bonsai-lint-ignore: generated dispatch table\n */\nfunction target() { if (a) { f(); } }\n";
+    assert_eq!(
+        suppression_of(source, "target"),
+        Suppression::Reasoned("generated dispatch table".to_string())
+    );
+}
+
+#[test]
+fn a_trailing_marker_on_the_signature_line_is_honoured() {
+    let source = "function target() { // bonsai-lint-ignore: legacy\n    if (a) { f(); }\n}\n";
+    assert_eq!(
+        suppression_of(source, "target"),
+        Suppression::Reasoned("legacy".to_string())
+    );
+}
+
+#[test]
+fn a_bare_marker_is_refused() {
+    let source = "// bonsai-lint-ignore\nfunction target() { if (a) { f(); } }\n";
+    assert_eq!(suppression_of(source, "target"), Suppression::MissingReason);
+}
+
+#[test]
+fn a_marker_above_a_bound_arrow_is_honoured() {
+    let source =
+        "// bonsai-lint-ignore: hand-tuned\nexport const handler = () => { if (a) { f(); } };\n";
+    assert_eq!(
+        suppression_of(source, "handler"),
+        Suppression::Reasoned("hand-tuned".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_a_class_field_arrow_is_honoured() {
+    let source = "class F {\n  // bonsai-lint-ignore: framework contract\n  field = () => { if (a) { f(); } };\n}\n";
+    assert_eq!(
+        suppression_of(source, "field"),
+        Suppression::Reasoned("framework contract".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_an_object_pair_is_honoured() {
+    let source = "const api = {\n  first: 1,\n  // bonsai-lint-ignore: vendored\n  onClick: function () { if (a) { f(); } },\n};\n";
+    assert_eq!(
+        suppression_of(source, "onClick"),
+        Suppression::Reasoned("vendored".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_a_decorated_method_is_honoured() {
+    let source = "class A {\n  // bonsai-lint-ignore: framework contract\n  @Get('/x')\n  target() { if (a) { f(); } }\n}\n";
+    assert_eq!(
+        suppression_of(source, "target"),
+        Suppression::Reasoned("framework contract".to_string())
+    );
+}
+
+#[test]
+fn a_marker_cannot_leak_into_the_next_declaration() {
+    let source = "// bonsai-lint-ignore: only the first\nfunction first() { if (a) { f(); } }\nfunction second() { if (b) { f(); } }\n";
+    assert_eq!(suppression_of(source, "second"), Suppression::None);
+}
+
+/// On one line, the closing brace shares the signature line, so the marker is the declaration's
+/// own; it must never reach the declaration below.
+#[test]
+fn a_trailing_marker_after_a_one_line_declaration_belongs_to_it() {
+    let source = "function first() { if (a) { f(); } } // bonsai-lint-ignore: mine\nfunction second() { if (b) { f(); } }\n";
+    assert_eq!(
+        suppression_of(source, "first"),
+        Suppression::Reasoned("mine".to_string())
+    );
+    assert_eq!(suppression_of(source, "second"), Suppression::None);
+}
+
+#[test]
+fn a_trailing_marker_on_a_closing_brace_line_suppresses_nothing() {
+    let source = "function first() {\n  if (a) { f(); }\n} // bonsai-lint-ignore: nobody's\nfunction second() { if (b) { f(); } }\n";
+    assert_eq!(suppression_of(source, "first"), Suppression::None);
+    assert_eq!(suppression_of(source, "second"), Suppression::None);
+}
+
+#[test]
+fn a_decorator_does_not_move_the_reported_line() {
+    let source = "class A {\n  @Get('/x')\n  @Auth()\n  handler() { if (a) { f(); } }\n}\n";
+    assert_eq!(line_of(source, "handler"), 4);
+}

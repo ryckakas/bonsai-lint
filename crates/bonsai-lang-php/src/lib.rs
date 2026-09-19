@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
 };
@@ -15,19 +16,14 @@ pub static PHP: LanguageDescriptor = LanguageDescriptor {
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "php",
     kinds: KindSets {
-        unit: &["function_definition", "method_declaration"],
+        unit: UNIT,
         container: &[
             "class_declaration",
             "interface_declaration",
             "trait_declaration",
             "enum_declaration",
         ],
-        nesting_function: &[
-            "anonymous_function",
-            "anonymous_function_creation_expression",
-            "arrow_function",
-            "function_definition",
-        ],
+        nesting_function: UNIT,
         if_statement: &["if_statement"],
         else_if_clause: &["else_if_clause"],
         else_clause: &["else_clause"],
@@ -45,11 +41,7 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         unconditional_jump: &["goto_statement"],
         logical: &["binary_expression"],
         parenthesis: &["parenthesized_expression"],
-        call: &[
-            "function_call_expression",
-            "member_call_expression",
-            "scoped_call_expression",
-        ],
+        call: CALL,
         comment: &["comment"],
         leading_trivia: &["attribute_list"],
     },
@@ -63,7 +55,7 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         logical_left: "left",
         logical_right: "right",
         logical_operator: "operator",
-        control_header: &["condition"],
+        control_header: &["condition", "initialize", "update"],
     },
     hooks: Hooks {
         normalize_logical_operator,
@@ -76,6 +68,22 @@ pub static SPEC: LanguageSpec = LanguageSpec {
     },
     optional_kinds: &["anonymous_function_creation_expression"],
 };
+
+/// A closure at file scope is a unit like a `function`, so a routes file scores per route
+/// exactly as its JavaScript equivalent does.
+const UNIT: &[&str] = &[
+    "function_definition",
+    "method_declaration",
+    "anonymous_function",
+    "anonymous_function_creation_expression",
+    "arrow_function",
+];
+
+const CALL: &[&str] = &[
+    "function_call_expression",
+    "member_call_expression",
+    "scoped_call_expression",
+];
 
 fn compiled() -> &'static Language {
     static COMPILED: OnceLock<Language> = OnceLock::new();
@@ -130,9 +138,19 @@ fn is_self_receiver(text: &str, _container: Option<&str>) -> bool {
 }
 
 fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
-    node.child_by_field_name("name")
-        .and_then(|name| name.utf8_text(src).ok())
-        .map_or_else(UnitName::anonymous, UnitName::declared)
+    if let Some(name) = node
+        .child_by_field_name("name")
+        .and_then(|name| text(name, src))
+    {
+        return UnitName::declared(name);
+    }
+    if let Some(name) = bound_name(node, src) {
+        return UnitName::bound(name);
+    }
+    if let Some(name) = positional_name(node, src) {
+        return UnitName::positional(name);
+    }
+    UnitName::anonymous()
 }
 
 fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
@@ -142,6 +160,115 @@ fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
         .map(ToString::to_string)
 }
 
+/// Climbs to the statement a marker would sit above, so `$handler = function () {}` can be
+/// suppressed from the line before it.
 fn suppression_anchor(node: Node<'_>) -> Node<'_> {
-    node
+    let mut current = node;
+    loop {
+        let Some(parent) = current.parent() else {
+            return current;
+        };
+        let is_value = |field: &str| {
+            parent
+                .child_by_field_name(field)
+                .is_some_and(|value| value.id() == current.id())
+        };
+        match parent.kind() {
+            "assignment_expression" if is_value("right") => current = parent,
+            "expression_statement" | "parenthesized_expression" => current = parent,
+            _ => return current,
+        }
+    }
+}
+
+/// Walks up to whatever the closure is bound to. A binder only names the closure when the
+/// closure really is its value, so `$x = $c ? $f : $g` names neither branch.
+fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
+    let mut current = node;
+    loop {
+        let parent = current.parent()?;
+        let is_value = |field: &str| {
+            parent
+                .child_by_field_name(field)
+                .is_some_and(|value| value.id() == current.id())
+        };
+
+        match parent.kind() {
+            "assignment_expression" if is_value("right") => {
+                let left = parent.child_by_field_name("left")?;
+                let name = text(left, src)?;
+                return Some(match left.kind() {
+                    "variable_name" => name.trim_start_matches('$').to_string(),
+                    _ => compact(&name),
+                });
+            }
+            "array_element_initializer" => return array_key(parent, current, src),
+            // A factory call hands its own binding to a lone callable argument; a call that is
+            // nobody's value falls through to a positional key.
+            "arguments" if is_sole_callable_argument(parent, current) => {
+                let call = parent.parent()?;
+                if !CALL.contains(&call.kind()) {
+                    return None;
+                }
+                current = call;
+            }
+            "argument" | "parenthesized_expression" => current = parent,
+            _ => return None,
+        }
+    }
+}
+
+fn array_key(element: Node<'_>, value: Node<'_>, src: &[u8]) -> Option<String> {
+    let mut cursor = element.walk();
+    let mut children = element.named_children(&mut cursor);
+    let key = children.next()?;
+    let candidate = children.next()?;
+    if candidate.id() != value.id() {
+        return None;
+    }
+    text(key, src).map(|key| strip_quotes(&key))
+}
+
+fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {
+    let mut cursor = arguments.walk();
+    let mut callables = arguments.named_children(&mut cursor).filter(|argument| {
+        argument
+            .named_child(0)
+            .is_some_and(|inner| UNIT.contains(&inner.kind()) || CALL.contains(&inner.kind()))
+    });
+
+    callables
+        .next()
+        .is_some_and(|first| first.id() == candidate.id())
+        && callables.next().is_none()
+}
+
+/// A callback that is nobody's value takes the call it belongs to plus its argument position:
+/// `Route::get#1`, `array_map#0`. A callee that is itself a call or a closure would make the key
+/// as long as the code, so only a plain name or member chain qualifies.
+fn positional_name(node: Node<'_>, src: &[u8]) -> Option<String> {
+    let argument = node.parent().filter(|parent| parent.kind() == "argument")?;
+    let arguments = argument
+        .parent()
+        .filter(|parent| parent.kind() == "arguments")?;
+    let call = arguments
+        .parent()
+        .filter(|parent| CALL.contains(&parent.kind()))?;
+
+    let callee = std::str::from_utf8(&src[call.start_byte()..arguments.start_byte()]).ok()?;
+    let callee = compact(callee);
+    if callee.is_empty() || callee.contains(['(', '{']) {
+        return None;
+    }
+
+    let mut cursor = arguments.walk();
+    let index = arguments
+        .named_children(&mut cursor)
+        .position(|candidate| candidate.id() == argument.id())?;
+
+    Some(format!("{callee}#{index}"))
+}
+
+fn text(node: Node<'_>, src: &[u8]) -> Option<String> {
+    node.utf8_text(src).ok().map(ToString::to_string)
 }

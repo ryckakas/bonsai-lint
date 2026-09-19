@@ -18,10 +18,13 @@ the code; **+nesting** for a flow-breaker that sits inside other flow-breakers.
 | Sequence of like boolean operators | +1 per run | no |
 | Direct recursion | +1 | no |
 | Closure, arrow function, nested function | — | yes |
-| Class, interface, trait, enum, namespace | — | no |
+| Class, interface, trait, enum, namespace, object literal | — | no |
 
 `else if` takes a flat increment deliberately: a long chain reads linearly, so penalising it for
 depth would misrepresent it.
+
+A loop's header — the `for` initialiser and update, the `foreach` subject, a `while` condition —
+is read before the body, so it sits at the loop's own nesting level rather than one deeper.
 
 Boolean operators cost per *run*, not per operator — the cost is in the switching:
 
@@ -61,14 +64,19 @@ would report two easy functions at 3 and 1, and callback pyramids would cost not
 ## Units
 
 A function-like is a scoring unit when **no other function-like encloses it in the same file**.
-Anything nested inside rolls up. Whatever is left over at file scope — procedural code,
-templates, route tables, module-level bootstrap — is scored as a single `<toplevel>` unit per
-file, and reported only when it scores above zero.
+That includes closures: a PHP routes file made of `Route::get(..., function () {})` calls scores
+one unit per route, exactly as its Express equivalent does. Anything nested inside rolls up. A
+declaration without a body — an abstract or interface method, a TypeScript signature — is not a
+unit. Whatever is left over at file scope — procedural code, templates, route tables,
+module-level bootstrap, the values of a configuration object — is scored as a single
+`<toplevel>` unit per file, and reported only when it scores above zero.
 
-TypeScript units are named from wherever they are bound, since most are anonymous where they
-are written:
+A unit is reported on its signature line, below any `#[Attribute]` or `@decorator`.
 
-| Source | Unit key |
+Units are named from wherever they are bound, since most closures are anonymous where they are
+written:
+
+| TypeScript | Unit key |
 | --- | --- |
 | `function parse() {}` | `parse` |
 | `const handler = () => {}` | `handler` |
@@ -78,6 +86,18 @@ are written:
 | `export default function () {}` | `default` |
 | `const useCart = defineStore('cart', () => {})` | `useCart` |
 | `app.get('/x', (req, res) => {})` | `app.get#1` |
+| anything else | `<anonymous>` |
+
+| PHP | Unit key |
+| --- | --- |
+| `function parse() {}` | `parse` |
+| `$handler = function () {}` | `handler` |
+| `$this->handler = function () {}` | `$this->handler` |
+| `class C { public function m() {} }` | `C::m` |
+| `$api = ['onClick' => function () {}]` | `onClick` |
+| `$handler = Closure::fromCallable(function () {})` | `handler` |
+| `Route::get('/x', function () {})` | `Route::get#1` |
+| `array_map(fn ($x) => $x, $xs)` | `array_map#0` |
 | anything else | `<anonymous>` |
 
 A factory or wrapper call hands its own binding to the callback, so a Pinia store or a
@@ -97,7 +117,8 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
 - `elseif` and `else if` score identically, despite different parse shapes.
 - `break N` / `continue N` are PHP's analogue of the labelled break.
 - Recursion is detected through direct syntactic self-reference (`f()`, `$this->f()`,
-  `self::f()`). Dispatch through a variable needs symbol resolution and is not guessed at.
+  `self::f()`, `static::f()`). Dispatch through a variable needs symbol resolution and is not
+  guessed at.
 
 **JavaScript and TypeScript**
 

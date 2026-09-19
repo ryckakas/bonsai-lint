@@ -46,10 +46,12 @@ Most of the work is the fixture and the score corpus, not the spec.
 failure modes a string match does not:
 
 1. the fixture parses cleanly;
-2. the spec compiles against the grammar;
-3. every declared field name resolves — a renamed `consequence` would silently zero every `if`;
-4. every declared kind is actually produced by the fixture, not merely present in the symbol
+2. the spec compiles against the grammar, which resolves every kind and every field name — a
+   renamed `consequence` would silently zero every `if`;
+3. every declared kind is actually produced by the fixture, not merely present in the symbol
    table;
+4. where a grammar renamed a kind between releases and both spellings are declared, one of them
+   is live;
 5. `id_for_node_kind` agrees with `kind_id` for every declared kind, so tree-sitter aliasing
    cannot make the whole table miss;
 6. every child under an `if`'s alternative field is an else or else-if kind, which a grammar can
@@ -62,11 +64,13 @@ rather than by this project, and one CI builds against on every pull request so 
 honest.
 
 ```bash
-cargo build --release
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
 ```
+
+CI runs exactly these on every pull request, plus the feature subsets below and a build on the
+minimum supported Rust version. `cargo build --release` produces the binary users get.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
 subset — including none. CI builds all four combinations.
@@ -79,6 +83,23 @@ Feature subsets exist so that adding or removing a language stays a clean operat
 `#[cfg]` seams keep being exercised. **They are not a shipping option.** `dist` publishes one
 binary with every language built in; there is no slim artifact and no variant for a user to
 choose.
+
+## The scan driver
+
+A few decisions in `bonsai-engine` and the CLI are invisible from the outside and easy to undo
+by accident:
+
+- Every path compared against a domain root is canonical, so `/tmp` and `/private/tmp` never
+  end up on opposite sides of a `starts_with`. Scan roots pay one `canonicalize` each; files
+  under them are joined arithmetically.
+- Globs stop `*` at `/`, as `.gitignore` does. `packages/*` names direct children, and the
+  domain walk is bounded to that depth, which is what keeps an editor's per-keystroke scan cheap.
+- The scan runs on a thread with a 256 MB stack reservation. The walkers are recursive, and
+  generated code nests far deeper than a default main thread allows.
+- A file that is not valid UTF-8 is decoded leniently with a warning: the replaced bytes sit in
+  strings and comments, which do not score. An unreadable file is an error and fails the run.
+- A closed stdout — `bonsai-lint --all . | head` — ends the output quietly and leaves the exit
+  code to the findings.
 
 ## Releasing
 
@@ -107,5 +128,5 @@ first release. After the first tag:
 cd editors/vscode && npm install --save bonsai-lint@^0.1.0
 ```
 
-Until then the extension resolves the binary from `bonsai-lint.path` or from `PATH`, which is the
-same fallback chain it always uses.
+Until then the extension resolves the binary from `bonsai-lint.path`, then from that package once
+it exists, then from `PATH` — the same fallback chain it always uses.

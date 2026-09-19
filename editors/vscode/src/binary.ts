@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
+import { isAbsolute, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
@@ -19,9 +20,18 @@ export interface Binary {
  * PATH — so someone who installed via Homebrew keeps their own version, and someone who
  * installed nothing still gets a working extension.
  */
-export async function resolveBinary(configured: string): Promise<Binary | undefined> {
-  if (configured.trim() !== "" && existsSync(configured)) {
-    return { command: configured, prefixArgs: [], source: "setting" };
+export async function resolveBinary(
+  configured: string,
+  workspaceRoot?: string,
+): Promise<Binary | undefined> {
+  const setting = configured.trim();
+  if (setting !== "") {
+    // A relative setting means relative to the project, not to wherever the editor started.
+    const command =
+      isAbsolute(setting) || workspaceRoot === undefined ? setting : resolve(workspaceRoot, setting);
+    if (existsSync(command)) {
+      return { command, prefixArgs: [], source: "setting" };
+    }
   }
 
   const bundled = resolveBundled();

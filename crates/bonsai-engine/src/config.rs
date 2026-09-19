@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 
 pub const CONFIG_FILE: &str = "bonsai-lint.toml";
@@ -23,6 +23,7 @@ pub struct ConfigFile {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LanguageSection {
     pub threshold: Option<u32>,
 }
@@ -35,6 +36,9 @@ pub struct Domain {
     pub language_thresholds: BTreeMap<String, u32>,
     pub toplevel: bool,
     pub baseline: PathBuf,
+    /// Matched against paths relative to this domain's root; the workspace's own `exclude` is
+    /// matched against the workspace root.
+    pub exclude: GlobSet,
 }
 
 impl Domain {
@@ -73,7 +77,35 @@ impl Workspace {
     #[must_use]
     pub fn is_excluded(&self, path: &Path) -> bool {
         let relative = path.strip_prefix(&self.root).unwrap_or(path);
-        self.exclude.is_match(relative)
+        if self.exclude.is_match(relative) {
+            return true;
+        }
+        let domain = &self.domains[self.domain_for(path)];
+        let in_domain = path.strip_prefix(&domain.root).unwrap_or(path);
+        domain.exclude.is_match(in_domain)
+    }
+
+    /// A config that is not a declared domain would otherwise change nothing while looking as
+    /// though it did. This walks the whole tree, so it is a separate step that a single-file
+    /// scan can skip.
+    #[must_use]
+    pub fn undeclared_config_warnings(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+        for entry in ignore::WalkBuilder::new(&self.root).build().flatten() {
+            if entry.file_name() != CONFIG_FILE {
+                continue;
+            }
+            let Some(directory) = entry.path().parent() else {
+                continue;
+            };
+            if !self.domains.iter().any(|domain| domain.root == directory) {
+                warnings.push(format!(
+                    "{}: not a declared domain, ignoring (add it to `domains` in the root config)",
+                    entry.path().display()
+                ));
+            }
+        }
+        warnings
     }
 }
 
@@ -97,13 +129,18 @@ impl std::fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-/// No `bonsai-lint.toml` anywhere above the starting directory means zero-config: built-in defaults,
-/// one implicit domain, nothing read from disk.
+/// No `bonsai-lint.toml` anywhere above the starting directory means zero-config: built-in
+/// defaults, one implicit domain, nothing read from disk.
 pub fn discover(start: &Path, known_languages: &[&str]) -> Result<Workspace, ConfigError> {
-    let Some(root) = find_workspace_root(start) else {
+    let start = containing_directory(start);
+
+    let Some(root) = find_upward(start, CONFIG_FILE) else {
+        // With no config anywhere, a baseline written from the project root still marks it, so
+        // scanning one file afterwards finds the same accepted entries.
+        let root = find_upward(start, BASELINE_FILE).unwrap_or_else(|| start.to_path_buf());
         return Ok(Workspace {
-            root: start.to_path_buf(),
-            domains: vec![default_domain(start)],
+            domains: vec![default_domain(&root)],
+            root,
             exclude: GlobSet::empty(),
             warnings: Vec::new(),
         });
@@ -114,13 +151,20 @@ pub fn discover(start: &Path, known_languages: &[&str]) -> Result<Workspace, Con
     warn_unknown_languages(&config, known_languages, &root, &mut warnings);
 
     let exclude = build_globset(config.exclude.as_deref().unwrap_or_default())?;
-    let root_domain = domain_from(&config, &root, &config, "root", known_languages);
+    let root_domain = domain_from(
+        &config,
+        &root,
+        &config,
+        "root",
+        known_languages,
+        GlobSet::empty(),
+    );
 
     let mut domains = vec![root_domain];
 
     if let Some(patterns) = &config.domains {
         let matcher = build_globset(patterns)?;
-        for directory in matching_directories(&root, &matcher) {
+        for directory in matching_directories(&root, patterns, &matcher) {
             let path = directory.join(CONFIG_FILE);
             let child = if path.is_file() {
                 read_config(&path)?
@@ -128,23 +172,29 @@ pub fn discover(start: &Path, known_languages: &[&str]) -> Result<Workspace, Con
                 ConfigFile::default()
             };
             warn_unknown_languages(&child, known_languages, &directory, &mut warnings);
+            if child.domains.is_some() {
+                warnings.push(format!(
+                    "{}: `domains` is only read from the root config, ignoring",
+                    path.display()
+                ));
+            }
 
             let fallback = directory
                 .strip_prefix(&root)
                 .unwrap_or(&directory)
                 .to_string_lossy()
                 .to_string();
+            let own_exclude = build_globset(child.exclude.as_deref().unwrap_or_default())?;
             domains.push(domain_from(
                 &child,
                 &directory,
                 &config,
                 &fallback,
                 known_languages,
+                own_exclude,
             ));
         }
     }
-
-    warn_undeclared_configs(&root, &domains, &mut warnings);
 
     Ok(Workspace {
         root,
@@ -152,6 +202,18 @@ pub fn discover(start: &Path, known_languages: &[&str]) -> Result<Workspace, Con
         exclude,
         warnings,
     })
+}
+
+/// A file as the starting point must not become a domain root, or its baseline would live at
+/// `file.php/.bonsai-lint-baseline.json`.
+fn containing_directory(start: &Path) -> &Path {
+    if start.is_dir() {
+        return start;
+    }
+    start
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
 }
 
 fn default_domain(root: &Path) -> Domain {
@@ -162,6 +224,7 @@ fn default_domain(root: &Path) -> Domain {
         language_thresholds: BTreeMap::new(),
         toplevel: true,
         baseline: root.join(BASELINE_FILE),
+        exclude: GlobSet::empty(),
     }
 }
 
@@ -175,6 +238,7 @@ fn domain_from(
     inherited: &ConfigFile,
     fallback: &str,
     known_languages: &[&str],
+    exclude: GlobSet,
 ) -> Domain {
     let threshold = config
         .threshold
@@ -209,17 +273,14 @@ fn domain_from(
             .baseline
             .clone()
             .map_or_else(|| root.join(BASELINE_FILE), |path| root.join(path)),
+        exclude,
     }
 }
 
-fn find_workspace_root(start: &Path) -> Option<PathBuf> {
-    let mut current = if start.is_dir() {
-        Some(start)
-    } else {
-        start.parent()
-    };
+fn find_upward(start: &Path, file_name: &str) -> Option<PathBuf> {
+    let mut current = Some(start);
     while let Some(directory) = current {
-        if directory.join(CONFIG_FILE).is_file() {
+        if directory.join(file_name).is_file() {
             return Some(directory.to_path_buf());
         }
         current = directory.parent();
@@ -238,16 +299,24 @@ fn read_config(path: &Path) -> Result<ConfigFile, ConfigError> {
     })
 }
 
+/// `*` stops at `/`, as in `.gitignore`, so `packages/*` names direct children only and
+/// `vendor/**` is how a subtree is spelled.
 fn build_globset(patterns: &[String]) -> Result<GlobSet, ConfigError> {
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
         if pattern.starts_with('!') {
-            continue;
+            return Err(ConfigError::Glob {
+                pattern: pattern.clone(),
+                error: "negated patterns are not supported".to_string(),
+            });
         }
-        let glob = Glob::new(pattern).map_err(|error| ConfigError::Glob {
-            pattern: pattern.clone(),
-            error: error.to_string(),
-        })?;
+        let glob = GlobBuilder::new(pattern)
+            .literal_separator(true)
+            .build()
+            .map_err(|error| ConfigError::Glob {
+                pattern: pattern.clone(),
+                error: error.to_string(),
+            })?;
         builder.add(glob);
     }
     builder.build().map_err(|error| ConfigError::Glob {
@@ -256,9 +325,12 @@ fn build_globset(patterns: &[String]) -> Result<GlobSet, ConfigError> {
     })
 }
 
-fn matching_directories(root: &Path, matcher: &GlobSet) -> Vec<PathBuf> {
+fn matching_directories(root: &Path, patterns: &[String], matcher: &GlobSet) -> Vec<PathBuf> {
+    let mut walker = ignore::WalkBuilder::new(root);
+    walker.max_depth(pattern_depth(patterns));
+
     let mut found = Vec::new();
-    for entry in ignore::WalkBuilder::new(root).build().flatten() {
+    for entry in walker.build().flatten() {
         if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
             continue;
         }
@@ -273,6 +345,17 @@ fn matching_directories(root: &Path, matcher: &GlobSet) -> Vec<PathBuf> {
     found
 }
 
+/// `packages/*` can only match two levels down, so the walk stops there instead of visiting the
+/// whole repository on every editor keystroke.
+fn pattern_depth(patterns: &[String]) -> Option<usize> {
+    patterns.iter().try_fold(0, |deepest, pattern| {
+        if pattern.contains("**") {
+            return None;
+        }
+        Some(deepest.max(pattern.trim_matches('/').split('/').count()))
+    })
+}
+
 fn warn_unknown_languages(
     config: &ConfigFile,
     known: &[&str],
@@ -284,25 +367,6 @@ fn warn_unknown_languages(
             warnings.push(format!(
                 "{}: unknown language section `[{language}]`, ignoring",
                 at.join(CONFIG_FILE).display()
-            ));
-        }
-    }
-}
-
-/// A config that is not a declared domain would otherwise change nothing while looking as
-/// though it did, so it is named out loud rather than passed over.
-fn warn_undeclared_configs(root: &Path, domains: &[Domain], warnings: &mut Vec<String>) {
-    for entry in ignore::WalkBuilder::new(root).build().flatten() {
-        if entry.file_name() != CONFIG_FILE {
-            continue;
-        }
-        let Some(directory) = entry.path().parent() else {
-            continue;
-        };
-        if !domains.iter().any(|domain| domain.root == directory) {
-            warnings.push(format!(
-                "{}: not a declared domain, ignoring (add it to `domains` in the root config)",
-                entry.path().display()
             ));
         }
     }

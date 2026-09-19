@@ -8,4 +8,4 @@ pub mod scan;
 pub use baseline::Baseline;
 pub use config::{Domain, Workspace};
 pub use finding::Located;
-pub use scan::{ScanStats, Scanner};
+pub use scan::{ScanOutcome, ScanStats, Scanner};

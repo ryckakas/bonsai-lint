@@ -1,13 +1,19 @@
 use std::collections::BTreeMap;
-use std::io::Read;
-use std::path::PathBuf;
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use bonsai_core::Suppression;
 use bonsai_engine::config::{self, Workspace};
+use bonsai_engine::finding::normalize_key;
 use bonsai_engine::report::{Report, ReportedFinding};
-use bonsai_engine::{registry, Baseline, Located, Scanner};
+use bonsai_engine::scan::{decode, resolve};
+use bonsai_engine::{registry, Baseline, Located, ScanOutcome, ScanStats, Scanner};
 use clap::{Parser as ClapParser, ValueEnum};
+
+/// Generated code nests deeper than the default main-thread stack lets the recursive walkers
+/// go; a 20,000-term concatenation is one bundled base64 blob. Only touched pages are committed.
+const STACK_SIZE: usize = 256 << 20;
 
 #[derive(ClapParser)]
 #[command(
@@ -37,11 +43,11 @@ struct Args {
     #[arg(long)]
     write_baseline: bool,
 
-    /// Use one baseline file instead of each domain's own
+    /// Use one baseline file, keyed from the workspace root, instead of each domain's own
     #[arg(long, value_name = "PATH")]
     baseline: Option<PathBuf>,
 
-    /// Restrict the scan to these languages
+    /// Restrict the scan to these languages (`php`, `typescript`)
     #[arg(long, value_delimiter = ',', value_name = "ID")]
     lang: Vec<String>,
 
@@ -75,9 +81,15 @@ enum Format {
 fn main() -> ExitCode {
     let args = Args::parse();
 
-    match run(&args) {
-        Ok(code) => code,
-        Err(message) => {
+    let outcome = std::thread::Builder::new()
+        .stack_size(STACK_SIZE)
+        .spawn(move || run(&args))
+        .map_err(|error| format!("could not start the scan: {error}"))
+        .and_then(|worker| worker.join().map_err(|_| "the scan aborted".to_string()));
+
+    match outcome {
+        Ok(Ok(code)) => code,
+        Ok(Err(message)) | Err(message) => {
             eprintln!("{message}");
             ExitCode::FAILURE
         }
@@ -85,13 +97,15 @@ fn main() -> ExitCode {
 }
 
 fn run(args: &Args) -> Result<ExitCode, String> {
-    let known: Vec<&str> = registry::descriptors().iter().map(|d| d.id).collect();
+    let known = registry::language_ids();
+    reject_unknown_languages(args, &known)?;
+
     let start = args
         .config
         .clone()
         .or_else(|| args.paths.first().cloned())
         .unwrap_or_else(|| PathBuf::from("."));
-    let start = start.canonicalize().unwrap_or(start);
+    let start = resolve(&start);
 
     let mut workspace = config::discover(&start, &known).map_err(|error| error.to_string())?;
     apply_overrides(args, &mut workspace)?;
@@ -99,19 +113,28 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     for warning in &workspace.warnings {
         eprintln!("{warning}");
     }
+    if !args.stdin {
+        for warning in workspace.undeclared_config_warnings() {
+            eprintln!("{warning}");
+        }
+    }
 
     let mut scanner = Scanner::new();
     let languages = (!args.lang.is_empty()).then(|| args.lang.clone());
 
-    let (mut located, stats, errors) = if args.stdin {
+    let ScanOutcome {
+        mut located,
+        stats,
+        errors,
+        warnings,
+    } = if args.stdin {
         scan_stdin(args, &workspace, &mut scanner)?
     } else {
-        let (located, stats, errors) = scanner.scan(&args.paths, &workspace, languages.as_deref());
-        (located, stats, errors)
+        scanner.scan(&args.paths, &workspace, languages.as_deref())
     };
 
-    for error in &errors {
-        eprintln!("{error}");
+    for message in warnings.iter().chain(&errors) {
+        eprintln!("{message}");
     }
 
     if let Some(wanted) = &args.domain {
@@ -129,6 +152,10 @@ fn run(args: &Args) -> Result<ExitCode, String> {
         return Err(failure);
     }
 
+    if args.baseline.is_some() {
+        rekey_to_workspace(&mut located, &workspace);
+    }
+
     warn_about_unreasoned_suppressions(&located, &workspace);
 
     let over_threshold: Vec<Located> = located
@@ -142,17 +169,18 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     }
 
     let baselines = load_baselines(args, &workspace)?;
-    report_stale_entries(&baselines, &located, &workspace, &stats);
+    report_stale_entries(&baselines, &located, &workspace, args);
 
     let breaches: Vec<&Located> = over_threshold
         .iter()
         .filter(|item| is_regression(item, &baselines, args))
         .collect();
 
-    match args.format {
+    let printed = match args.format {
         Format::Text => print_text(&located, args, &workspace, &baselines),
         Format::Json => print_json(&located, args, &workspace, &baselines, breaches.len()),
-    }
+    };
+    tolerate_closed_pipe(printed)?;
 
     if breaches.is_empty() {
         return Ok(ExitCode::SUCCESS);
@@ -174,13 +202,29 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::FAILURE)
 }
 
-type ScanResult = (Vec<Located>, bonsai_engine::ScanStats, Vec<String>);
+fn reject_unknown_languages(args: &Args, known: &[&str]) -> Result<(), String> {
+    let overridden = args
+        .over
+        .iter()
+        .flat_map(|value| value.split(','))
+        .filter_map(|part| part.split_once('=').map(|(language, _)| language.trim()));
+
+    for id in args.lang.iter().map(String::as_str).chain(overridden) {
+        if !known.contains(&id) {
+            return Err(format!(
+                "unknown language `{id}`; expected one of: {}",
+                known.join(", ")
+            ));
+        }
+    }
+    Ok(())
+}
 
 fn scan_stdin(
     args: &Args,
     workspace: &Workspace,
     scanner: &mut Scanner,
-) -> Result<ScanResult, String> {
+) -> Result<ScanOutcome, String> {
     let path = args
         .stdin_path
         .clone()
@@ -189,17 +233,33 @@ fn scan_stdin(
     let descriptor = registry::for_path(&path)
         .ok_or_else(|| format!("{}: no language handles this extension", path.display()))?;
 
-    let mut source = String::new();
-    std::io::stdin()
-        .read_to_string(&mut source)
+    let mut bytes = Vec::new();
+    io::stdin()
+        .read_to_end(&mut bytes)
         .map_err(|error| format!("reading stdin: {error}"))?;
 
-    let absolute = path.canonicalize().unwrap_or_else(|_| path.clone());
+    let absolute = resolve(&path);
     let index = workspace.domain_for(&absolute);
     let domain = &workspace.domains[index];
-    let key_path = bonsai_engine::finding::normalize_key(&absolute, &domain.root);
 
-    let located = scanner
+    let mut outcome = ScanOutcome {
+        stats: ScanStats {
+            files: 1,
+            errors: 0,
+            domains: std::iter::once(index).collect(),
+        },
+        ..ScanOutcome::default()
+    };
+
+    // The editor must agree with CI, and CI never sees an excluded file.
+    if workspace.is_excluded(&absolute) {
+        return Ok(outcome);
+    }
+
+    let source = decode(bytes, &path, &mut outcome.warnings);
+    let key_path = normalize_key(&absolute, &domain.root);
+
+    outcome.located = scanner
         .analyze_source(descriptor, &source, domain.toplevel)
         .into_iter()
         .map(|finding| Located {
@@ -210,13 +270,7 @@ fn scan_stdin(
         })
         .collect();
 
-    let stats = bonsai_engine::ScanStats {
-        files: 1,
-        errors: 0,
-        domains: std::iter::once(index).collect(),
-    };
-
-    Ok((located, stats, Vec::new()))
+    Ok(outcome)
 }
 
 fn apply_overrides(args: &Args, workspace: &mut Workspace) -> Result<(), String> {
@@ -262,19 +316,31 @@ fn apply_overrides(args: &Args, workspace: &mut Workspace) -> Result<(), String>
     Ok(())
 }
 
+/// One shared baseline spans every domain, so its keys are workspace-relative; two domains each
+/// holding a `src/index.ts` would otherwise fight over one entry.
+fn rekey_to_workspace(located: &mut [Located], workspace: &Workspace) {
+    for item in located {
+        let domain = &workspace.domains[item.domain];
+        item.key_path = normalize_key(&domain.root.join(&item.key_path), &workspace.root);
+    }
+}
+
 fn is_over_threshold(item: &Located, workspace: &Workspace) -> bool {
     let threshold = workspace.domains[item.domain].threshold_for(item.finding.language);
     item.finding.score > threshold && !item.finding.is_suppressed()
 }
 
-fn is_regression(item: &Located, baselines: &BTreeMap<usize, Baseline>, args: &Args) -> bool {
-    let key = if args.baseline.is_some() {
+fn baseline_index(item: &Located, args: &Args) -> usize {
+    if args.baseline.is_some() {
         0
     } else {
         item.domain
-    };
+    }
+}
+
+fn is_regression(item: &Located, baselines: &BTreeMap<usize, Baseline>, args: &Args) -> bool {
     baselines
-        .get(&key)
+        .get(&baseline_index(item, args))
         .is_none_or(|baseline| baseline.is_regression(item))
 }
 
@@ -320,11 +386,7 @@ fn write_baselines(
         baseline
             .save(path)
             .map_err(|error| format!("{}: {error}", path.display()))?;
-        println!(
-            "recorded {} finding(s) in {}",
-            baseline.len(),
-            path.display()
-        );
+        report_written(&baseline, path)?;
         return Ok(ExitCode::SUCCESS);
     }
 
@@ -342,41 +404,55 @@ fn write_baselines(
         baseline
             .save(&domain.baseline)
             .map_err(|error| format!("{}: {error}", domain.baseline.display()))?;
-        println!(
-            "recorded {} finding(s) in {}",
-            baseline.len(),
-            domain.baseline.display()
-        );
+        report_written(&baseline, &domain.baseline)?;
     }
 
     Ok(ExitCode::SUCCESS)
 }
 
-/// Stale keys are how a baseline rots into a permanent amnesty.
+fn report_written(baseline: &Baseline, path: &Path) -> Result<(), String> {
+    tolerate_closed_pipe(writeln!(
+        io::stdout().lock(),
+        "recorded {} finding(s) in {}",
+        baseline.len(),
+        path.display()
+    ))
+}
+
+/// Only a scan that saw a whole domain can tell that an entry has gone stale. One editor buffer,
+/// one language or one sub-directory would report everything else as stale.
 fn report_stale_entries(
     baselines: &BTreeMap<usize, Baseline>,
     located: &[Located],
     workspace: &Workspace,
-    stats: &bonsai_engine::ScanStats,
+    args: &Args,
 ) {
+    if args.stdin || args.domain.is_some() || !args.lang.is_empty() {
+        return;
+    }
+    let scanned: Vec<PathBuf> = args.paths.iter().map(|path| resolve(path)).collect();
+    let covered = |root: &Path| scanned.iter().any(|path| root.starts_with(path));
+
     for (index, baseline) in baselines {
-        if !stats.domains.contains(index) {
+        let (name, root, scoped) = if args.baseline.is_some() {
+            ("baseline", workspace.root.as_path(), located.to_vec())
+        } else {
+            let domain = &workspace.domains[*index];
+            let scoped = located
+                .iter()
+                .filter(|item| item.domain == *index)
+                .cloned()
+                .collect();
+            (domain.name.as_str(), domain.root.as_path(), scoped)
+        };
+
+        if !covered(root) {
             continue;
         }
-        let scoped: Vec<Located> = located
-            .iter()
-            .filter(|item| item.domain == *index)
-            .cloned()
-            .collect();
         let stale = baseline.unmatched(&scoped);
         if !stale.is_empty() {
-            let name = workspace
-                .domains
-                .get(*index)
-                .map_or("root", |domain| &domain.name);
             eprintln!(
-                "{}: {} baseline entr(ies) matched nothing in this scan",
-                name,
+                "{name}: {} baseline entr(ies) matched nothing in this scan",
                 stale.len()
             );
         }
@@ -403,7 +479,7 @@ fn warn_about_unreasoned_suppressions(located: &[Located], workspace: &Workspace
     }
 }
 
-fn unusable_scan(stats: &bonsai_engine::ScanStats, args: &Args) -> Option<String> {
+fn unusable_scan(stats: &ScanStats, args: &Args) -> Option<String> {
     if stats.errors > 0 {
         return Some(format!(
             "{} path(s) could not be read; refusing to report a clean run",
@@ -426,23 +502,36 @@ fn unusable_scan(stats: &bonsai_engine::ScanStats, args: &Args) -> Option<String
     None
 }
 
+/// `bonsai-lint --all . | head` closes the pipe early; that is the reader's choice, not a failure.
+fn tolerate_closed_pipe(result: io::Result<()>) -> Result<(), String> {
+    match result {
+        Err(error) if error.kind() != io::ErrorKind::BrokenPipe => {
+            Err(format!("writing output: {error}"))
+        }
+        _ => Ok(()),
+    }
+}
+
 fn print_text(
     located: &[Located],
     args: &Args,
     workspace: &Workspace,
     baselines: &BTreeMap<usize, Baseline>,
-) {
+) -> io::Result<()> {
+    let mut out = io::stdout().lock();
     for item in located {
         if args.all || is_reported(item, args, workspace, baselines) {
-            println!(
+            writeln!(
+                out,
                 "{:>4}  {}:{}  {}",
                 item.finding.score,
                 item.path.display(),
                 item.finding.line,
                 item.finding.qualified_name()
-            );
+            )?;
         }
     }
+    Ok(())
 }
 
 fn print_json(
@@ -451,7 +540,7 @@ fn print_json(
     workspace: &Workspace,
     baselines: &BTreeMap<usize, Baseline>,
     breaches: usize,
-) {
+) -> io::Result<()> {
     let findings: Vec<ReportedFinding> = located
         .iter()
         .filter(|item| args.all || is_reported(item, args, workspace, baselines))
@@ -466,14 +555,12 @@ fn print_json(
         .collect();
 
     let mut thresholds = BTreeMap::new();
-    for descriptor in registry::descriptors() {
+    for id in registry::language_ids() {
         let value = workspace
             .domains
             .first()
-            .map_or(config::DEFAULT_THRESHOLD, |domain| {
-                domain.threshold_for(descriptor.id)
-            });
-        thresholds.insert(descriptor.id.to_string(), value);
+            .map_or(config::DEFAULT_THRESHOLD, |domain| domain.threshold_for(id));
+        thresholds.insert(id.to_string(), value);
     }
 
     let report = Report {
@@ -482,8 +569,7 @@ fn print_json(
         findings,
     };
 
-    match serde_json::to_string_pretty(&report) {
-        Ok(json) => println!("{json}"),
-        Err(error) => eprintln!("failed to serialise the report: {error}"),
-    }
+    let json = serde_json::to_string_pretty(&report)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    writeln!(io::stdout().lock(), "{json}")
 }

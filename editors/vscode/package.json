@@ -64,7 +64,7 @@
         },
         "bonsai-lint.threshold": {
           "type": [
-            "number",
+            "integer",
             "null"
           ],
           "default": null,

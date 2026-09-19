@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tree_sitter::{Node, Tree};
 
 use crate::finding::{Finding, NameOrigin, Suppression, TOPLEVEL_UNIT};
-use crate::language::{field, Flags, Language};
+use crate::language::{field, Flags, Language, Role};
 use crate::suppression::suppression;
 use crate::walk::{score_node, score_nodes, WalkCx};
 
@@ -39,7 +39,10 @@ fn collect(
         let info = lang.info(child.kind_id());
 
         if info.flags.has(Flags::UNIT) {
-            findings.push(score_unit(child, src, lang, container));
+            // A bodyless (abstract or interface) method would only ever report a zero.
+            if field(child, lang.fields.body).is_some() {
+                findings.push(score_unit(child, src, lang, container));
+            }
         } else if info.flags.has(Flags::CONTAINER) {
             let nested = container_path(child, src, lang, container);
             collect(child, src, lang, nested.as_deref(), findings);
@@ -80,11 +83,24 @@ fn score_unit(node: Node<'_>, src: &[u8], lang: &Language, container: Option<&st
         container: container.map(ToString::to_string),
         name: name.text,
         origin: name.origin,
-        line: node.start_position().row + 1,
+        line: declaration_row(node, lang) + 1,
         score,
         suppression: suppression(node, src, lang),
         language: lang.spec.id,
     }
+}
+
+/// A declaration node starts at its attributes or decorators, not at its signature line.
+#[must_use]
+pub fn declaration_row(node: Node<'_>, lang: &Language) -> usize {
+    let mut cursor = node.walk();
+    let first = node.children(&mut cursor).find(|child| {
+        let info = lang.info(child.kind_id());
+        info.role != Role::Trivia && !info.flags.has(Flags::LEADING_TRIVIA)
+    });
+    first.map_or(node.start_position().row, |child| {
+        child.start_position().row
+    })
 }
 
 /// Code outside any function is invisible to a purely unit-based scan, which is exactly where

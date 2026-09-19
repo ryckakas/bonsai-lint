@@ -106,3 +106,12 @@ test("output that is not a report is refused rather than trusted", async () => {
 
   await assert.rejects(run(binary));
 });
+
+test("a tool that exits without reading its input rejects instead of crashing the host", async () => {
+  const binary = fakeCli(`
+    process.stderr.write("no language handles this extension");
+    process.exit(1);
+  `);
+
+  await assert.rejects(run(binary, { text: "x".repeat(1 << 20) }), /no language handles/);
+});

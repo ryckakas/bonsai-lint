@@ -65,3 +65,40 @@ fn a_marker_cannot_leak_into_the_next_declaration() {
     let source = "<?php\n// bonsai-lint-ignore: only the first\nfunction first() { if ($a) { echo 1; } }\nfunction second() { if ($b) { echo 1; } }\n";
     assert_eq!(suppression_of(source, "second"), Suppression::None);
 }
+
+/// On one line, the closing brace shares the signature line, so the marker is the declaration's
+/// own; it must never reach the declaration below.
+#[test]
+fn a_trailing_marker_after_a_one_line_declaration_belongs_to_it() {
+    let source = "<?php\nfunction first() { if ($a) { echo 1; } } // bonsai-lint-ignore: mine\nfunction second() { if ($b) { echo 1; } }\n";
+    assert_eq!(
+        suppression_of(source, "first"),
+        Suppression::Reasoned("mine".to_string())
+    );
+    assert_eq!(suppression_of(source, "second"), Suppression::None);
+}
+
+#[test]
+fn a_trailing_marker_on_a_closing_brace_line_suppresses_nothing() {
+    let source = "<?php\nfunction first() {\n    if ($a) { echo 1; }\n} // bonsai-lint-ignore: nobody's\nfunction second() { if ($b) { echo 1; } }\n";
+    assert_eq!(suppression_of(source, "first"), Suppression::None);
+    assert_eq!(suppression_of(source, "second"), Suppression::None);
+}
+
+#[test]
+fn a_trailing_marker_on_an_attributed_method_is_honoured() {
+    let source = "<?php\nclass A {\n    #[Route('/x')]\n    public function target() { // bonsai-lint-ignore: legacy\n        if ($a) { echo 1; }\n    }\n}\n";
+    assert_eq!(
+        suppression_of(source, "target"),
+        Suppression::Reasoned("legacy".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_an_assigned_closure_is_honoured() {
+    let source = "<?php\n// bonsai-lint-ignore: hand-tuned\n$handler = function () { if ($a) { echo 1; } };\n";
+    assert_eq!(
+        suppression_of(source, "handler"),
+        Suppression::Reasoned("hand-tuned".to_string())
+    );
+}
