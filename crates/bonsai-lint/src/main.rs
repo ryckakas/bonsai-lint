@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use bonsai_core::Suppression;
-use bonsai_lint::config::{self, Workspace};
-use bonsai_lint::report::{Report, ReportedFinding};
-use bonsai_lint::{registry, Baseline, Located, Scanner};
+use bonsai_engine::config::{self, Workspace};
+use bonsai_engine::report::{Report, ReportedFinding};
+use bonsai_engine::{registry, Baseline, Located, Scanner};
 use clap::{Parser as ClapParser, ValueEnum};
 
 #[derive(ClapParser)]
@@ -174,7 +174,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     Ok(ExitCode::FAILURE)
 }
 
-type ScanResult = (Vec<Located>, bonsai_lint::ScanStats, Vec<String>);
+type ScanResult = (Vec<Located>, bonsai_engine::ScanStats, Vec<String>);
 
 fn scan_stdin(
     args: &Args,
@@ -197,7 +197,7 @@ fn scan_stdin(
     let absolute = path.canonicalize().unwrap_or_else(|_| path.clone());
     let index = workspace.domain_for(&absolute);
     let domain = &workspace.domains[index];
-    let key_path = bonsai_lint::finding::normalize_key(&absolute, &domain.root);
+    let key_path = bonsai_engine::finding::normalize_key(&absolute, &domain.root);
 
     let located = scanner
         .analyze_source(descriptor, &source, domain.toplevel)
@@ -210,7 +210,7 @@ fn scan_stdin(
         })
         .collect();
 
-    let stats = bonsai_lint::ScanStats {
+    let stats = bonsai_engine::ScanStats {
         files: 1,
         errors: 0,
         domains: std::iter::once(index).collect(),
@@ -357,7 +357,7 @@ fn report_stale_entries(
     baselines: &BTreeMap<usize, Baseline>,
     located: &[Located],
     workspace: &Workspace,
-    stats: &bonsai_lint::ScanStats,
+    stats: &bonsai_engine::ScanStats,
 ) {
     for (index, baseline) in baselines {
         if !stats.domains.contains(index) {
@@ -403,7 +403,7 @@ fn warn_about_unreasoned_suppressions(located: &[Located], workspace: &Workspace
     }
 }
 
-fn unusable_scan(stats: &bonsai_lint::ScanStats, args: &Args) -> Option<String> {
+fn unusable_scan(stats: &bonsai_engine::ScanStats, args: &Args) -> Option<String> {
     if stats.errors > 0 {
         return Some(format!(
             "{} path(s) could not be read; refusing to report a clean run",

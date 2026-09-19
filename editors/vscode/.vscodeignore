@@ -1,0 +1,8 @@
+src/**
+tsconfig.json
+.vscodeignore
+.vscode/**
+**/*.map
+
+# tests are compiled alongside the sources but have no business shipping
+out/**/*.test.js

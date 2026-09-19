@@ -47,9 +47,9 @@ impl Domain {
     }
 }
 
-/// Domains are declared by glob at the workspace root, the way `pnpm-workspace.yaml` and
-/// Cargo's `[workspace] members` do it, rather than discovered by walking up from every file.
-/// A stray config cannot then create a domain nobody sanctioned.
+/// Domains are declared by glob at the workspace root rather than discovered by walking up
+/// from every file, so a stray config cannot create a domain nobody sanctioned and the whole
+/// policy stays readable in one place.
 #[derive(Debug)]
 pub struct Workspace {
     pub root: PathBuf,

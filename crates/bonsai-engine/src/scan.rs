@@ -130,7 +130,11 @@ impl Scanner {
                 continue;
             }
 
-            if workspace.is_excluded(path.canonicalize().as_deref().unwrap_or(path)) {
+            // `absolute` is pure path arithmetic; `canonicalize` would be a syscall per file,
+            // which on a large repository costs more than the parsing does.
+            let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+
+            if workspace.is_excluded(&absolute) {
                 continue;
             }
 
@@ -146,13 +150,11 @@ impl Scanner {
             stats.files += 1;
 
             // Scan paths are usually relative while domain roots are absolute, so matching has
-            // to happen on a canonical path or every file would fall back to the root domain.
-            let absolute = path.canonicalize();
-            let for_matching = absolute.as_deref().unwrap_or(path);
-            let index = workspace.domain_for(for_matching);
+            // to happen on an absolute path or every file would fall back to the root domain.
+            let index = workspace.domain_for(&absolute);
             stats.domains.insert(index);
             let domain = &workspace.domains[index];
-            let key_path = normalize_key(for_matching, &domain.root);
+            let key_path = normalize_key(&absolute, &domain.root);
 
             for finding in self.analyze_source(descriptor, &source, domain.toplevel) {
                 located.push(Located {

@@ -62,19 +62,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "bonsai-cli"
-version = "0.1.0"
-dependencies = [
- "bonsai-core",
- "bonsai-lint",
- "clap",
- "serde_json",
-]
-
-[[package]]
 name = "bonsai-core"
 version = "0.1.0"
 dependencies = [
+ "tree-sitter",
+]
+
+[[package]]
+name = "bonsai-engine"
+version = "0.1.0"
+dependencies = [
+ "bonsai-core",
+ "bonsai-lang-php",
+ "bonsai-lang-ts",
+ "globset",
+ "ignore",
+ "serde",
+ "serde_json",
+ "toml",
  "tree-sitter",
 ]
 
@@ -103,14 +108,9 @@ name = "bonsai-lint"
 version = "0.1.0"
 dependencies = [
  "bonsai-core",
- "bonsai-lang-php",
- "bonsai-lang-ts",
- "globset",
- "ignore",
- "serde",
+ "bonsai-engine",
+ "clap",
  "serde_json",
- "toml",
- "tree-sitter",
 ]
 
 [[package]]
