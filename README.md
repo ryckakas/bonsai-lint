@@ -66,7 +66,7 @@ The rest of the flags, for monorepos and editors:
 
 ```bash
 bonsai-lint --domain web                       # one declared domain only
-bonsai-lint --baseline shared.json .           # one baseline for every domain, keyed from the root
+bonsai-lint --baseline PATH .                  # one baseline file for the whole repo, wherever you choose
 bonsai-lint --config packages/web src/         # discover config from here, not from the first path
 bonsai-lint --no-toplevel src/                 # skip code outside any function
 bonsai-lint --stdin --stdin-path src/a.php < buffer   # score an unsaved buffer as that file
@@ -176,8 +176,8 @@ services/billing/.bonsai-lint-baseline.json
 relative to the domain root, so they survive being checked out anywhere, on any platform. A
 domain's own `exclude` is relative to its root too; the root's applies everywhere.
 
-`--baseline shared.json` keeps every domain in one file instead, keyed from the repository root
-so two domains with a `src/index.ts` cannot collide.
+`--baseline PATH` keeps every domain in one file of your choosing instead. Its keys are relative
+to the repository root, so two domains with a `src/index.ts` cannot collide.
 
 </details>
 
