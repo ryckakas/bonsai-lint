@@ -1,0 +1,55 @@
+# Changelog
+
+[← Back to README](README.md)
+
+Notable changes per release, in the format of [Keep a Changelog](https://keepachangelog.com).
+This project follows [Semantic Versioning](https://semver.org); while it is pre-1.0, `0.1.x` is
+the compatibility unit, so a backwards-compatible change is a patch bump.
+
+`dist` reads the section matching a tag and uses it as that release's notes, so an entry here is
+what a user reads on the GitHub release page.
+
+## [Unreleased]
+
+## [0.1.1] - 2026-09-20
+
+### Added
+
+- `-j`, `--jobs <N>` bounds how many files are scored at once. Absent or `0` asks the machine,
+  which respects cgroup quotas and CPU affinity, so a CI container gets the number it is actually
+  allowed. The request is capped at four times the machine's parallelism.
+
+### Changed
+
+- Files are read, parsed and scored in parallel. On a 1.26 million line monorepo and a ten-core
+  machine, a scan drops from **3.16s to 0.80s**, about 1.6 million lines per second. Scaling
+  flattens near 4x rather than approaching 10x because six of those cores are efficiency cores,
+  and the wall-clock win costs roughly 74% more total CPU.
+- Output is unchanged. A report is byte for byte identical to the previous release's at every
+  thread count, stdout and stderr alike: files are scored out of order but replayed in walk
+  order, and findings are ranked after the scan rather than printed as they arrive.
+
+### Notes
+
+- The scorer is untouched — no change to `bonsai-core`, so no score moves.
+- Discovery is still single-threaded, and is now most of what remains. See
+  [ROADMAP.md](ROADMAP.md) for the measurement and the two follow-ups it motivates.
+
+## [0.1.0] - 2026-09-19
+
+Initial release.
+
+- Cognitive complexity scoring for PHP, JavaScript and TypeScript, read through tree-sitter
+  without executing any of it, from one static binary with no PHP or Node runtime required.
+- The same logic scores the same in every supported language, so one threshold is meaningful
+  across a mixed repository.
+- Monorepo support: domains with their own configs, thresholds, excludes and baselines.
+- Baselines to accept existing findings so only later regressions fail, per domain or shared.
+- `bonsai-lint-ignore` suppression markers, per unit or per file, with a required reason.
+- Text and JSON output, and `--stdin` for scoring an unsaved editor buffer.
+- Published as a GitHub release, an npm package, and a Homebrew formula, alongside a VS Code
+  extension versioned independently.
+
+[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ryckakas/bonsai-lint/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/ryckakas/bonsai-lint/releases/tag/v0.1.0

@@ -153,6 +153,15 @@ builds every target and publishes a GitHub Release, npm package, and Homebrew fo
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
 Azure DevOps PAT).
 
+`CHANGELOG.md` is not decoration: `dist` reads the section whose heading matches the tag and
+publishes it as that release's notes, so a missing or misnamed section ships an empty release
+page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY-MM-DD`.
+
+A release bumps `version` in the root `Cargo.toml` **and** the five internal path dependencies
+beside it, which must match or cargo refuses to build. The npm package and Homebrew formula take
+their version from that one field; neither is edited by hand. The extension is bumped afterwards,
+because its lockfile can only pin a CLI version that is already published.
+
 ## Further reading
 
 - [docs/architecture.md](docs/architecture.md) — the source for most of the above, in more depth
