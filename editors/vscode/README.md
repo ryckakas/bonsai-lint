@@ -1,7 +1,7 @@
 # bonsai-lint for VS Code
 
 Flags functions that are hard to read, across PHP, JavaScript and TypeScript. Powered by
-[bonsai-lint](https://github.com/ryckakas/bonsai-lint) — a single Rust binary, with no PHP
+[bonsai-lint](https://github.com/ryckakas/bonsai-lint), a single Rust binary, with no PHP
 runtime and no Node runtime involved in the analysis.
 
 ![A cognitive complexity warning underlining a TypeScript function name, with the Problems panel showing one diagnostic](https://github.com/ryckakas/bonsai-lint/raw/HEAD/editors/vscode/images/diagnostic.png)
@@ -27,9 +27,9 @@ as `<toplevel>`, rather than skipped for living outside a function.
 The extension deliberately does **not** pass a threshold unless you set one. Your repository's
 `bonsai-lint.toml`, its per-domain thresholds, its excludes, its baselines and your
 `bonsai-lint-ignore` markers all apply exactly as they do on the command line. What you see in
-the editor is what the build will fail on — nothing more, nothing less.
+the editor is what the build will fail on. Nothing more, nothing less.
 
-Anything that goes wrong — a broken `bonsai-lint.toml`, a binary that will not start — is written
+Anything that goes wrong, a broken `bonsai-lint.toml` or a binary that will not start, is written
 to the `bonsai-lint` output channel, and the first occurrence of each problem pops up once.
 
 ## Settings
@@ -43,9 +43,12 @@ to the `bonsai-lint` output channel, and the first occurrence of each problem po
 
 ## Requirements
 
-VS Code 1.90 or newer. Install the CLI with `brew install ryckakas/tap/bonsai-lint`, or set
-`bonsai-lint.path` to a binary you already have. The extension will tell you once if it cannot
-find one.
+VS Code 1.90 or newer. Nothing else: the extension carries its own `bonsai-lint` and fetches
+the build for your platform the first time it analyses a file.
+
+To use a CLI you already have instead, point `bonsai-lint.path` at it. That also covers the
+case where the first-run download cannot reach GitHub, behind a proxy for instance. A binary on
+`PATH` is used as a last resort. The extension tells you once if it cannot find any of them.
 
 ## License
 
