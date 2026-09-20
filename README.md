@@ -1,14 +1,14 @@
 # bonsai-lint
 
-![bonsai-lint — cognitive complexity linter for PHP, JavaScript and TypeScript](docs/images/cover-hero.png)
+![bonsai-lint: cognitive complexity linter for PHP, JavaScript and TypeScript](docs/images/cover-hero.png)
 
-**Find the code that's hard to read — in seconds, in one project or a whole monorepo.**
+**Find the code that's hard to read, in seconds, in one project or a whole monorepo.**
 
-*Bonsai — the art of keeping a tree small enough to take in at a glance. Same idea, applied to
+*Bonsai: the art of keeping a tree small enough to take in at a glance. Same idea, applied to
 your syntax trees.*
 
 A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript and
-TypeScript — use it for any one of them, or all three at once. No PHP runtime, no Node runtime,
+TypeScript. Use it for any one of them, or all three at once. No PHP runtime, no Node runtime,
 no Composer entry, nothing added to your project. Scans **1.25 million lines in 3.5 seconds**.
 
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
@@ -21,10 +21,10 @@ no Composer entry, nothing added to your project. Scans **1.25 million lines in 
 
 - **One language, or all of them.** Point it at a PHP project and it is a PHP linter; point it
   at a TypeScript one and it is a TypeScript linter. Nothing to configure either way. Point it at
-  both and they score on one metric in one pass — the same logic written in either language gets
-  the same number, and that is tested.
+  both and they score on one metric in one pass, and the same logic written in either language
+  gets the same number. That is tested.
 - **No runtime, no plugins, no conflicts.** Nothing to wire into a PHPStan or ESLint setup, no
-  plugin versions to keep in step, no Composer entry. A 6 MB binary, 1 MB to download — or
+  plugin versions to keep in step, no Composer entry. A 6 MB binary, 1 MB to download, or
   `npx bonsai-lint` and install nothing at all.
 - **Never executes your code.** Syntax-only: no autoloader, no reflection, no module
   resolution. Safe to point at third-party or untrusted source.
@@ -52,7 +52,7 @@ cargo install bonsai-lint                 # from source
 curl -LsSf https://github.com/ryckakas/bonsai-lint/releases/latest/download/bonsai-lint-installer.sh | sh
 ```
 
-The npm package fetches the prebuilt binary for your platform on install — nothing is compiled,
+The npm package fetches the prebuilt binary for your platform on install. Nothing is compiled,
 and Node only launches it. The analysis itself is pure Rust.
 
 ## Use it
@@ -67,7 +67,7 @@ bonsai-lint --lang php src/          # one language only: `php` or `typescript`
 ```
 
 <details>
-<summary><b>The rest of the flags — monorepos, CI and editors</b></summary>
+<summary><b>The rest of the flags: monorepos, CI and editors</b></summary>
 
 ```bash
 bonsai-lint --domain web                       # one declared domain only
@@ -85,7 +85,7 @@ bonsai-lint --stdin --stdin-path src/a.php < buffer   # score an unsaved buffer 
   22  packages/web/src/parser/lexer.js:19  Lexer
 ```
 
-A clean run prints nothing and exits 0. Exit 1 means a breach — or that the scan was
+A clean run prints nothing and exits 0. Exit 1 means a breach, or that the scan was
 untrustworthy, because a path could not be read or matched no supported file. A gate that
 cannot read what it was pointed at must not report success.
 
@@ -97,7 +97,7 @@ cannot read what it was pointed at must not report success.
 | `.php`, `.phtml` | PHP | `php` |
 | `.ts`, `.mts`, `.cts` | TypeScript | `typescript` |
 | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
-| `*.d.ts` | skipped — signatures only | |
+| `*.d.ts` | skipped, signatures only | |
 
 The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
 `typescript` covers every JavaScript and TypeScript file however it is parsed. An id that is not
@@ -152,7 +152,7 @@ threshold = 20
 | `exclude` | `[]` | Globs, relative to the config's own directory. `*` stops at `/` and `**` crosses it, as in `.gitignore`. |
 | `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
 | `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |
-| `domains` | — | Root config only: globs naming directories that own their own config and baseline. |
+| `domains` | none | Root config only: globs naming directories that own their own config and baseline. |
 | `name` | the directory | A domain's name in output and for `--domain`. |
 
 A misspelt key is an error rather than a silent default, and so is a negated glob: `!pattern`
@@ -161,7 +161,7 @@ is not supported.
 </details>
 
 <details>
-<summary><b>Monorepos — per-team thresholds and baselines</b></summary>
+<summary><b>Monorepos: per-team thresholds and baselines</b></summary>
 
 Add `domains` and each team owns its own thresholds and its own baseline, without editing a
 shared file. The root declares *where* domains may live, so a stray config cannot quietly
@@ -203,7 +203,7 @@ nearest config is the root. `--config PATH` starts the walk somewhere else.
 </details>
 
 <details>
-<summary><b>Baselines — adopt it without fixing everything first</b></summary>
+<summary><b>Baselines: adopt it without fixing everything first</b></summary>
 
 ```bash
 bonsai-lint --write-baseline src/
@@ -211,9 +211,9 @@ bonsai-lint --write-baseline src/
 
 Records everything currently above the threshold as accepted. Later runs fail only on scores
 that got worse, or on units the baseline has never seen. An unknown key is treated as a
-regression, never as an acceptance — a renamed function is reported rather than silently
+regression, never as an acceptance. A renamed function is reported rather than silently
 inheriting someone else's amnesty. Entries that match nothing are reported too, so a baseline
-cannot quietly rot into a permanent exemption — but only by a scan that covered the whole
+cannot quietly rot into a permanent exemption, but only by a scan that covered the whole
 domain, so a single file from a pre-commit hook or an editor buffer never cries stale.
 
 Without a `bonsai-lint.toml`, the directory holding the baseline is the project root, so
@@ -222,7 +222,7 @@ Without a `bonsai-lint.toml`, the directory holding the baseline is the project 
 </details>
 
 <details>
-<summary><b>Suppressing a finding — with a reason, or not at all</b></summary>
+<summary><b>Suppressing a finding: with a reason, or not at all</b></summary>
 
 ```php
 // bonsai-lint-ignore: hand-tuned state machine, splitting it hurts more than it helps
@@ -230,7 +230,7 @@ function parse(string $input): Ast { /* ... */ }
 ```
 
 Works above the declaration, inside the docblock, or trailing the signature line, in every
-supported language — for a `$handler = function () {}` or `const handler = () => {}` too. A
+supported language, and for a `$handler = function () {}` or `const handler = () => {}` too. A
 marker after a closing brace on its own line belongs to nobody. **A marker without a reason is
 refused**, reported on stderr, and the finding stands. Suppression hides a finding but never
 changes a score, and `--all` always shows the real number.
@@ -290,7 +290,7 @@ if (a) { for (const x of xs) { xs.forEach(item => { if (b) { … } }); } }
 ```
 
 bonsai-lint reports that as a single unit scoring **7**. Scored per function it is two units, at 3
-and 1. Neither is wrong — they answer different questions. Per-function tells you how hard each
+and 1. Neither is wrong. They answer different questions. Per-function tells you how hard each
 piece is on its own; bonsai-lint tells you how hard the whole thing is to read where it stands. If
 you care about callback depth, the second is the more useful number.
 
@@ -304,7 +304,7 @@ Migrating? Expect your numbers to move, mostly upward, for these reasons and no 
 
 The [VS Code extension](editors/vscode) reports diagnostics for all five language IDs. It
 analyses the buffer as you type, not the file on disk, and it deliberately does **not** pass a
-threshold unless you set one — so the editor shows exactly what CI would fail on, your
+threshold unless you set one, so the editor shows exactly what CI would fail on, your
 `bonsai-lint.toml` and baselines included.
 
 ## Performance
@@ -314,15 +314,15 @@ threshold unless you set one — so the editor shows exactly what CI would fail 
 | 1.25 million lines of PHP, JavaScript and TypeScript | **3.5s** |
 
 Roughly **360,000 lines per second**, across three languages, in a single pass, on an M-series
-Mac. No warm-up, no daemon, no language server — one process, start to finish.
+Mac. No warm-up, no daemon, no language server. One process, start to finish.
 
-One binary, 6.1 MB on disk and about 1 MB to download, with every language built in. There is
+One binary, 6.3 MB on disk and about 1 MB to download, with every language built in. There is
 no variant to choose and nothing to enable.
 
 ## Documentation
 
-- [Scoring rules](docs/scoring-rules.md) — the full increment table and per-language notes
-- [Architecture](docs/architecture.md) — the language seam, and how to add a language
+- [Scoring rules](docs/scoring-rules.md): the full increment table and per-language notes
+- [Architecture](docs/architecture.md): the language seam, and how to add a language
 
 ## License
 
