@@ -7,9 +7,8 @@ use std::thread::{Scope, ScopedJoinHandle};
 /// reservation is address space rather than memory, and every shipped target is 64-bit.
 pub const STACK_SIZE: usize = 256 << 20;
 
-/// Results come back in item order whatever order the workers finished in, which is what makes
-/// `--jobs 8` print what `--jobs 1` prints. Each worker builds its own `state`, because parsing
-/// takes `&mut` and a parser cannot be shared.
+/// Results come back in item order whatever order the workers finished in. Each worker builds
+/// its own `state`, because parsing takes `&mut` and a parser cannot be shared.
 pub(crate) fn map<T, S, R>(
     items: &[T],
     workers: NonZeroUsize,

@@ -91,11 +91,13 @@ them when touching scan/domain/path code:
   `build_parallel()` cannot host the scoring: it spawns visitors with `std::thread::scope` and
   no stack-size control.
 - The walk is planned on one thread, files are scored on many, results are replayed in plan
-  order. Walk errors keep their slot in that list beside the files, so completion order cannot
-  reach the report: `--jobs 8` prints what `--jobs 1` prints, byte for byte.
-- `rank` is a stable sort over score/path/line and is *not* a total order — two findings on one
-  line of one file tie, and stay in tree order only because each file's findings merge as one
-  contiguous batch. Keep that property if the merge changes.
+  order, walk errors keeping their slot beside the files.
+- Two mechanisms make that deterministic and they cover different things. The report body is
+  ordered by `rank` (a stable sort over score/path/line, path unique per file), and its only
+  ties — two findings on one line — survive because each file's findings merge as one contiguous
+  batch. Warnings and errors have no such sort: they accumulate in merge order alone. So a broken
+  replay shows up on stderr, not in the report, and a test for it needs several invalid-UTF-8
+  files, not one.
 - Invalid UTF-8 is decoded leniently with a warning (replacement bytes land in strings/comments,
   which don't score); an unreadable file is a hard error and fails the run.
 - A closed stdout ends output quietly and leaves the exit code to the findings, not to the write

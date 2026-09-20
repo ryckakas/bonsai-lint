@@ -99,12 +99,16 @@ by accident:
   its visitors with `std::thread::scope` and no way to set a stack size, which is why scoring
   does not live inside the walk.
 - The walk is planned on one thread, the files are scored on many, and the results are replayed
-  in plan order. A walk error keeps its slot in that list beside the files, so which worker
-  finished first cannot reach the report — `--jobs 8` prints what `--jobs 1` prints, byte for
-  byte, and that is what the determinism tests assert.
-- `rank` is a stable sort over score, path and line, which is not a total order: two findings on
-  one line of one file tie. They stay in tree order only because each file's findings are merged
-  as one contiguous batch. Preserve that if the merge is ever rewritten.
+  in plan order, with walk errors keeping their slot in that list beside the files.
+- Determinism rests on two separate mechanisms, and it is worth knowing which does what. The
+  **report body** is ordered by `rank`, a stable sort over score, path and line; because the path
+  is unique per file, completion order cannot disturb it, and the only possible ties are within
+  one file, which survive because a file's findings are merged as one contiguous batch. The
+  **diagnostics** are the opposite: warnings and errors accumulate in merge order alone, so
+  breaking the plan-order replay leaves the report looking correct while stderr silently
+  reorders. That is why the tests guarding it use several invalid-UTF-8 files rather than one —
+  a single warning cannot be emitted out of order, and an earlier version of these tests missed
+  exactly that bug for exactly that reason.
 - A file that is not valid UTF-8 is decoded leniently with a warning: the replaced bytes sit in
   strings and comments, which do not score. An unreadable file is an error and fails the run.
 - A closed stdout — `bonsai-lint --all . | head` — ends the output quietly and leaves the exit
