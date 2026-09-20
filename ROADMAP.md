@@ -5,26 +5,33 @@
 Nothing here is promised for a particular release. Items are listed in the order they are
 likely to be worth doing, and each one records the measurement that motivated it.
 
-## Parallel scanning
+## Faster discovery
 
-The scan uses exactly one core today. Measured against a 1.26 million line monorepo:
+Scoring is parallel as of the `--jobs` work; discovery is not, and it is now the whole of what
+is left. Measured against a 1.26 million line monorepo on a ten-core M5:
 
 ```text
-real 3.74  user 3.19  sys 0.50   cores used 0.99
+--jobs 1    3.15s
+--jobs 10   0.77s      4.1x
 ```
 
-On a ten core machine that leaves nine idle. The work is close to embarrassingly parallel:
-every file is read, parsed and scored independently, and only the final ranking needs a defined
-order. `ignore::WalkBuilder` already exposes `build_parallel()`, so the walk itself is a small
-change.
+Restricting the same scan to one language at a time isolates the shared term: the walk costs
+about **0.24s**, which was 8% of the serial run and is now roughly a third of the parallel one.
 
-The care is in what surrounds it. Output has to stay byte for byte deterministic regardless of
-completion order, which means collecting then sorting rather than printing as results arrive.
-The scan statistics that decide whether a run was trustworthy, the file and error counts, have
-to be accumulated across threads without losing any. Per-domain baselines resolve per file, so
-domain lookup has to be safe to call concurrently.
+Two separate things sit inside that 0.24s, and neither has been measured on its own yet:
 
-This is the single largest speed win available and it does not touch the scorer.
+- **The tree is walked twice.** `Workspace::undeclared_config_warnings` calls
+  `config_directories_below`, an unbounded `ignore` walk of everything under the scan roots,
+  before the scan walk proper — purely to find `bonsai-lint.toml` files that are not declared
+  domains. On a repository with no stray configs it walks the whole tree to report nothing.
+  Collecting those directories during the scan walk that already happens would remove a full
+  traversal. Measure the split first; the 0.24s above covers both walks together.
+- **The scan walk itself is serial.** `ignore::WalkBuilder` exposes `build_parallel()`, but note
+  that it cannot also host the scoring: its visitors are spawned with `std::thread::scope` and
+  no stack-size control, and the scorer needs a 256 MB stack. So this is a parallel producer
+  feeding the existing pool, not a merge of the two. The care is that the `seen` dedupe decides
+  which spelling of a duplicated path is reported, and diagnostics are emitted in walk order —
+  both become an explicit deterministic sort rather than a free consequence of walking in order.
 
 ## Vue single-file components
 

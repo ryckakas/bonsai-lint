@@ -94,8 +94,17 @@ by accident:
   under them are joined arithmetically.
 - Globs stop `*` at `/`, as `.gitignore` does. `packages/*` names direct children, and the
   domain walk is bounded to that depth, which is what keeps an editor's per-keystroke scan cheap.
-- The scan runs on a thread with a 256 MB stack reservation. The walkers are recursive, and
-  generated code nests far deeper than a default main thread allows.
+- Every thread that parses reserves a 256 MB stack. The walkers are recursive, and generated
+  code nests far deeper than a default thread allows. `ignore`'s own `build_parallel()` spawns
+  its visitors with `std::thread::scope` and no way to set a stack size, which is why scoring
+  does not live inside the walk.
+- The walk is planned on one thread, the files are scored on many, and the results are replayed
+  in plan order. A walk error keeps its slot in that list beside the files, so which worker
+  finished first cannot reach the report — `--jobs 8` prints what `--jobs 1` prints, byte for
+  byte, and that is what the determinism tests assert.
+- `rank` is a stable sort over score, path and line, which is not a total order: two findings on
+  one line of one file tie. They stay in tree order only because each file's findings are merged
+  as one contiguous batch. Preserve that if the merge is ever rewritten.
 - A file that is not valid UTF-8 is decoded leniently with a warning: the replaced bytes sit in
   strings and comments, which do not score. An unreadable file is an error and fails the run.
 - A closed stdout — `bonsai-lint --all . | head` — ends the output quietly and leaves the exit

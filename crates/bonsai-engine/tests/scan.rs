@@ -1,7 +1,9 @@
 //! The scan driver decides which files are read and how; these are the rules a user sees as
 //! "why was this file (not) reported".
 
+use std::fmt::Write as _;
 use std::fs;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use bonsai_engine::config;
@@ -25,9 +27,24 @@ fn write(root: &Path, relative: &str, content: &[u8]) {
 }
 
 fn scan(root: &Path, paths: &[&str], languages: Option<&[String]>) -> ScanOutcome {
+    scan_with_jobs(root, paths, languages, None)
+}
+
+fn scan_with_jobs(
+    root: &Path,
+    paths: &[&str],
+    languages: Option<&[String]>,
+    jobs: Option<usize>,
+) -> ScanOutcome {
     let workspace = config::discover(root, KNOWN).expect("discovery");
     let paths: Vec<PathBuf> = paths.iter().map(|path| root.join(path)).collect();
-    Scanner::new().scan(&paths, &workspace, languages)
+    Scanner::new()
+        .with_jobs(jobs.and_then(NonZeroUsize::new))
+        .scan(&paths, &workspace, languages)
+}
+
+fn shape(outcome: &ScanOutcome) -> String {
+    format!("{:?}", outcome.located)
 }
 
 #[test]
@@ -112,4 +129,78 @@ fn reported_paths_use_one_separator_on_every_platform() {
         "packages/web/src/a.ts"
     );
     assert_eq!(display_path(Path::new(".")), Path::new("."));
+}
+
+#[test]
+fn every_file_is_counted_once_however_many_workers_run() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", b"domains = [\"packages/*\"]\n");
+    for index in 0..32 {
+        let mut php = String::new();
+        writeln!(
+            php,
+            "<?php\nfunction a{index}($x) {{ if ($x) {{ return 1; }} return 0; }}"
+        )
+        .expect("string write");
+        write(&root, &format!("packages/api/f{index}.php"), php.as_bytes());
+        write(
+            &root,
+            &format!("packages/web/f{index}.ts"),
+            TS_UNIT.as_bytes(),
+        );
+    }
+
+    let serial = scan_with_jobs(&root, &["."], None, Some(1));
+    assert_eq!(serial.stats.files, 64);
+    assert_eq!(serial.stats.domains.len(), 2);
+    assert!(serial.errors.is_empty(), "{:?}", serial.errors);
+
+    for jobs in [2, 4, 8, 16] {
+        let parallel = scan_with_jobs(&root, &["."], None, Some(jobs));
+        assert_eq!(parallel.stats.files, serial.stats.files, "jobs={jobs}");
+        assert_eq!(parallel.stats.errors, serial.stats.errors, "jobs={jobs}");
+        assert_eq!(parallel.stats.domains, serial.stats.domains, "jobs={jobs}");
+        assert_eq!(shape(&parallel), shape(&serial), "jobs={jobs}");
+    }
+}
+
+#[test]
+fn warnings_come_back_in_walk_order_whatever_the_workers_do() {
+    let (_dir, root) = project();
+    for index in 0..16 {
+        write(&root, &format!("src/f{index}.php"), PHP_UNIT.as_bytes());
+    }
+    for index in 0..8 {
+        write(
+            &root,
+            &format!("src/legacy{index}.php"),
+            b"<?php\nfunction f() { return \"caf\xE9\"; }\n",
+        );
+    }
+
+    let serial = scan_with_jobs(&root, &["src"], None, Some(1));
+    assert_eq!(serial.warnings.len(), 8, "{:?}", serial.warnings);
+
+    for jobs in [2, 8, 16] {
+        let parallel = scan_with_jobs(&root, &["src"], None, Some(jobs));
+        assert_eq!(parallel.warnings, serial.warnings, "jobs={jobs}");
+    }
+}
+
+/// The only test that can prove the engine parses on a stack it sized itself: it runs on a
+/// libtest thread, so a worker spawned without one would take the process down here.
+#[test]
+fn deeply_nested_sources_are_parsed_on_a_stack_sized_for_them() {
+    let (_dir, root) = project();
+    let mut source = String::from("<?php\n$x = 'a'");
+    for _ in 0..30_000 {
+        source.push_str(" . 'a'");
+    }
+    source.push_str(";\n");
+    write(&root, "deep.php", source.as_bytes());
+
+    let outcome = scan(&root, &["deep.php"], None);
+
+    assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+    assert_eq!(outcome.stats.files, 1);
 }

@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::num::NonZeroUsize;
 use std::path::{Component, Path, PathBuf};
 
 use bonsai_core::LanguageDescriptor;
@@ -7,6 +8,7 @@ use tree_sitter::Parser;
 
 use crate::config::Workspace;
 use crate::finding::{normalize_key, Located};
+use crate::pool;
 use crate::registry;
 
 #[derive(Debug, Default, Clone)]
@@ -35,13 +37,105 @@ impl ScanOutcome {
     }
 }
 
-/// What one `scan` call accumulates across all its paths.
+#[derive(Debug)]
+struct Job {
+    path: PathBuf,
+    shown: PathBuf,
+    key_path: String,
+    domain: usize,
+    descriptor: &'static LanguageDescriptor,
+    toplevel: bool,
+}
+
+/// A path the walk could not reach keeps its place in the list, so diagnostics stay in walk
+/// order however the files around it were scored.
+#[derive(Debug)]
+enum Planned {
+    Unreadable(String),
+    Read(Job),
+}
+
+#[derive(Debug, Default)]
+struct Plan {
+    entries: Vec<Planned>,
+    files: usize,
+}
+
+#[derive(Debug, Default)]
+struct Scored {
+    located: Vec<Located>,
+    /// Set once the file was read: one that could not be read counts for neither the file tally
+    /// nor its domain.
+    domain: Option<usize>,
+    warnings: Vec<String>,
+    error: Option<String>,
+}
+
 struct Pass<'a> {
     workspace: &'a Workspace,
     languages: Option<&'a [String]>,
     /// `bonsai-lint src src/a.php` names `a.php` twice and must report it once.
     seen: HashSet<PathBuf>,
-    outcome: ScanOutcome,
+    plan: Plan,
+}
+
+impl Pass<'_> {
+    fn walk(&mut self, given: &Path) {
+        let root = ScanRoot {
+            given,
+            resolved: resolve(given),
+        };
+        for entry in WalkBuilder::new(given).build() {
+            self.visit(entry, &root);
+        }
+    }
+
+    fn visit(&mut self, entry: Result<DirEntry, ignore::Error>, root: &ScanRoot<'_>) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                return self
+                    .plan
+                    .entries
+                    .push(Planned::Unreadable(error.to_string()))
+            }
+        };
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+            return;
+        }
+
+        let Some(job) = self.job(entry.path(), root) else {
+            return;
+        };
+        self.plan.entries.push(Planned::Read(job));
+        self.plan.files += 1;
+    }
+
+    fn job(&mut self, path: &Path, root: &ScanRoot<'_>) -> Option<Job> {
+        let descriptor = registry::for_path(path)?;
+        let wanted = |ids: &[String]| ids.iter().any(|id| id == descriptor.spec.id);
+        if self.languages.is_some_and(|ids| !wanted(ids)) {
+            return None;
+        }
+
+        let absolute = root.absolute(path);
+        if !self.seen.insert(absolute.clone()) || self.workspace.is_excluded(&absolute) {
+            return None;
+        }
+
+        // Domain roots are absolute, so a relative scan path has to be matched absolutely or
+        // every file would fall back to the root domain.
+        let index = self.workspace.domain_for(&absolute);
+        let domain = &self.workspace.domains[index];
+        Some(Job {
+            shown: display_path(path),
+            key_path: normalize_key(&absolute, &domain.root),
+            toplevel: domain.toplevel,
+            path: path.to_path_buf(),
+            descriptor,
+            domain: index,
+        })
+    }
 }
 
 /// Pure path arithmetic per file; only the scan root paid for a `canonicalize`.
@@ -58,34 +152,27 @@ impl ScanRoot<'_> {
 }
 
 /// A parser is expensive to build and `set_language` resets its state, so one is kept per
-/// language rather than switching a single parser per file.
+/// language. Parsing takes `&mut`, so a set belongs to one thread.
 #[derive(Default)]
-pub struct Scanner {
-    parsers: HashMap<&'static str, Parser>,
-}
+struct Parsers(HashMap<&'static str, Parser>);
 
-impl std::fmt::Debug for Scanner {
+impl std::fmt::Debug for Parsers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Scanner")
-            .field("languages", &self.parsers.len())
+        f.debug_struct("Parsers")
+            .field("languages", &self.0.len())
             .finish()
     }
 }
 
-impl Scanner {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn analyze_source(
+impl Parsers {
+    fn analyze(
         &mut self,
         descriptor: &'static LanguageDescriptor,
         source: &str,
         toplevel: bool,
     ) -> Vec<bonsai_core::Finding> {
         let language = (descriptor.compiled)();
-        let parser = self.parsers.entry(descriptor.id).or_insert_with(|| {
+        let parser = self.0.entry(descriptor.id).or_insert_with(|| {
             let mut parser = Parser::new();
             parser
                 .set_language(&language.ts)
@@ -100,89 +187,132 @@ impl Scanner {
             .map(|tree| bonsai_core::analyze(&tree, source.as_bytes(), language, toplevel))
             .unwrap_or_default()
     }
+}
 
-    pub fn scan(
+#[derive(Debug, Default)]
+pub struct Scanner {
+    parsers: Parsers,
+    jobs: Option<NonZeroUsize>,
+}
+
+impl Scanner {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// `None` asks the machine how many cores it has.
+    #[must_use]
+    pub fn with_jobs(mut self, jobs: Option<NonZeroUsize>) -> Self {
+        self.jobs = jobs;
+        self
+    }
+
+    pub fn analyze_source(
         &mut self,
+        descriptor: &'static LanguageDescriptor,
+        source: &str,
+        toplevel: bool,
+    ) -> Vec<bonsai_core::Finding> {
+        self.parsers.analyze(descriptor, source, toplevel)
+    }
+
+    /// The walk is planned serially and the files are scored in parallel, then replayed in plan
+    /// order: what a run prints does not depend on which worker finished first.
+    pub fn scan(
+        &self,
         paths: &[PathBuf],
         workspace: &Workspace,
         languages: Option<&[String]>,
     ) -> ScanOutcome {
-        let mut pass = Pass {
-            workspace,
-            languages,
-            seen: HashSet::new(),
-            outcome: ScanOutcome::default(),
-        };
+        let plan = plan(paths, workspace, languages);
+        let scored = pool::map(
+            &plan.entries,
+            self.workers(plan.files),
+            Parsers::default,
+            score,
+        );
 
-        for path in paths {
-            self.scan_one(path, &mut pass);
+        let mut outcome = ScanOutcome::default();
+        for entry in scored {
+            absorb(entry, &mut outcome);
         }
 
-        rank(&mut pass.outcome.located);
-        pass.outcome
+        rank(&mut outcome.located);
+        outcome
     }
 
-    fn scan_one(&mut self, given: &Path, pass: &mut Pass<'_>) {
-        let root = ScanRoot {
-            given,
-            resolved: resolve(given),
-        };
-        for entry in WalkBuilder::new(given).build() {
-            self.scan_entry(entry, &root, pass);
-        }
+    /// Capped by the file count: a two-file scan has nothing to spread across eight threads, and
+    /// every worker reserves a large stack.
+    fn workers(&self, files: usize) -> NonZeroUsize {
+        let asked = self
+            .jobs
+            .or_else(|| std::thread::available_parallelism().ok())
+            .unwrap_or(NonZeroUsize::MIN);
+        NonZeroUsize::new(files.min(asked.get())).unwrap_or(NonZeroUsize::MIN)
     }
+}
 
-    fn scan_entry(
-        &mut self,
-        entry: Result<DirEntry, ignore::Error>,
-        root: &ScanRoot<'_>,
-        pass: &mut Pass<'_>,
-    ) {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => return pass.outcome.fail(error.to_string()),
-        };
-        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
-            return;
-        }
+fn plan(paths: &[PathBuf], workspace: &Workspace, languages: Option<&[String]>) -> Plan {
+    let mut pass = Pass {
+        workspace,
+        languages,
+        seen: HashSet::new(),
+        plan: Plan::default(),
+    };
 
-        let path = entry.path();
-        let Some(descriptor) = registry::for_path(path) else {
-            return;
-        };
-        let wanted = |ids: &[String]| ids.iter().any(|id| id == descriptor.spec.id);
-        if pass.languages.is_some_and(|ids| !wanted(ids)) {
-            return;
-        }
-
-        let absolute = root.absolute(path);
-        if !pass.seen.insert(absolute.clone()) || pass.workspace.is_excluded(&absolute) {
-            return;
-        }
-
-        let shown = display_path(path);
-        let source = match std::fs::read(path) {
-            Ok(bytes) => decode(bytes, &shown, &mut pass.outcome.warnings),
-            Err(error) => return pass.outcome.fail(format!("{}: {error}", shown.display())),
-        };
-        pass.outcome.stats.files += 1;
-
-        // Domain roots are absolute, so a relative scan path has to be matched absolutely or
-        // every file would fall back to the root domain.
-        let index = pass.workspace.domain_for(&absolute);
-        pass.outcome.stats.domains.insert(index);
-        let domain = &pass.workspace.domains[index];
-        let key_path = normalize_key(&absolute, &domain.root);
-
-        for finding in self.analyze_source(descriptor, &source, domain.toplevel) {
-            pass.outcome.located.push(Located {
-                path: shown.clone(),
-                key_path: key_path.clone(),
-                domain: index,
-                finding,
-            });
-        }
+    for path in paths {
+        pass.walk(path);
     }
+    pass.plan
+}
+
+fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
+    let job = match planned {
+        Planned::Read(job) => job,
+        Planned::Unreadable(message) => {
+            return Scored {
+                error: Some(message.clone()),
+                ..Scored::default()
+            }
+        }
+    };
+
+    let mut scored = Scored::default();
+    let source = match std::fs::read(&job.path) {
+        Ok(bytes) => decode(bytes, &job.shown, &mut scored.warnings),
+        Err(error) => {
+            scored.error = Some(format!("{}: {error}", job.shown.display()));
+            return scored;
+        }
+    };
+
+    scored.domain = Some(job.domain);
+    scored.located = parsers
+        .analyze(job.descriptor, &source, job.toplevel)
+        .into_iter()
+        .map(|finding| Located {
+            path: job.shown.clone(),
+            key_path: job.key_path.clone(),
+            domain: job.domain,
+            finding,
+        })
+        .collect();
+    scored
+}
+
+/// Replaying plan order accumulates exactly what a serial scan accumulated — counts, warnings
+/// and errors alike.
+fn absorb(scored: Scored, outcome: &mut ScanOutcome) {
+    outcome.warnings.extend(scored.warnings);
+    if let Some(message) = scored.error {
+        return outcome.fail(message);
+    }
+    if let Some(domain) = scored.domain {
+        outcome.stats.files += 1;
+        outcome.stats.domains.insert(domain);
+    }
+    outcome.located.extend(scored.located);
 }
 
 /// Highest score first, then by position, so the worst offender heads every report whichever

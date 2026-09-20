@@ -9,7 +9,7 @@ your syntax trees.*
 
 A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript and
 TypeScript. Use it for any one of them, or all three at once. No PHP runtime, no Node runtime,
-no Composer entry, nothing added to your project. Scans **1.25 million lines in 3.5 seconds**.
+no Composer entry, nothing added to your project. Scans **1.26 million lines in 0.8 seconds**.
 
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bonsai-lint?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/bonsai-lint)
@@ -75,6 +75,7 @@ bonsai-lint --baseline PATH .                  # one baseline file for the whole
 bonsai-lint --config packages/web src/         # discover config from here, not from the first path
 bonsai-lint --no-toplevel src/                 # skip code outside any function
 bonsai-lint --stdin --stdin-path src/a.php < buffer   # score an unsaved buffer as that file
+bonsai-lint --jobs 4 .                         # cap the workers; 0 or absent uses every core
 ```
 
 </details>
@@ -311,10 +312,15 @@ threshold unless you set one, so the editor shows exactly what CI would fail on,
 
 | Corpus | Time |
 | --- | --- |
-| 1.25 million lines of PHP, JavaScript and TypeScript | **3.5s** |
+| 1.26 million lines of PHP, JavaScript and TypeScript | **0.77s** |
 
-Roughly **360,000 lines per second**, across three languages, in a single pass, on an M-series
-Mac. No warm-up, no daemon, no language server. One process, start to finish.
+Roughly **1.6 million lines per second**, across three languages, in one pass, on a ten-core
+M5. No warm-up, no daemon, no language server. One process, start to finish.
+
+Files are read, parsed and scored in parallel; `--jobs` bounds that, and `--jobs 1` is the same
+scan on one core, at 3.15s. The report is byte for byte identical either way — findings are
+collected and ranked after the scan, never printed as they arrive — so a diff of two runs is
+always a real change, not a scheduling artefact.
 
 One binary, 6.3 MB on disk and about 1 MB to download, with every language built in. There is
 no variant to choose and nothing to enable.
