@@ -139,15 +139,20 @@ package after the package, so the command users get matches the thing they insta
 **The VS Code extension versions independently** of the CLI, and the two numbers are not
 expected to match. Publishing is manual — `vsce` needs an Azure DevOps PAT.
 
-**Bootstrap ordering.** The extension is meant to depend on the `bonsai-lint` npm package on a
-caret range, so it picks up CLI releases without a bump of its own. That dependency cannot exist
-until `dist` has published the CLI for the first time, so it is deliberately absent from
-`editors/vscode/package.json` right now — otherwise `npm ci` fails and CI is red before the
-first release. After the first tag:
+**The extension depends on the `bonsai-lint` npm package** on a caret range, so it picks up CLI
+releases without a bump of its own. It resolves the binary from `bonsai-lint.path` first, then
+from that package, then from `PATH`.
+
+**Release ordering.** `npm ci` installs the exact version pinned in
+`editors/vscode/package-lock.json`, and that can only name a version `dist` has already
+published. So the CLI goes first — bump, tag, publish — and the extension is relocked and
+repackaged afterwards:
 
 ```bash
-cd editors/vscode && npm install --save bonsai-lint@^0.1.0
+cd editors/vscode && npm install
 ```
 
-Until then the extension resolves the binary from `bonsai-lint.path`, then from that package once
-it exists, then from `PATH` — the same fallback chain it always uses.
+Pointing the dependency at an unpublished version turns CI red, since `npm ci` cannot resolve it.
+Note also that the `.vsix` ships the npm *wrapper* rather than the executable, and that wrapper
+is pinned at package time — so a CLI release does not reach existing extension users until the
+extension is republished.
