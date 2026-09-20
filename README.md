@@ -86,6 +86,61 @@ bonsai-lint --jobs 4 .                         # cap the workers; 0 or absent us
   22  packages/web/src/parser/lexer.js:19  Lexer
 ```
 
+<details>
+<summary><b>The same run as JSON</b></summary>
+
+```bash
+bonsai-lint --format json .
+```
+
+```json
+{
+  "thresholds": {
+    "php": 15,
+    "typescript": 15
+  },
+  "breaches": 3,
+  "findings": [
+    {
+      "path": "packages/billing/src/invoice-mapper.service.ts",
+      "line": 47,
+      "name": "InvoiceMapperService::mapLineItems",
+      "score": 69,
+      "language": "typescript",
+      "domain": "root"
+    },
+    {
+      "path": "services/api/src/Controller/CheckoutController.php",
+      "line": 207,
+      "name": "CheckoutController::applyDiscounts",
+      "score": 25,
+      "language": "php",
+      "domain": "root"
+    },
+    {
+      "path": "packages/web/src/parser/lexer.js",
+      "line": 19,
+      "name": "Lexer",
+      "score": 22,
+      "language": "typescript",
+      "domain": "root"
+    }
+  ]
+}
+```
+
+`findings` is already ranked, worst first, so a consumer does not have to sort it. `thresholds`
+is keyed by language id and reports what the scan actually applied, which is the domain's
+threshold rather than the root's when the scan was scoped to one. `breaches` counts the findings
+over that threshold, and is what the exit code follows; with `--all` the array also carries
+everything under it, and `breaches` still counts only the ones that failed.
+
+`domain` names the domain a file resolved to — `root` when there is no `bonsai-lint.toml`
+declaring any — and `path` is always forward-slashed, so a report generated on Windows compares
+against one generated in CI.
+
+</details>
+
 A clean run prints nothing and exits 0. Exit 1 means a breach, or that the scan was
 untrustworthy, because a path could not be read or matched no supported file. A gate that
 cannot read what it was pointed at must not report success.
