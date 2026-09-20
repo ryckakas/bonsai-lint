@@ -31,7 +31,7 @@ Boolean operators cost per *run*, not per operator — the cost is in the switch
 ```php
 $a && $b && $c              // +1  one run
 $a && $b || $c              // +2  two runs
-$a && $b && $c || $d || $e  // +3  three runs
+$a && $b || $c && $d        // +3  three runs
 $a && ($b && $c)            // +1  parentheses are skipped, not treated as a boundary
 $a && !($b && $c)           // +2  a negation is not a logical expression, so it ends the run
 ```
