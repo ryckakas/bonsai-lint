@@ -242,14 +242,14 @@ impl Scanner {
         outcome
     }
 
-    /// Capped by the file count: a two-file scan has nothing to spread across eight threads, and
-    /// every worker reserves a large stack.
+    /// Capped by the file count, because a two-file scan has nothing to spread across eight
+    /// threads, and by a small multiple of the machine, because past that the spawns cost more
+    /// than the parallelism returns: uncapped, `--jobs 5000` measures slower than `--jobs 1`.
     fn workers(&self, files: usize) -> NonZeroUsize {
-        let asked = self
-            .jobs
-            .or_else(|| std::thread::available_parallelism().ok())
-            .unwrap_or(NonZeroUsize::MIN);
-        NonZeroUsize::new(files.min(asked.get())).unwrap_or(NonZeroUsize::MIN)
+        let machine = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+        let asked = self.jobs.unwrap_or(machine);
+        let ceiling = machine.get().saturating_mul(4);
+        NonZeroUsize::new(files.min(asked.get()).min(ceiling)).unwrap_or(NonZeroUsize::MIN)
     }
 }
 

@@ -89,7 +89,12 @@ them when touching scan/domain/path code:
 - Every thread that parses reserves a 256 MB stack (`bonsai_engine::STACK_SIZE`) because the
   walkers are recursive and generated code nests deeper than a default stack allows. `ignore`'s
   `build_parallel()` cannot host the scoring: it spawns visitors with `std::thread::scope` and
-  no stack-size control.
+  no stack-size control. The one exception is a machine that grants no worker thread at all:
+  the scan then runs inline on the caller's thread, which the engine did not size. The CLI is
+  safe because `main` already wraps the run in a sized thread; an embedder must do the same.
+- Worker count is capped by the file count and by four times `available_parallelism`. Past that
+  the spawns cost more than the parallelism returns — uncapped, `--jobs 5000` measures slower
+  than `--jobs 1`.
 - The walk is planned on one thread, files are scored on many, results are replayed in plan
   order, walk errors keeping their slot beside the files.
 - Two mechanisms make that deterministic and they cover different things. The report body is

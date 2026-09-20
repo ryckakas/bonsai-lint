@@ -703,7 +703,7 @@ fn a_parallel_scan_prints_exactly_what_a_serial_one_prints() {
 
     for format in ["text", "json"] {
         let serial = project.run(&["--all", "--format", format, "--jobs", "1", "."]);
-        for jobs in ["2", "3", "8", "16", "0"] {
+        for jobs in ["2", "3", "8", "16", "0", "4096"] {
             assert_matches_serial(&project, format, jobs, &serial);
         }
     }

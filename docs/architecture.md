@@ -97,7 +97,15 @@ by accident:
 - Every thread that parses reserves a 256 MB stack. The walkers are recursive, and generated
   code nests far deeper than a default thread allows. `ignore`'s own `build_parallel()` spawns
   its visitors with `std::thread::scope` and no way to set a stack size, which is why scoring
-  does not live inside the walk.
+  does not live inside the walk. There is one exception, and it is deliberate: if the machine
+  will not grant a worker thread at all, the scan runs inline on the caller's thread rather than
+  failing, and that thread is sized by whoever spawned it. Being refused a thread is a reason to
+  be slow, not to abandon the run. The CLI is unaffected because `main` already runs everything
+  on a thread it sized itself; an embedder calling `Scanner::scan` should do the same.
+- How many workers run is capped twice over: by the number of files, since a two-file scan has
+  nothing to spread across eight threads, and by four times `available_parallelism`, since past
+  that the spawning costs more than the parallelism returns. Uncapped, `--jobs 5000` measures
+  slower than `--jobs 1`.
 - The walk is planned on one thread, the files are scored on many, and the results are replayed
   in plan order, with walk errors keeping their slot in that list beside the files.
 - Determinism rests on two separate mechanisms, and it is worth knowing which does what. The
