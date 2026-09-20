@@ -47,6 +47,10 @@ The starting position should be that only script blocks score.
 - **A domain cannot opt a language out.** Per-language thresholds work per domain, but there is
   no way to say that a domain is TypeScript only. The workaround is an `exclude` glob.
   Analysed in [docs/features/domain-language-scope.md](docs/features/domain-language-scope.md).
+- **Shipping the CLI inside the extension.** The `.vsix` carries no binary today. Bundling the
+  npm wrapper costs 23 KB and makes it fetch its own on first use; one package per platform
+  costs about 1.6 MB and fetches nothing. Analysed in
+  [docs/features/extension-cli-bundling.md](docs/features/extension-cli-bundling.md).
 - **Trusted publishing.** Both npm and crates.io now support OIDC from GitHub Actions, which
   would remove the stored tokens that have to be rotated when they expire.
 - **A long lived editor server.** The extension currently starts a process per analysis. A
