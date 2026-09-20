@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -8,12 +9,8 @@ use bonsai_engine::config::{self, Workspace};
 use bonsai_engine::finding::normalize_key;
 use bonsai_engine::report::{Report, ReportedFinding};
 use bonsai_engine::scan::{decode, display_path, rank, resolve};
-use bonsai_engine::{registry, Baseline, Located, ScanOutcome, ScanStats, Scanner};
+use bonsai_engine::{registry, Baseline, Located, ScanOutcome, ScanStats, Scanner, STACK_SIZE};
 use clap::{Parser as ClapParser, ValueEnum};
-
-/// Generated code nests deeper than the default main-thread stack lets the recursive walkers
-/// go; a 20,000-term concatenation is one bundled base64 blob. Only touched pages are committed.
-const STACK_SIZE: usize = 256 << 20;
 
 #[derive(ClapParser)]
 #[command(
@@ -70,6 +67,10 @@ struct Args {
     /// The path the stdin contents should be attributed to
     #[arg(long, value_name = "PATH", requires = "stdin")]
     stdin_path: Option<PathBuf>,
+
+    /// How many files to score at once; `0` asks the machine
+    #[arg(short, long, value_name = "N", default_value_t = 0)]
+    jobs: usize,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -81,6 +82,7 @@ enum Format {
 fn main() -> ExitCode {
     let args = Args::parse();
 
+    // The engine gives its own workers this stack; `--stdin` parses on this thread instead.
     let outcome = std::thread::Builder::new()
         .stack_size(STACK_SIZE)
         .spawn(move || run(&args))
@@ -133,7 +135,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
         }
     }
 
-    let mut scanner = Scanner::new();
+    let mut scanner = Scanner::new().with_jobs(NonZeroUsize::new(args.jobs));
     let languages = (!args.lang.is_empty()).then(|| args.lang.clone());
 
     let ScanOutcome {

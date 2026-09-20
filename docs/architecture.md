@@ -94,8 +94,29 @@ by accident:
   under them are joined arithmetically.
 - Globs stop `*` at `/`, as `.gitignore` does. `packages/*` names direct children, and the
   domain walk is bounded to that depth, which is what keeps an editor's per-keystroke scan cheap.
-- The scan runs on a thread with a 256 MB stack reservation. The walkers are recursive, and
-  generated code nests far deeper than a default main thread allows.
+- Every thread that parses reserves a 256 MB stack. The walkers are recursive, and generated
+  code nests far deeper than a default thread allows. `ignore`'s own `build_parallel()` spawns
+  its visitors with `std::thread::scope` and no way to set a stack size, which is why scoring
+  does not live inside the walk. There is one exception, and it is deliberate: if the machine
+  will not grant a worker thread at all, the scan runs inline on the caller's thread rather than
+  failing, and that thread is sized by whoever spawned it. Being refused a thread is a reason to
+  be slow, not to abandon the run. The CLI is unaffected because `main` already runs everything
+  on a thread it sized itself; an embedder calling `Scanner::scan` should do the same.
+- How many workers run is capped twice over: by the number of files, since a two-file scan has
+  nothing to spread across eight threads, and by four times `available_parallelism`, since past
+  that the spawning costs more than the parallelism returns. Uncapped, `--jobs 5000` measures
+  slower than `--jobs 1`.
+- The walk is planned on one thread, the files are scored on many, and the results are replayed
+  in plan order, with walk errors keeping their slot in that list beside the files.
+- Determinism rests on two separate mechanisms, and it is worth knowing which does what. The
+  **report body** is ordered by `rank`, a stable sort over score, path and line; because the path
+  is unique per file, completion order cannot disturb it, and the only possible ties are within
+  one file, which survive because a file's findings are merged as one contiguous batch. The
+  **diagnostics** are the opposite: warnings and errors accumulate in merge order alone, so
+  breaking the plan-order replay leaves the report looking correct while stderr silently
+  reorders. That is why the tests guarding it use several invalid-UTF-8 files rather than one —
+  a single warning cannot be emitted out of order, and an earlier version of these tests missed
+  exactly that bug for exactly that reason.
 - A file that is not valid UTF-8 is decoded leniently with a warning: the replaced bytes sit in
   strings and comments, which do not score. An unreadable file is an error and fails the run.
 - A closed stdout — `bonsai-lint --all . | head` — ends the output quietly and leaves the exit

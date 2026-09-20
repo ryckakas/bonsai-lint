@@ -86,8 +86,23 @@ them when touching scan/domain/path code:
   never land on opposite sides of a `starts_with`.
 - Globs stop `*` at `/` and let `**` cross it, matching `.gitignore` semantics; the domain walk
   depth is bounded by this, which keeps a per-keystroke editor scan cheap.
-- The scan runs on a thread with a 256 MB stack reservation because the walkers are recursive and
-  generated code nests deeper than a default main-thread stack allows.
+- Every thread that parses reserves a 256 MB stack (`bonsai_engine::STACK_SIZE`) because the
+  walkers are recursive and generated code nests deeper than a default stack allows. `ignore`'s
+  `build_parallel()` cannot host the scoring: it spawns visitors with `std::thread::scope` and
+  no stack-size control. The one exception is a machine that grants no worker thread at all:
+  the scan then runs inline on the caller's thread, which the engine did not size. The CLI is
+  safe because `main` already wraps the run in a sized thread; an embedder must do the same.
+- Worker count is capped by the file count and by four times `available_parallelism`. Past that
+  the spawns cost more than the parallelism returns — uncapped, `--jobs 5000` measures slower
+  than `--jobs 1`.
+- The walk is planned on one thread, files are scored on many, results are replayed in plan
+  order, walk errors keeping their slot beside the files.
+- Two mechanisms make that deterministic and they cover different things. The report body is
+  ordered by `rank` (a stable sort over score/path/line, path unique per file), and its only
+  ties — two findings on one line — survive because each file's findings merge as one contiguous
+  batch. Warnings and errors have no such sort: they accumulate in merge order alone. So a broken
+  replay shows up on stderr, not in the report, and a test for it needs several invalid-UTF-8
+  files, not one.
 - Invalid UTF-8 is decoded leniently with a warning (replacement bytes land in strings/comments,
   which don't score); an unreadable file is a hard error and fails the run.
 - A closed stdout ends output quietly and leaves the exit code to the findings, not to the write
@@ -110,6 +125,17 @@ projects on crates.io/npm/VS Code Marketplace).
   property, not an assumption — see the README's "same code scores the same" example when
   changing shared scoring logic in `bonsai-core`.
 
+## Comments
+
+Don't comment. The exception is a short "why" — rationale, a trade-off, the reason a non-obvious
+choice was made — and only where it is genuinely needed. Three lines is the ceiling; one is
+usually right.
+
+Never restate what the code already says. If a comment could be deleted without losing something
+a reader could not recover from the code itself, delete it. Where a rule is correct *by omission*
+— a value deliberately absent from a match arm or a list — pair the "why" with a named test
+asserting the absence, since a comment alone cannot fail.
+
 ## Workspace-wide lint config (`Cargo.toml`)
 
 `unsafe_code = "forbid"`, clippy `pedantic` warn, and `excessive_nesting`/`too_many_lines` are
@@ -131,5 +157,5 @@ Azure DevOps PAT).
 
 - [docs/architecture.md](docs/architecture.md) — the source for most of the above, in more depth
 - [docs/scoring-rules.md](docs/scoring-rules.md) — the full cognitive-complexity increment table
-- [ROADMAP.md](ROADMAP.md) — planned work and the measurements motivating it (e.g. parallel
-  scanning is single-core today and is the largest known speed win)
+- [ROADMAP.md](ROADMAP.md) — planned work and the measurements motivating it (e.g. discovery is
+  still single-threaded, and walks the tree twice)

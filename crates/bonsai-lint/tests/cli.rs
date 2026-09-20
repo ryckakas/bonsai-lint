@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::fs;
 use std::io::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 const BUSY_PHP: &str =
@@ -615,5 +615,389 @@ fn a_file_level_marker_is_honoured_and_a_bare_one_refused_out_loud() {
         stdout(&refused).contains("<toplevel>"),
         "{}",
         stdout(&refused)
+    );
+}
+
+/// Nested ifs score 1+2+..+depth, which is how these fixtures land either side of a threshold.
+fn nested_php(name: &str, depth: usize) -> String {
+    nest(&format!("<?php\nfunction {name}($a) {{\n"), "$a", depth)
+}
+
+fn nested_ts(name: &str, depth: usize) -> String {
+    nest(&format!("function {name}(a) {{\n"), "a", depth)
+}
+
+fn nest(header: &str, condition: &str, depth: usize) -> String {
+    let mut source = header.to_string();
+    for level in 0..depth {
+        writeln!(source, "{}if ({condition}) {{", "    ".repeat(level + 1)).expect("string write");
+    }
+    source.push_str("    return 1;\n");
+    for level in (0..depth).rev() {
+        writeln!(source, "{}}}", "    ".repeat(level + 1)).expect("string write");
+    }
+    source.push_str("}\n");
+    source
+}
+
+fn over_threshold(name: &str) -> String {
+    nested_php(name, 6)
+}
+
+/// Baits completion-order bugs: a slow first file so the worker holding index 0 finishes last,
+/// ties that `rank` cannot break, and a warning with a position to be wrong about.
+fn racy_project() -> Project {
+    let project = Project::new();
+    project.file("bonsai-lint.toml", "exclude = [\"skipped/**\"]\n");
+
+    let mut heavy = String::from("<?php\n");
+    for index in 0..4000 {
+        writeln!(
+            heavy,
+            "function h{index}($a) {{ if ($a) {{ return 1; }} return 0; }}"
+        )
+        .expect("string write");
+    }
+    project.file("aaa_heavy.php", &heavy);
+
+    let mut deep = String::from("<?php\n$x = 'a'");
+    for _ in 0..30_000 {
+        deep.push_str(" . 'a'");
+    }
+    deep.push_str(";\n");
+    project.file("deep.php", &deep);
+
+    for index in 0..40 {
+        project.file(&format!("src/tie{index}.php"), &over_threshold("tie"));
+        project.file(&format!("src/calm{index}.ts"), CALM_TS);
+    }
+
+    let unit = "function ($a) { if ($a) { if ($a) { if ($a) { if ($a) { if ($a) { if ($a) { return 1; } } } } } } }";
+    project.file(
+        "src/same_line.php",
+        &format!("<?php\n$a = {unit}; $b = {unit};\n"),
+    );
+    project.file("src/types.d.ts", "export declare function f(): void;\n");
+    project.file("skipped/ignored.php", BUSY_PHP);
+
+    let mut legacy = over_threshold("legacy").into_bytes();
+    legacy.extend_from_slice(b"// caf\xE9\n");
+    fs::write(project.root.join("src/legacy.php"), legacy).expect("write");
+
+    project
+}
+
+/// Repeated because a scheduling bug that reorders output does not do so on every run.
+fn assert_matches_serial(project: &Project, format: &str, jobs: &str, serial: &Output) {
+    for _ in 0..3 {
+        let parallel = project.run(&["--all", "--format", format, "--jobs", jobs, "."]);
+        assert_eq!(stdout(&parallel), stdout(serial), "{format} jobs={jobs}");
+        assert_eq!(stderr(&parallel), stderr(serial), "{format} jobs={jobs}");
+        assert_eq!(code(&parallel), code(serial), "{format} jobs={jobs}");
+    }
+}
+
+#[test]
+fn a_parallel_scan_prints_exactly_what_a_serial_one_prints() {
+    let project = racy_project();
+
+    for format in ["text", "json"] {
+        let serial = project.run(&["--all", "--format", format, "--jobs", "1", "."]);
+        for jobs in ["2", "3", "8", "16", "0", "4096"] {
+            assert_matches_serial(&project, format, jobs, &serial);
+        }
+    }
+}
+
+#[test]
+fn a_parallel_scan_finds_the_same_breaches_a_serial_one_finds() {
+    let project = racy_project();
+
+    let serial = project.run(&["--format", "json", "--jobs", "1", "."]);
+    assert_eq!(code(&serial), 1, "{}", stderr(&serial));
+    assert!(
+        report(&serial)["breaches"].as_u64().expect("breaches") > 40,
+        "the fixture must actually breach the threshold"
+    );
+    assert!(
+        stderr(&serial).contains("not valid UTF-8"),
+        "the fixture must exercise a warning: {}",
+        stderr(&serial)
+    );
+
+    let parallel = project.run(&["--format", "json", "--jobs", "8", "."]);
+    assert_eq!(stdout(&parallel), stdout(&serial));
+    assert_eq!(stderr(&parallel), stderr(&serial));
+}
+
+#[test]
+fn a_baseline_is_the_same_file_however_many_workers_wrote_it() {
+    let project = racy_project();
+    project.file("src/twice.php", &over_threshold("same"));
+
+    let serial = project.run(&["--write-baseline", "--jobs", "1", "."]);
+    assert_eq!(code(&serial), 0, "{}", stderr(&serial));
+    let expected = project.read(".bonsai-lint-baseline.json");
+
+    for jobs in ["2", "8", "16"] {
+        let parallel = project.run(&["--write-baseline", "--jobs", jobs, "."]);
+        assert_eq!(code(&parallel), 0, "{}", stderr(&parallel));
+        assert_eq!(
+            project.read(".bonsai-lint-baseline.json"),
+            expected,
+            "jobs={jobs}"
+        );
+    }
+}
+
+#[test]
+fn jobs_is_accepted_alongside_stdin() {
+    let project = Project::new();
+    project.file("src/a.php", CALM_PHP);
+
+    let output = project.run_with_stdin(
+        &["--stdin", "--stdin-path", "src/a.php", "--jobs", "4"],
+        BUSY_PHP,
+    );
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+}
+
+/// A monorepo's shape: several domains at once, each with its own config, threshold and
+/// baseline. The engine tests cover two domains; the combination below is what a real repository
+/// runs and what only ever got checked by hand.
+const DOMAINS: &[&str] = &[
+    "apps/lenient",
+    "apps/strict",
+    "apps/flat",
+    "apps/plain",
+    "packages/scoped",
+    "packages/plain",
+];
+
+/// `heavy` scores 21 and `mid` scores 6, so they straddle the per-domain thresholds below.
+fn seed_domain(project: &Project, domain: &str) {
+    for index in 0..3 {
+        project.file(
+            &format!("{domain}/heavy{index}.php"),
+            &nested_php(&format!("heavy{index}"), 6),
+        );
+        project.file(
+            &format!("{domain}/mid{index}.ts"),
+            &nested_ts(&format!("mid{index}"), 3),
+        );
+        project.file(&format!("{domain}/calm{index}.php"), CALM_PHP);
+    }
+}
+
+fn multi_domain_project() -> Project {
+    let project = Project::new();
+    project.file(
+        "bonsai-lint.toml",
+        "domains = [\"apps/*\", \"packages/*\"]\nthreshold = 12\nexclude = [\"**/vendor/**\"]\n\n[php]\nthreshold = 20\n\n[typescript]\nthreshold = 8\n",
+    );
+    project.file("apps/lenient/bonsai-lint.toml", "threshold = 30\n");
+    project.file(
+        "apps/strict/bonsai-lint.toml",
+        "threshold = 5\n\n[typescript]\nthreshold = 4\n",
+    );
+    project.file("apps/flat/bonsai-lint.toml", "toplevel = false\n");
+    project.file(
+        "packages/scoped/bonsai-lint.toml",
+        "exclude = [\"generated/**\"]\n",
+    );
+
+    for domain in DOMAINS {
+        seed_domain(&project, domain);
+    }
+
+    // Several warnings, spread across the walk: one alone cannot be emitted out of order.
+    for (index, domain) in DOMAINS.iter().enumerate().take(4) {
+        let mut legacy = nested_php(&format!("legacy{index}"), 6).into_bytes();
+        legacy.extend_from_slice(b"// caf\xE9\n");
+        fs::write(project.root.join(format!("{domain}/legacy.php")), legacy).expect("write");
+    }
+
+    project.file("apps/plain/vendor/bundled.php", &nested_php("bundled", 6));
+    project.file(
+        "packages/scoped/generated/out.php",
+        &nested_php("generated", 6),
+    );
+    project.file(
+        "apps/flat/script.php",
+        "<?php\nif ($a) { if ($a) { echo 1; } }\n",
+    );
+    project.file(
+        "apps/plain/script.php",
+        "<?php\nif ($a) { if ($a) { echo 1; } }\n",
+    );
+    project
+}
+
+fn collect_baselines(
+    root: &Path,
+    dir: &Path,
+    stack: &mut Vec<PathBuf>,
+    found: &mut Vec<(String, String)>,
+) {
+    for entry in fs::read_dir(dir).expect("read dir").flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            stack.push(path);
+        } else if path
+            .file_name()
+            .is_some_and(|name| name == ".bonsai-lint-baseline.json")
+        {
+            let key = path
+                .strip_prefix(root)
+                .expect("under root")
+                .to_string_lossy()
+                .replace('\\', "/");
+            found.push((key, fs::read_to_string(&path).expect("read baseline")));
+        }
+    }
+}
+
+fn baselines(project: &Project) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    let mut stack = vec![project.root.clone()];
+    while let Some(dir) = stack.pop() {
+        collect_baselines(&project.root, &dir, &mut stack, &mut found);
+    }
+    found.sort();
+    found
+}
+
+fn remove_baselines(project: &Project) {
+    for (relative, _) in baselines(project) {
+        fs::remove_file(project.root.join(relative)).expect("remove baseline");
+    }
+}
+
+#[test]
+fn many_domains_scan_identically_however_many_workers_run() {
+    let project = multi_domain_project();
+
+    let reference = project.run(&["--all", "--format", "json", "--jobs", "1", "."]);
+    assert!(
+        paths(&reference).len() > 50,
+        "the comparison is only meaningful if the scan reports plenty"
+    );
+
+    for format in ["text", "json"] {
+        let serial = project.run(&["--all", "--format", format, "--jobs", "1", "."]);
+        for jobs in ["2", "4", "8", "0"] {
+            assert_matches_serial(&project, format, jobs, &serial);
+        }
+    }
+}
+
+#[test]
+fn each_domain_applies_its_own_threshold() {
+    let project = multi_domain_project();
+
+    let breached = paths(&project.run(&["--format", "json", "."]));
+
+    assert!(
+        !breached
+            .iter()
+            .any(|path| path.starts_with("apps/lenient/")),
+        "a threshold of 30 accepts a score of 21: {breached:?}"
+    );
+    assert!(breached.contains(&"apps/strict/heavy0.php".to_string()));
+    assert!(breached.contains(&"apps/plain/heavy0.php".to_string()));
+
+    assert!(
+        breached.contains(&"apps/strict/mid0.ts".to_string()),
+        "6 is over the domain's typescript threshold of 4"
+    );
+    assert!(
+        !breached.contains(&"apps/plain/mid0.ts".to_string()),
+        "6 is under the root's typescript threshold of 8"
+    );
+
+    assert!(!breached.iter().any(|path| path.contains("/vendor/")));
+    assert!(!breached.iter().any(|path| path.contains("/generated/")));
+}
+
+#[test]
+fn a_domain_can_turn_off_toplevel_scoring_without_affecting_its_neighbours() {
+    let project = multi_domain_project();
+
+    let reported = paths(&project.run(&["--all", "--format", "json", "."]));
+
+    assert!(!reported.contains(&"apps/flat/script.php".to_string()));
+    assert!(reported.contains(&"apps/plain/script.php".to_string()));
+}
+
+#[test]
+fn a_baseline_per_domain_is_written_identically_however_many_workers_run() {
+    let project = multi_domain_project();
+
+    let written = project.run(&["--write-baseline", "--jobs", "1", "."]);
+    assert_eq!(code(&written), 0, "{}", stderr(&written));
+
+    let expected = baselines(&project);
+    let names: Vec<&String> = expected.iter().map(|(path, _)| path).collect();
+    assert!(
+        expected.len() >= 4,
+        "several domains must record their own baseline: {names:?}"
+    );
+    assert!(names.iter().any(|path| path.starts_with("apps/strict/")));
+    assert!(names.iter().any(|path| path.starts_with("packages/plain/")));
+
+    for jobs in ["2", "8", "16"] {
+        remove_baselines(&project);
+        let parallel = project.run(&["--write-baseline", "--jobs", jobs, "."]);
+        assert_eq!(code(&parallel), 0, "{}", stderr(&parallel));
+        assert_eq!(baselines(&project), expected, "jobs={jobs}");
+    }
+}
+
+#[test]
+fn every_domain_baseline_is_honoured_at_once() {
+    let project = multi_domain_project();
+    assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
+
+    let accepted = project.run(&["--jobs", "8", "."]);
+
+    assert_eq!(code(&accepted), 0, "{}", stderr(&accepted));
+    assert_eq!(stdout(&accepted), "");
+}
+
+fn inject_ghost(project: &Project, domain: &str) {
+    let relative = format!("{domain}/.bonsai-lint-baseline.json");
+    let mut baseline: serde_json::Value =
+        serde_json::from_str(&project.read(&relative)).expect("baseline is json");
+    baseline["entries"]["ghost.php"] = serde_json::json!({ "ghost": 99 });
+    fs::write(
+        project.root.join(&relative),
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&baseline).expect("serialize")
+        ),
+    )
+    .expect("write baseline");
+}
+
+#[test]
+fn stale_entries_are_reported_for_each_domain_that_has_them() {
+    let project = multi_domain_project();
+    assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
+    inject_ghost(&project, "apps/strict");
+    inject_ghost(&project, "packages/plain");
+
+    let output = project.run(&["--jobs", "8", "."]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("apps/strict: 1 baseline entr(ies) matched nothing"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        stderr(&output).contains("packages/plain: 1 baseline entr(ies) matched nothing"),
+        "{}",
+        stderr(&output)
     );
 }
