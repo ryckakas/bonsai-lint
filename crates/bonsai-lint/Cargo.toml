@@ -31,3 +31,11 @@ tempfile = { workspace = true }
 
 [lints]
 workspace = true
+
+# Duplicated from the workspace root on purpose. A published crate is its own root, so this is
+# the only copy `cargo install` ever sees; without it Cargo users get an unoptimised, unstripped
+# 7.6 MB binary instead of 6.1 MB. Cargo ignores it during a workspace build and says so.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

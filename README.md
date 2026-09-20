@@ -323,6 +323,7 @@ no variant to choose and nothing to enable.
 
 - [Scoring rules](docs/scoring-rules.md): the full increment table and per-language notes
 - [Architecture](docs/architecture.md): the language seam, and how to add a language
+- [Roadmap](ROADMAP.md): what is likely to come next, and why
 
 ## License
 
