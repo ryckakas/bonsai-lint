@@ -33,23 +33,18 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   which spelling of a duplicated path is reported, and diagnostics are emitted in walk order —
   both become an explicit deterministic sort rather than a free consequence of walking in order.
 
-## Vue single-file components
-
-`.vue` files are currently invisible. Pointing the CLI at one reports `no supported files
-found`, which on a Vue codebase silently excludes a large share of the logic.
-
-The work is extracting the `<script>` and `<script setup>` blocks from the component and
-scoring their contents with the existing TypeScript grammar. Two details decide whether it is
-usable: the `lang` attribute selects which grammar to use, and every reported line number needs
-an offset so it points at the line in the `.vue` file rather than inside the extracted block.
-A baseline key that drifts by the length of a template is worse than no support at all.
-
-Open question worth settling before starting: whether template logic scores. A chain of `v-if`
-and `v-for` is genuine branching, but it is not what the specification was written against, and
-counting it would make Vue scores incomparable with the same logic written in TypeScript.
-The starting position should be that only script blocks score.
-
 ## Smaller known items
+
+- **Two units with one qualified name cannot both be baselined.** A baseline is
+  `{path: {qualified_name: score}}`, so when a file declares the same name twice the second write
+  wins and the other unit can never be accepted, leaving an unchanged re-run failing forever. The
+  trigger is a name the namer cannot qualify: `export const Widget = defineComponent({ setup(){} })`
+  yields a bare `setup`, because `bound_name` does not unwrap a lone *object* argument the way
+  `is_sole_callable_argument` unwraps a lone callable, so two components in one file collide.
+  `disambiguate` deliberately leaves declared duplicates alone, which is right for the report but
+  leaves the baseline with an un-silenceable finding. Teaching `bound_name` to unwrap a sole
+  object argument would give `Widget::setup` and fix both, at the cost of changing existing
+  baseline keys.
 
 - **A domain cannot opt a language out.** Per-language thresholds work per domain, but there is
   no way to say that a domain is TypeScript only. The workaround is an `exclude` glob.

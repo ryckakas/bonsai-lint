@@ -2,9 +2,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::path::{Component, Path, PathBuf};
 
-use bonsai_core::LanguageDescriptor;
+use bonsai_core::{Language, LanguageDescriptor};
 use ignore::{DirEntry, WalkBuilder};
-use tree_sitter::Parser;
+use tree_sitter::{Parser, Range};
 
 use crate::config::Workspace;
 use crate::finding::{normalize_key, Located};
@@ -152,9 +152,10 @@ impl ScanRoot<'_> {
 }
 
 /// A parser is expensive to build and `set_language` resets its state, so one is kept per
-/// language. Parsing takes `&mut`, so a set belongs to one thread.
+/// grammar. Parsing takes `&mut`, so a set belongs to one thread. The key is the compiled
+/// language rather than the descriptor, because an embedded language picks its grammar per file.
 #[derive(Default)]
-struct Parsers(HashMap<&'static str, Parser>);
+struct Parsers(HashMap<usize, Parser>);
 
 impl std::fmt::Debug for Parsers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -170,23 +171,106 @@ impl Parsers {
         descriptor: &'static LanguageDescriptor,
         source: &str,
         toplevel: bool,
+        path: &Path,
+        warnings: &mut Vec<String>,
     ) -> Vec<bonsai_core::Finding> {
-        let language = (descriptor.compiled)();
-        let parser = self.0.entry(descriptor.id).or_insert_with(|| {
-            let mut parser = Parser::new();
-            parser
-                .set_language(&language.ts)
-                .expect("compiled grammar loads");
-            parser
-        });
+        let Some((language, ranges)) = region(descriptor, source, path, warnings) else {
+            return Vec::new();
+        };
 
-        // Partial parses still score: tree-sitter recovers from syntax errors, and a file
-        // mid-edit should not blank the report.
-        parser
-            .parse(source, None)
-            .map(|tree| bonsai_core::analyze(&tree, source.as_bytes(), language, toplevel))
-            .unwrap_or_default()
+        let parser = self
+            .0
+            .entry(std::ptr::from_ref(language) as usize)
+            .or_insert_with(|| {
+                let mut parser = Parser::new();
+                parser
+                    .set_language(&language.ts)
+                    .expect("compiled grammar loads");
+                parser
+            });
+
+        if ranges.is_empty() {
+            return parse_region(parser, source, &[], language, toplevel);
+        }
+
+        // One region at a time: tree-sitter concatenates included ranges, so a line comment that
+        // ends one region would run on into the next and swallow it whole.
+        let mut findings = Vec::new();
+        for range in &ranges {
+            findings.extend(parse_region(
+                parser,
+                source,
+                std::slice::from_ref(range),
+                language,
+                toplevel,
+            ));
+        }
+        merge_toplevel(&mut findings);
+        findings
     }
+}
+
+/// An empty slice restores the whole document, so a language without regions is unaffected.
+fn parse_region(
+    parser: &mut Parser,
+    source: &str,
+    ranges: &[Range],
+    language: &'static Language,
+    toplevel: bool,
+) -> Vec<bonsai_core::Finding> {
+    if parser.set_included_ranges(ranges).is_err() {
+        return Vec::new();
+    }
+
+    // Partial parses still score: tree-sitter recovers from syntax errors, and a file
+    // mid-edit should not blank the report.
+    parser
+        .parse(source, None)
+        .map(|tree| bonsai_core::analyze(&tree, source.as_bytes(), language, toplevel))
+        .unwrap_or_default()
+}
+
+/// A file has one top level however many regions its code is spread across. Two findings under
+/// that one name would collide as a baseline key, so the regions are added up.
+fn merge_toplevel(findings: &mut Vec<bonsai_core::Finding>) {
+    let is_toplevel = |finding: &bonsai_core::Finding| finding.name == bonsai_core::TOPLEVEL_UNIT;
+    let Some(first) = findings.iter().position(is_toplevel) else {
+        return;
+    };
+
+    findings[first].score = findings
+        .iter()
+        .filter(|f| is_toplevel(f))
+        .map(|f| f.score)
+        .sum();
+
+    let mut kept = false;
+    findings.retain(|finding| {
+        if !is_toplevel(finding) {
+            return true;
+        }
+        let keep = !kept;
+        kept = true;
+        keep
+    });
+}
+
+/// `None` when a host syntax was read but holds nothing scorable.
+fn region(
+    descriptor: &'static LanguageDescriptor,
+    source: &str,
+    path: &Path,
+    warnings: &mut Vec<String>,
+) -> Option<(&'static Language, Vec<Range>)> {
+    let Some(extract) = descriptor.extract else {
+        return Some(((descriptor.compiled)(), Vec::new()));
+    };
+
+    let extraction = extract(source);
+    if let Some(warning) = extraction.warning {
+        warnings.push(format!("{}: {warning}", path.display()));
+    }
+    (!extraction.ranges.is_empty()).then_some((extraction.language, extraction.ranges))
 }
 
 #[derive(Debug, Default)]
@@ -213,8 +297,11 @@ impl Scanner {
         descriptor: &'static LanguageDescriptor,
         source: &str,
         toplevel: bool,
+        path: &Path,
+        warnings: &mut Vec<String>,
     ) -> Vec<bonsai_core::Finding> {
-        self.parsers.analyze(descriptor, source, toplevel)
+        self.parsers
+            .analyze(descriptor, source, toplevel, path, warnings)
     }
 
     /// The walk is planned serially and the files are scored in parallel, then replayed in plan
@@ -289,7 +376,13 @@ fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
 
     scored.domain = Some(job.domain);
     scored.located = parsers
-        .analyze(job.descriptor, &source, job.toplevel)
+        .analyze(
+            job.descriptor,
+            &source,
+            job.toplevel,
+            &job.shown,
+            &mut scored.warnings,
+        )
         .into_iter()
         .map(|finding| Located {
             path: job.shown.clone(),

@@ -11,6 +11,31 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- Minified JavaScript is skipped, the way `*.d.ts` already was: a bundle's nesting rolls up into
+  one unit whose score outranks every real finding, and it is generated output nobody is going
+  to refactor. The skipped names now live in one list of whole suffixes, which also closes a gap
+  where `*.d.mts` and `*.d.cts` were scanned despite being declaration files. Names that merely
+  resemble one, such as `app.mini.js`, are untouched. A baseline holding a newly skipped file
+  will report that entry as stale.
+
+- **Vue single-file components.** `.vue` files are scanned under a new `vue` language id, so
+  `--lang vue`, `--over vue=N` and a `[vue]` section in the config all work. Both `<script>` and
+  `<script setup>` are scored, with `lang="ts"` selecting the TypeScript grammar and anything
+  else the JSX-capable one; each block is parsed on its own and their file-level code is added
+  into the single `<toplevel>` a component reports. Reported lines are lines in the `.vue` file,
+  so editing a template moves a finding without changing its baseline key.
+
+  Templates, `<style>` and custom blocks such as `<docs>` are not scored, and a `src=` block is
+  scored as whatever file it points at. A `render()` function written in a script block is
+  ordinary code and is scored. Counting template branching would make a component incomparable
+  with the same logic written in TypeScript. Built behind a `vue` cargo feature, on by default
+  and implying `ts`.
+
+  Upgrading a repository that contains `.vue` files will report findings that were previously
+  invisible. Run `bonsai-lint --write-baseline .` to adopt them.
+
 ## [0.1.1] - 2026-09-20
 
 ### Added

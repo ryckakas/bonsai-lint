@@ -7,9 +7,10 @@
 *Bonsai: the art of keeping a tree small enough to take in at a glance. Same idea, applied to
 your syntax trees.*
 
-A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript and
-TypeScript. Use it for any one of them, or all three at once. No PHP runtime, no Node runtime,
-no Composer entry, nothing added to your project. Scans **1.26 million lines in 0.8 seconds**.
+A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript,
+TypeScript and Vue single-file components. Use it for any one of them, or all at once. No PHP
+runtime, no Node runtime, no Composer entry, nothing added to your project. Scans **1.26 million
+lines in 0.8 seconds**.
 
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bonsai-lint?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/bonsai-lint)
@@ -153,14 +154,47 @@ cannot read what it was pointed at must not report success.
 | `.php`, `.phtml` | PHP | `php` |
 | `.ts`, `.mts`, `.cts` | TypeScript | `typescript` |
 | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
-| `*.d.ts` | skipped, signatures only | |
+| `.vue` | the `<script>` blocks only | `vue` |
+| `*.d.ts`, `*.d.mts`, `*.d.cts` | skipped, signatures only | |
+| `*.min.js`, `*.min.mjs`, `*.min.cjs` | skipped, generated output | |
 
 The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
 `typescript` covers every JavaScript and TypeScript file however it is parsed. An id that is not
 one of these is an error, not a silent no-op.
 
+A declaration file and a minified one are both skipped outright, for opposite reasons: the first
+holds only signatures so every unit scores zero, and the second is generated output whose whole
+body rolls up into one unit nobody will refactor. The skipped names are a list of whole suffixes
+in `registry::UNSCORED`, so `app.mini.js`, `jasmine.js` and a file simply called `min.js` are all
+still scanned.
+
 `.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
 annotations are the one thing this misparses.
+
+A `.vue` file scores its `<script>` and `<script setup>` blocks, with `lang="ts"` choosing the
+TypeScript grammar and anything else (including no `lang`) choosing the JSX-capable one, which
+is the grammar `.js` already uses. Each block is parsed on its own, and their file-level code is
+added together into the one `<toplevel>` a component reports. Reported lines are lines in the
+`.vue` file, so editing a template moves a finding without changing its baseline key.
+
+| Construct | Scored |
+| --- | --- |
+| `<script>` and `<script setup>`, any `lang` | yes, as `vue` |
+| a `render()` function written in a script block | yes, as `vue` |
+| JSX inside `<script lang="tsx">` | yes, as `vue` |
+| `<template>`: `v-if`, `v-for`, `{{ }}`, `@click="a && b()"` | no |
+| `<style>`, and custom blocks such as `<docs>` or `<i18n>` | no |
+| `<script src="./logic.ts">` | no, but `logic.ts` is scanned on its own, as `typescript` |
+
+Two consequences are worth knowing:
+
+- **The template is deliberately not scored.** A `v-if` chain is real branching, but the
+  specification was not written against templates and counting them would make a component
+  incomparable with the same logic written in TypeScript. A `render()` function *is* scored,
+  because it is ordinary script code, so moving logic out of a template and into `render()`
+  makes it visible, and a component that never had a template was never hidden.
+- **A `src=` block belongs to the file it points at.** That file is scored as `typescript`, so a
+  `[vue]` threshold does not reach it.
 
 </details>
 

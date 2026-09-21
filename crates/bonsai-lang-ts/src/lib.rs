@@ -13,6 +13,7 @@ pub static TYPESCRIPT: LanguageDescriptor = LanguageDescriptor {
     extensions: &["ts", "mts", "cts"],
     spec: &SPEC,
     compiled: compiled_typescript,
+    extract: None,
 };
 
 /// TSX is a superset of JavaScript and JSX, so it serves `.js` and `.jsx` too and
@@ -22,78 +23,85 @@ pub static TSX: LanguageDescriptor = LanguageDescriptor {
     extensions: &["tsx", "jsx", "js", "mjs", "cjs"],
     spec: &SPEC,
     compiled: compiled_tsx,
+    extract: None,
 };
 
 /// The two dialects differ only by JSX nodes and `type_assertion`, none of which the scorer
-/// references, so one spec serves both.
-pub static SPEC: LanguageSpec = LanguageSpec {
-    id: "typescript",
-    kinds: KindSets {
-        unit: UNIT,
-        container: &[
-            "class_declaration",
-            "abstract_class_declaration",
-            "class",
-            "interface_declaration",
-            "enum_declaration",
-            "internal_module",
-            "module",
-            "object",
-        ],
-        nesting_function: UNIT,
-        if_statement: &["if_statement"],
-        // TypeScript has no else-if clause: `else if` is a nested `if_statement` inside the
-        // alternative, which `walk_else` already handles as the two-word form.
-        else_if_clause: &[],
-        else_clause: &["else_clause"],
-        nesting_control: &[
-            "ternary_expression",
-            "switch_statement",
-            "for_statement",
-            "for_in_statement",
-            "while_statement",
-            "do_statement",
-            "catch_clause",
-        ],
-        jump: &["break_statement", "continue_statement"],
-        unconditional_jump: &[],
-        logical: &["binary_expression"],
-        parenthesis: &["parenthesized_expression"],
-        call: &["call_expression"],
-        comment: &["comment"],
-        leading_trivia: &["decorator"],
-        preamble: &["hash_bang_line"],
-    },
-    fields: FieldNames {
-        name: "name",
-        body: "body",
-        condition: "condition",
-        if_then: "consequence",
-        if_alternative: "alternative",
-        else_body: None,
-        logical_left: "left",
-        logical_right: "right",
-        logical_operator: "operator",
-        control_header: &[
-            "condition",
-            "value",
-            "initializer",
-            "increment",
-            "left",
-            "right",
-        ],
-    },
-    hooks: Hooks {
-        normalize_logical_operator,
-        is_penalized_jump,
-        resolve_callee,
-        is_self_receiver,
-        unit_name,
-        container_name,
-        suppression_anchor,
-    },
-    optional_kinds: &[],
-};
+/// references, so one spec serves both. The id is a parameter because an embedded dialect reuses
+/// these kinds under a name of its own.
+#[must_use]
+pub const fn spec(id: &'static str) -> LanguageSpec {
+    LanguageSpec {
+        id,
+        kinds: KindSets {
+            unit: UNIT,
+            container: &[
+                "class_declaration",
+                "abstract_class_declaration",
+                "class",
+                "interface_declaration",
+                "enum_declaration",
+                "internal_module",
+                "module",
+                "object",
+            ],
+            nesting_function: UNIT,
+            if_statement: &["if_statement"],
+            // TypeScript has no else-if clause: `else if` is a nested `if_statement` inside the
+            // alternative, which `walk_else` already handles as the two-word form.
+            else_if_clause: &[],
+            else_clause: &["else_clause"],
+            nesting_control: &[
+                "ternary_expression",
+                "switch_statement",
+                "for_statement",
+                "for_in_statement",
+                "while_statement",
+                "do_statement",
+                "catch_clause",
+            ],
+            jump: &["break_statement", "continue_statement"],
+            unconditional_jump: &[],
+            logical: &["binary_expression"],
+            parenthesis: &["parenthesized_expression"],
+            call: &["call_expression"],
+            comment: &["comment"],
+            leading_trivia: &["decorator"],
+            preamble: &["hash_bang_line"],
+        },
+        fields: FieldNames {
+            name: "name",
+            body: "body",
+            condition: "condition",
+            if_then: "consequence",
+            if_alternative: "alternative",
+            else_body: None,
+            logical_left: "left",
+            logical_right: "right",
+            logical_operator: "operator",
+            control_header: &[
+                "condition",
+                "value",
+                "initializer",
+                "increment",
+                "left",
+                "right",
+            ],
+        },
+        hooks: Hooks {
+            normalize_logical_operator,
+            is_penalized_jump,
+            resolve_callee,
+            is_self_receiver,
+            unit_name,
+            container_name,
+            suppression_anchor,
+        },
+        optional_kinds: &[],
+    }
+}
+
+pub static SPEC: LanguageSpec = spec("typescript");
 
 /// Bodyless declarations are deliberately absent: `method_signature`,
 /// `abstract_method_signature`, `function_signature`, `call_signature`, `construct_signature`,

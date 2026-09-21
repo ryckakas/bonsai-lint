@@ -7,6 +7,7 @@ crates/
 ├── bonsai-core/        the scorer: parsed tree in, scores out. no I/O, no serde, no grammars
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
+├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
 ├── bonsai-engine/      registry, configuration, domains, baselines, the scan driver
 ├── bonsai-lint/        the CLI, producing the `bonsai-lint` binary
 └── bonsai-testkit/     the grammar contract harness, used by every language crate
@@ -39,6 +40,26 @@ forever.
 4. Register the descriptor in `bonsai-engine/src/registry.rs` behind a cargo feature.
 
 Most of the work is the fixture and the score corpus, not the spec.
+
+### Languages embedded in a host syntax
+
+A `.vue` file is mostly not code. `LanguageDescriptor::extract` is an optional hook returning the
+byte ranges that hold the scorable text and the grammar to read them with; `bonsai-lang-vue` uses
+`tree-sitter-html` to find the `<script>` blocks and hands back the TypeScript or TSX grammar
+according to `lang`.
+
+The ranges go to `Parser::set_included_ranges` against the **whole file**, not an extracted
+substring. Tree-sitter then reports every node at its position in the original file, so a line
+number needs no offset and a baseline key cannot drift by the length of a template.
+
+Each block is parsed on its own, because tree-sitter concatenates included ranges and a line
+comment closing one block would otherwise run into the next and swallow it whole. The driver then
+adds the blocks' `<toplevel>` findings together, since two of them would collide as one baseline
+key.
+
+A host grammar has no `LanguageSpec`, so nothing fails compilation when it renames a node. Two
+things stand in for that: a contract test over the kinds the extractor reads, and a scan warning
+when a file contains `<script` but yielded no block.
 
 ### The grammar contract
 
