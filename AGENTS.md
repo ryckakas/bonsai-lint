@@ -127,8 +127,8 @@ projects on crates.io/npm/VS Code Marketplace).
   `vue.rs` (scoring, and that a reported line is a line in the `.vue` file).
 - `bonsai-engine` integration tests (`baseline.rs`, `config.rs`, `scan.rs`) exercise config
   discovery, domains, and baseline read/write against real temp directories.
-- `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area — `cli_report.rs`,
-  `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs` — over a
+- `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area (`cli_report.rs`,
+  `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`) over a
   shared `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in
   a fifth of a second while `cli_parallel` is the slow one.
 - Cross-language parity (same logic in PHP and TypeScript scoring identically) is a tested

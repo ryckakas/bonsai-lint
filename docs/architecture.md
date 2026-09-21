@@ -50,9 +50,12 @@ according to `lang`.
 
 The ranges go to `Parser::set_included_ranges` against the **whole file**, not an extracted
 substring. Tree-sitter then reports every node at its position in the original file, so a line
-number needs no offset and a baseline key cannot drift by the length of a template. All the
-blocks of one file go into a single parse, because two parses would each produce a `<toplevel>`
-finding and their qualified names would collide.
+number needs no offset and a baseline key cannot drift by the length of a template.
+
+Each block is parsed on its own, because tree-sitter concatenates included ranges and a line
+comment closing one block would otherwise run into the next and swallow it whole. The driver then
+adds the blocks' `<toplevel>` findings together, since two of them would collide as one baseline
+key.
 
 A host grammar has no `LanguageSpec`, so nothing fails compilation when it renames a node. Two
 things stand in for that: a contract test over the kinds the extractor reads, and a scan warning

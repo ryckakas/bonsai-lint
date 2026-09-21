@@ -165,11 +165,29 @@ one of these is an error, not a silent no-op.
 annotations are the one thing this misparses.
 
 A `.vue` file scores its `<script>` and `<script setup>` blocks, with `lang="ts"` choosing the
-TypeScript grammar and anything else the JSX-capable one. Both blocks are read in one pass, so a
-component reports one `<toplevel>`. Reported lines are lines in the `.vue` file, so editing a
-template moves a finding without changing its baseline key. The template itself is deliberately
-not scored: a `v-if` chain is branching, but counting it would make a component's score
-incomparable with the same logic written in TypeScript.
+TypeScript grammar and anything else (including no `lang`) choosing the JSX-capable one, which
+is the grammar `.js` already uses. Each block is parsed on its own, and their file-level code is
+added together into the one `<toplevel>` a component reports. Reported lines are lines in the
+`.vue` file, so editing a template moves a finding without changing its baseline key.
+
+| Construct | Scored |
+| --- | --- |
+| `<script>` and `<script setup>`, any `lang` | yes, as `vue` |
+| a `render()` function written in a script block | yes, as `vue` |
+| JSX inside `<script lang="tsx">` | yes, as `vue` |
+| `<template>`: `v-if`, `v-for`, `{{ }}`, `@click="a && b()"` | no |
+| `<style>`, and custom blocks such as `<docs>` or `<i18n>` | no |
+| `<script src="./logic.ts">` | no, but `logic.ts` is scanned on its own, as `typescript` |
+
+Two consequences are worth knowing:
+
+- **The template is deliberately not scored.** A `v-if` chain is real branching, but the
+  specification was not written against templates and counting them would make a component
+  incomparable with the same logic written in TypeScript. A `render()` function *is* scored,
+  because it is ordinary script code, so moving logic out of a template and into `render()`
+  makes it visible, and a component that never had a template was never hidden.
+- **A `src=` block belongs to the file it points at.** That file is scored as `typescript`, so a
+  `[vue]` threshold does not reach it.
 
 </details>
 

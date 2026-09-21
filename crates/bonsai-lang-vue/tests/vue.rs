@@ -155,3 +155,29 @@ fn top_level_code_in_both_blocks_adds_up_to_one_finding() {
     assert_eq!(toplevel.score, 4);
     assert_eq!(toplevel.line, 1);
 }
+
+/// A template is not scored, but a `render()` is: it is ordinary script code. Moving logic out of
+/// a template and into `render()` therefore makes it visible rather than hiding it.
+#[test]
+fn a_render_function_in_a_script_block_is_scored() {
+    let found = findings(
+        "<script>\n\
+         export default {\n\
+         \x20 render(h) {\n\
+         \x20   if (this.a) { if (this.b) { return h('div') } }\n\
+         \x20   return h('span')\n\
+         \x20 }\n\
+         }\n\
+         </script>\n",
+    );
+    assert_eq!(find(&found, "default::render").score, 3);
+}
+
+#[test]
+fn a_style_block_is_not_scored() {
+    let found = findings(
+        "<template><p/></template>\n\
+         <style scoped>\n.a { color: red; }\n.b:hover { color: blue; }\n</style>\n",
+    );
+    assert!(found.is_empty(), "{found:?}");
+}
