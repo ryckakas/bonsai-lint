@@ -2,7 +2,7 @@
   "name": "bonsai-lint",
   "displayName": "bonsai-lint — cognitive complexity for PHP, JS, TS and Vue",
   "description": "Flags functions that are hard to read, across PHP, JavaScript, TypeScript and Vue. Rust-powered, no runtime required.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "RicardasKauneckas",
   "license": "MIT",
   "repository": {
@@ -89,6 +89,6 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "bonsai-lint": "^0.1.0"
+    "bonsai-lint": "^0.2.0"
   }
 }

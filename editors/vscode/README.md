@@ -1,6 +1,6 @@
 # bonsai-lint for VS Code
 
-Flags functions that are hard to read, across PHP, JavaScript and TypeScript. Powered by
+Flags functions that are hard to read, across PHP, JavaScript, TypeScript and Vue. Powered by
 [bonsai-lint](https://github.com/ryckakas/bonsai-lint), a single Rust binary, with no PHP
 runtime and no Node runtime involved in the analysis.
 
