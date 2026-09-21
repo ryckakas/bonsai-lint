@@ -16,7 +16,7 @@ use clap::{Parser as ClapParser, ValueEnum};
 #[command(
     name = "bonsai-lint",
     version,
-    about = "Cognitive complexity linter for PHP, JS and TS"
+    about = "Cognitive complexity linter for PHP, JS, TS and Vue"
 )]
 #[allow(clippy::struct_excessive_bools)]
 struct Args {
@@ -44,7 +44,7 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     baseline: Option<PathBuf>,
 
-    /// Restrict the scan to these languages (`php`, `typescript`)
+    /// Restrict the scan to these languages (`php`, `typescript`, `vue`)
     #[arg(long, value_delimiter = ',', value_name = "ID")]
     lang: Vec<String>,
 
@@ -279,8 +279,14 @@ fn scan_stdin(
     let key_path = normalize_key(&absolute, &domain.root);
 
     let shown = display_path(&path);
-    outcome.located = scanner
-        .analyze_source(descriptor, &source, domain.toplevel)
+    let findings = scanner.analyze_source(
+        descriptor,
+        &source,
+        domain.toplevel,
+        &path,
+        &mut outcome.warnings,
+    );
+    outcome.located = findings
         .into_iter()
         .map(|finding| Located {
             path: shown.clone(),

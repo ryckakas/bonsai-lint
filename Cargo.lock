@@ -81,6 +81,7 @@ dependencies = [
  "bonsai-core",
  "bonsai-lang-php",
  "bonsai-lang-ts",
+ "bonsai-lang-vue",
  "globset",
  "ignore",
  "serde",
@@ -107,6 +108,18 @@ dependencies = [
  "bonsai-core",
  "bonsai-testkit",
  "tree-sitter",
+ "tree-sitter-typescript",
+]
+
+[[package]]
+name = "bonsai-lang-vue"
+version = "0.1.1"
+dependencies = [
+ "bonsai-core",
+ "bonsai-lang-ts",
+ "bonsai-testkit",
+ "tree-sitter",
+ "tree-sitter-html",
  "tree-sitter-typescript",
 ]
 
@@ -583,6 +596,16 @@ dependencies = [
  "regex",
  "serde_json",
  "streaming-iterator",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-html"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "261b708e5d92061ede329babaaa427b819329a9d427a1d710abb0f67bbef63ee"
+dependencies = [
+ "cc",
  "tree-sitter-language",
 ]
 

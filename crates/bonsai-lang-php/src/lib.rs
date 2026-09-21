@@ -11,6 +11,7 @@ pub static PHP: LanguageDescriptor = LanguageDescriptor {
     extensions: &["php", "phtml"],
     spec: &SPEC,
     compiled,
+    extract: None,
 };
 
 pub static SPEC: LanguageSpec = LanguageSpec {

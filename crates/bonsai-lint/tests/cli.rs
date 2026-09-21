@@ -200,7 +200,7 @@ fn json_thresholds_are_keyed_by_language_id() {
         .keys()
         .cloned()
         .collect::<Vec<_>>();
-    assert_eq!(thresholds, vec!["php", "typescript"]);
+    assert_eq!(thresholds, vec!["php", "typescript", "vue"]);
 }
 
 #[test]
@@ -1000,4 +1000,64 @@ fn stale_entries_are_reported_for_each_domain_that_has_them() {
         "{}",
         stderr(&output)
     );
+}
+
+const BUSY_VUE: &str = "<template>\n  <p v-if=\"a && b\">x</p>\n</template>\n\n<script setup lang=\"ts\">\nfunction busy(a: number, b: number) {\n    if (a) { if (b) { return 1 } }\n    return 0\n}\n</script>\n";
+
+#[test]
+fn a_vue_component_is_scored_and_reported_at_its_line_in_the_file() {
+    let project = Project::new();
+    project.file("src/Panel.vue", BUSY_VUE);
+
+    let output = project.run(&["--over", "0", "--format", "json", "."]);
+
+    let finding = &report(&output)["findings"][0];
+    assert_eq!(finding["name"], "busy");
+    assert_eq!(finding["language"], "vue");
+    assert_eq!(finding["line"], 6);
+    assert_eq!(code(&output), 1);
+}
+
+#[test]
+fn a_vue_threshold_section_applies_only_to_vue() {
+    let project = Project::new();
+    project.file(
+        "bonsai-lint.toml",
+        "threshold = 0\n\n[vue]\nthreshold = 99\n",
+    );
+    project.file("src/Panel.vue", BUSY_VUE);
+    project.file("src/plain.ts", BUSY_TS);
+
+    let output = project.run(&["--format", "json", "."]);
+
+    let names: Vec<String> = report(&output)["findings"]
+        .as_array()
+        .expect("findings is an array")
+        .iter()
+        .map(|finding| finding["name"].to_string())
+        .collect();
+    assert_eq!(report(&output)["breaches"], 1);
+    assert!(names.iter().any(|name| name.contains("busy")));
+}
+
+#[test]
+fn an_unsaved_vue_buffer_is_scored_through_stdin() {
+    let project = Project::new();
+
+    let output = project.run_with_stdin(
+        &[
+            "--over",
+            "0",
+            "--format",
+            "json",
+            "--stdin",
+            "--stdin-path",
+            "src/Panel.vue",
+        ],
+        BUSY_VUE,
+    );
+
+    let finding = &report(&output)["findings"][0];
+    assert_eq!(finding["language"], "vue");
+    assert_eq!(finding["line"], 6);
 }

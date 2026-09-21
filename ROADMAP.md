@@ -33,22 +33,6 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   which spelling of a duplicated path is reported, and diagnostics are emitted in walk order —
   both become an explicit deterministic sort rather than a free consequence of walking in order.
 
-## Vue single-file components
-
-`.vue` files are currently invisible. Pointing the CLI at one reports `no supported files
-found`, which on a Vue codebase silently excludes a large share of the logic.
-
-The work is extracting the `<script>` and `<script setup>` blocks from the component and
-scoring their contents with the existing TypeScript grammar. Two details decide whether it is
-usable: the `lang` attribute selects which grammar to use, and every reported line number needs
-an offset so it points at the line in the `.vue` file rather than inside the extracted block.
-A baseline key that drifts by the length of a template is worse than no support at all.
-
-Open question worth settling before starting: whether template logic scores. A chain of `v-if`
-and `v-for` is genuine branching, but it is not what the specification was written against, and
-counting it would make Vue scores incomparable with the same logic written in TypeScript.
-The starting position should be that only script blocks score.
-
 ## Smaller known items
 
 - **A domain cannot opt a language out.** Per-language thresholds work per domain, but there is

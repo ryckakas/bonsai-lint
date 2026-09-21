@@ -11,6 +11,20 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- **Vue single-file components.** `.vue` files are scanned under a new `vue` language id, so
+  `--lang vue`, `--over vue=N` and a `[vue]` section in the config all work. Both `<script>` and
+  `<script setup>` are scored, with `lang="ts"` selecting the TypeScript grammar and anything else
+  the JSX-capable one; the two blocks are read in one pass, so a component reports a single
+  `<toplevel>`. Reported lines are lines in the `.vue` file, so editing a template moves a finding
+  without changing its baseline key. The template is not scored — counting `v-if` would make a
+  component incomparable with the same logic written in TypeScript. Built behind a `vue` cargo
+  feature, on by default and implying `ts`.
+
+  Upgrading a repository that contains `.vue` files will report findings that were previously
+  invisible. Run `bonsai-lint --write-baseline .` to adopt them.
+
 ## [0.1.1] - 2026-09-20
 
 ### Added

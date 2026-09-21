@@ -10,9 +10,11 @@ use bonsai_engine::config;
 use bonsai_engine::scan::{display_path, ScanOutcome};
 use bonsai_engine::Scanner;
 
-const KNOWN: &[&str] = &["php", "typescript"];
+const KNOWN: &[&str] = &["php", "typescript", "vue"];
 const PHP_UNIT: &str = "<?php\nfunction f() { return 1; }\n";
 const TS_UNIT: &str = "function f() { return 1; }\n";
+const VUE_UNIT: &str =
+    "<template><p v-if=\"a\">x</p></template>\n<script setup lang=\"ts\">\nfunction f() { return 1 }\n</script>\n";
 
 fn project() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
@@ -203,4 +205,57 @@ fn deeply_nested_sources_are_parsed_on_a_stack_sized_for_them() {
 
     assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
     assert_eq!(outcome.stats.files, 1);
+}
+
+#[test]
+fn a_vue_component_is_discovered_and_scored_as_vue() {
+    let (_dir, root) = project();
+    write(&root, "src/Panel.vue", VUE_UNIT.as_bytes());
+
+    let outcome = scan(&root, &["."], None);
+
+    let languages: Vec<_> = outcome
+        .located
+        .iter()
+        .map(|located| located.finding.language)
+        .collect();
+    assert_eq!(languages, vec!["vue"]);
+}
+
+/// `.vue` and `.ts` are separate ids, so a filter naming one must not pick up the other.
+#[test]
+fn the_language_filter_separates_vue_from_typescript() {
+    let (_dir, root) = project();
+    write(&root, "src/Panel.vue", VUE_UNIT.as_bytes());
+    write(&root, "src/plain.ts", TS_UNIT.as_bytes());
+
+    let only_vue = scan(&root, &["."], Some(&["vue".to_string()]));
+    assert_eq!(only_vue.stats.files, 1);
+    assert!(only_vue
+        .located
+        .iter()
+        .all(|located| located.finding.language == "vue"));
+
+    let only_ts = scan(&root, &["."], Some(&["typescript".to_string()]));
+    assert_eq!(only_ts.stats.files, 1);
+    assert!(only_ts
+        .located
+        .iter()
+        .all(|located| located.finding.language == "typescript"));
+}
+
+#[test]
+fn a_vue_component_without_a_script_block_is_read_without_error() {
+    let (_dir, root) = project();
+    write(
+        &root,
+        "src/Static.vue",
+        b"<template><p>only</p></template>\n",
+    );
+
+    let outcome = scan(&root, &["."], None);
+
+    assert_eq!(outcome.stats.errors, 0);
+    assert!(outcome.warnings.is_empty());
+    assert!(outcome.located.is_empty());
 }

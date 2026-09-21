@@ -7,9 +7,10 @@
 *Bonsai: the art of keeping a tree small enough to take in at a glance. Same idea, applied to
 your syntax trees.*
 
-A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript and
-TypeScript. Use it for any one of them, or all three at once. No PHP runtime, no Node runtime,
-no Composer entry, nothing added to your project. Scans **1.26 million lines in 0.8 seconds**.
+A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript,
+TypeScript and Vue single-file components. Use it for any one of them, or all at once. No PHP
+runtime, no Node runtime, no Composer entry, nothing added to your project. Scans **1.26 million
+lines in 0.8 seconds**.
 
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bonsai-lint?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/bonsai-lint)
@@ -153,6 +154,7 @@ cannot read what it was pointed at must not report success.
 | `.php`, `.phtml` | PHP | `php` |
 | `.ts`, `.mts`, `.cts` | TypeScript | `typescript` |
 | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
+| `.vue` | the `<script>` blocks only | `vue` |
 | `*.d.ts` | skipped, signatures only | |
 
 The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
@@ -161,6 +163,13 @@ one of these is an error, not a silent no-op.
 
 `.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
 annotations are the one thing this misparses.
+
+A `.vue` file scores its `<script>` and `<script setup>` blocks, with `lang="ts"` choosing the
+TypeScript grammar and anything else the JSX-capable one. Both blocks are read in one pass, so a
+component reports one `<toplevel>`. Reported lines are lines in the `.vue` file, so editing a
+template moves a finding without changing its baseline key. The template itself is deliberately
+not scored: a `v-if` chain is branching, but counting it would make a component's score
+incomparable with the same logic written in TypeScript.
 
 </details>
 

@@ -18,6 +18,8 @@ pub fn descriptors() -> &'static [&'static LanguageDescriptor] {
             all.push(&bonsai_lang_ts::TYPESCRIPT);
             all.push(&bonsai_lang_ts::TSX);
         }
+        #[cfg(feature = "vue")]
+        all.push(&bonsai_lang_vue::VUE);
         all
     })
 }

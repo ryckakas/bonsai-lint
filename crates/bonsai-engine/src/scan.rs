@@ -2,9 +2,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::path::{Component, Path, PathBuf};
 
-use bonsai_core::LanguageDescriptor;
+use bonsai_core::{Language, LanguageDescriptor};
 use ignore::{DirEntry, WalkBuilder};
-use tree_sitter::Parser;
+use tree_sitter::{Parser, Range};
 
 use crate::config::Workspace;
 use crate::finding::{normalize_key, Located};
@@ -152,9 +152,10 @@ impl ScanRoot<'_> {
 }
 
 /// A parser is expensive to build and `set_language` resets its state, so one is kept per
-/// language. Parsing takes `&mut`, so a set belongs to one thread.
+/// grammar. Parsing takes `&mut`, so a set belongs to one thread. The key is the compiled
+/// language rather than the descriptor, because an embedded language picks its grammar per file.
 #[derive(Default)]
-struct Parsers(HashMap<&'static str, Parser>);
+struct Parsers(HashMap<usize, Parser>);
 
 impl std::fmt::Debug for Parsers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -170,15 +171,28 @@ impl Parsers {
         descriptor: &'static LanguageDescriptor,
         source: &str,
         toplevel: bool,
+        path: &Path,
+        warnings: &mut Vec<String>,
     ) -> Vec<bonsai_core::Finding> {
-        let language = (descriptor.compiled)();
-        let parser = self.0.entry(descriptor.id).or_insert_with(|| {
-            let mut parser = Parser::new();
-            parser
-                .set_language(&language.ts)
-                .expect("compiled grammar loads");
-            parser
-        });
+        let Some((language, ranges)) = region(descriptor, source, path, warnings) else {
+            return Vec::new();
+        };
+
+        let parser = self
+            .0
+            .entry(std::ptr::from_ref(language) as usize)
+            .or_insert_with(|| {
+                let mut parser = Parser::new();
+                parser
+                    .set_language(&language.ts)
+                    .expect("compiled grammar loads");
+                parser
+            });
+
+        // An empty slice restores the whole document, so a language without regions is unaffected.
+        if parser.set_included_ranges(&ranges).is_err() {
+            return Vec::new();
+        }
 
         // Partial parses still score: tree-sitter recovers from syntax errors, and a file
         // mid-edit should not blank the report.
@@ -187,6 +201,24 @@ impl Parsers {
             .map(|tree| bonsai_core::analyze(&tree, source.as_bytes(), language, toplevel))
             .unwrap_or_default()
     }
+}
+
+/// `None` when a host syntax was read but holds nothing scorable.
+fn region(
+    descriptor: &'static LanguageDescriptor,
+    source: &str,
+    path: &Path,
+    warnings: &mut Vec<String>,
+) -> Option<(&'static Language, Vec<Range>)> {
+    let Some(extract) = descriptor.extract else {
+        return Some(((descriptor.compiled)(), Vec::new()));
+    };
+
+    let extraction = extract(source);
+    if let Some(warning) = extraction.warning {
+        warnings.push(format!("{}: {warning}", path.display()));
+    }
+    (!extraction.ranges.is_empty()).then_some((extraction.language, extraction.ranges))
 }
 
 #[derive(Debug, Default)]
@@ -213,8 +245,11 @@ impl Scanner {
         descriptor: &'static LanguageDescriptor,
         source: &str,
         toplevel: bool,
+        path: &Path,
+        warnings: &mut Vec<String>,
     ) -> Vec<bonsai_core::Finding> {
-        self.parsers.analyze(descriptor, source, toplevel)
+        self.parsers
+            .analyze(descriptor, source, toplevel, path, warnings)
     }
 
     /// The walk is planned serially and the files are scored in parallel, then replayed in plan
@@ -289,7 +324,13 @@ fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
 
     scored.domain = Some(job.domain);
     scored.located = parsers
-        .analyze(job.descriptor, &source, job.toplevel)
+        .analyze(
+            job.descriptor,
+            &source,
+            job.toplevel,
+            &job.shown,
+            &mut scored.warnings,
+        )
         .into_iter()
         .map(|finding| Located {
             path: job.shown.clone(),

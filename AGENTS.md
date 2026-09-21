@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`bonsai-lint` is a cognitive complexity linter written in Rust that reads PHP, JavaScript and
-TypeScript via tree-sitter grammars, without executing any of it. One static binary, no PHP or
-Node runtime required to run the analysis. It ships as a Cargo workspace plus an independent
-VS Code extension.
+`bonsai-lint` is a cognitive complexity linter written in Rust that reads PHP, JavaScript,
+TypeScript and Vue single-file components via tree-sitter grammars, without executing any of it.
+One static binary, no PHP or Node runtime required to run the analysis. It ships as a Cargo
+workspace plus an independent VS Code extension.
 
 ## Commands
 
@@ -21,14 +21,16 @@ cargo build --release                                 # produces target/release/
 ```
 
 CI (`.github/workflows/ci.yml`) runs exactly the fmt/clippy/test commands above, plus a build
-matrix across Linux/macOS/Windows, a feature-combination build (`php`, `ts`, `php,ts`, none —
-each `cargo build -p bonsai-lint --no-default-features --features "<set>"`), and a
+matrix across Linux/macOS/Windows, a feature-combination build (`php`, `ts`, `php,ts`, `vue`,
+`ts,vue`, `php,ts,vue`, none — each
+`cargo build -p bonsai-lint --no-default-features --features "<set>"`), and a
 build-only check on the MSRV read from `Cargo.toml` (`rust-version`). Match these locally before
 pushing rather than relying on CI to catch it.
 
-Every language is behind a cargo feature. The registry must keep compiling with any feature
-subset, including none — this is exercised, not incidental, so don't add code that assumes a
-language is always present without a `#[cfg]` guard matching the existing pattern.
+Every language is behind a cargo feature; `vue` implies `ts` because it reuses that spec. The
+registry must keep compiling with any feature subset, including none — this is exercised, not
+incidental, so don't add code that assumes a language is always present without a `#[cfg]` guard
+matching the existing pattern.
 
 VS Code extension (`editors/vscode/`, own `package.json`, independent version number):
 
@@ -47,6 +49,7 @@ crates/
 ├── bonsai-core/        the scorer: parsed tree in, scores out. No I/O, no serde, no grammars.
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
+├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
 ├── bonsai-engine/      registry, configuration, domains, baselines, the scan driver
 ├── bonsai-lint/        the CLI, producing the `bonsai-lint` binary
 └── bonsai-testkit/     the grammar contract harness, used by every language crate
@@ -118,6 +121,10 @@ projects on crates.io/npm/VS Code Marketplace).
 - `bonsai-lang-php` and `bonsai-lang-ts` each have `tests/grammar.rs` (the contract, via
   `bonsai-testkit`), plus `naming.rs`, `spec.rs`, `suppression.rs`, `toplevel.rs`, and for TS,
   `tsx.rs`. Fixtures live in `tests/fixtures/`, shared helpers in `tests/common/mod.rs`.
+- `bonsai-lang-vue` reuses the TypeScript spec under a second id, so it has no naming or scoring
+  suite of its own. It has `grammar.rs` (the spec against both TS grammars), `host_grammar.rs`
+  (the HTML grammar's kinds, which nothing else would fail on), `sfc.rs` (block extraction) and
+  `vue.rs` (scoring, and that a reported line is a line in the `.vue` file).
 - `bonsai-engine` integration tests (`baseline.rs`, `config.rs`, `scan.rs`) exercise config
   discovery, domains, and baseline read/write against real temp directories.
 - `bonsai-lint/tests/cli.rs` drives the compiled binary end-to-end.
@@ -157,7 +164,7 @@ Azure DevOps PAT).
 publishes it as that release's notes, so a missing or misnamed section ships an empty release
 page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY-MM-DD`.
 
-A release bumps `version` in the root `Cargo.toml` **and** the five internal path dependencies
+A release bumps `version` in the root `Cargo.toml` **and** the six internal path dependencies
 beside it, which must match or cargo refuses to build. The npm package and Homebrew formula take
 their version from that one field; neither is edited by hand. The extension is bumped afterwards,
 because its lockfile can only pin a CLI version that is already published.

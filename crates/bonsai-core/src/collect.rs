@@ -16,7 +16,13 @@ pub fn analyze(tree: &Tree, src: &[u8], lang: &Language, toplevel: bool) -> Vec<
     collect(root, src, lang, None, &mut findings, &mut claimed);
 
     if toplevel {
-        findings.extend(toplevel_finding(root, src, lang, &claimed));
+        findings.extend(toplevel_finding(
+            root,
+            src,
+            lang,
+            &claimed,
+            region_line(tree),
+        ));
     }
 
     disambiguate(&mut findings);
@@ -115,11 +121,20 @@ pub fn declaration_row(node: Node<'_>, lang: &Language) -> usize {
 /// Code outside any function is invisible to a purely unit-based scan, which is exactly where
 /// procedural scripts and module-level initialisation hide. A zero score is not reported, since
 /// most files legitimately have no top-level logic and emitting them all would be noise.
+/// Where the parsed region starts. A whole-file parse reports one range beginning at row 0, so
+/// this is 1 for every language that is not embedded in a host syntax.
+fn region_line(tree: &Tree) -> usize {
+    tree.included_ranges()
+        .first()
+        .map_or(1, |range| range.start_point.row + 1)
+}
+
 fn toplevel_finding(
     root: Node<'_>,
     src: &[u8],
     lang: &Language,
     claimed: &HashSet<usize>,
+    line: usize,
 ) -> Option<Finding> {
     let cx = WalkCx {
         lang,
@@ -140,7 +155,7 @@ fn toplevel_finding(
         container: None,
         name: TOPLEVEL_UNIT.to_string(),
         origin: NameOrigin::TopLevel,
-        line: 1,
+        line,
         score,
         suppression: toplevel_suppression(root, src, lang, claimed),
         language: lang.spec.id,

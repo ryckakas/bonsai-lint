@@ -54,3 +54,15 @@ fn class_field_initialisers_belong_to_the_file() {
 fn a_file_without_top_level_logic_reports_nothing() {
     assert_eq!(toplevel_score("function foo() { return 1; }\n"), None);
 }
+
+/// Deriving the line from the root node instead would report 4 here: tree-sitter starts the root
+/// at the first token, not at byte 0.
+#[test]
+fn leading_blank_lines_do_not_move_the_toplevel_line() {
+    let findings = common::findings("\n\n\nif (a) { b(); }\n");
+    let toplevel = findings
+        .iter()
+        .find(|finding| finding.name == bonsai_core::TOPLEVEL_UNIT)
+        .expect("top-level code scores");
+    assert_eq!(toplevel.line, 1);
+}
