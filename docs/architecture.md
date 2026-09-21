@@ -61,6 +61,28 @@ A host grammar has no `LanguageSpec`, so nothing fails compilation when it renam
 things stand in for that: a contract test over the kinds the extractor reads, and a scan warning
 when a file contains `<script` but yielded no block.
 
+#### Why Vue is a language id when Vue is not a language
+
+A `.vue` file contains TypeScript or JavaScript; Vue is a file format around it, and the scores
+come from the TypeScript spec either way. It still gets its own id, deliberately.
+
+The id is the unit of user-facing control. It is what `--lang`, `--over LANG=N`, a `[section]` in
+the config and the JSON `language` field all take. Folding Vue into `typescript` would make a
+component indistinguishable from a service, and the two have different complexity profiles: a
+`[vue]` budget separate from `[typescript]` is the main reason anyone would want the distinction.
+Being able to scan only components, or only exclude them, follows from the same choice.
+
+The id lives on the `LanguageSpec` and `registry::language_ids` deduplicates by it, so a distinct
+id requires a distinct spec. That is what `bonsai_lang_ts::spec` exists for: `VUE_SPEC` is the
+TypeScript spec under another name, sharing every kind list and every hook, so the same logic
+scores the same in a `.vue` block and a `.ts` file. Nothing about the scoring diverges; only the
+label does.
+
+The cost is honest and small: a seventh crate to version and publish, and a second kind-id table
+compiled per grammar. The alternative, a `vue` feature inside `bonsai-lang-ts`, would put
+`tree-sitter-html` in the dependency graph of every TypeScript build and introduce the first
+`#[cfg]` inside a language crate, where gating otherwise lives only in `bonsai-engine`.
+
 ### The grammar contract
 
 `GrammarFixture::assert_contract()` makes six assertions, because an id-indexed table has
@@ -94,7 +116,7 @@ CI runs exactly these on every pull request, plus the feature subsets below and 
 minimum supported Rust version. `cargo build --release` produces the binary users get.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
-subset — including none. CI builds all four combinations.
+subset — including none. CI builds all seven combinations.
 
 ```bash
 cargo build -p bonsai-lint --no-default-features --features php

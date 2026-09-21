@@ -67,6 +67,14 @@ strings, so adding languages doesn't cost anything at scan time. Compilation is 
 purpose: a grammar upgrade that renames a node fails spec compilation with a message naming it,
 rather than silently scoring that construct as zero forever.
 
+**A language id is not a claim about languages.** Vue is a file format whose script blocks are
+TypeScript, and `VUE_SPEC` is the TypeScript spec under another name, so the scores are identical.
+It carries its own id because the id is what `--lang`, `--over LANG=N`, a `[section]` and the JSON
+`language` field all key on, and a component deserves a budget separate from a service. Since
+`registry::language_ids` deduplicates by `spec.id`, a distinct id is what forces a distinct spec.
+The reasoning is in [docs/architecture.md](docs/architecture.md); don't collapse the id without
+reading it.
+
 **Adding a language** means: a new crate with the grammar dependency and a `LanguageSpec`; a
 fixture exercising every declared kind, wired through `GrammarFixture::assert_contract()`; a
 golden-score corpus under `tests/fixtures/`; and registering the descriptor in

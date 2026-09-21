@@ -64,7 +64,7 @@ bonsai-lint --over 10 src/           # stricter; `--over php=10,typescript=20` p
 bonsai-lint --all src/               # every unit, ranked
 bonsai-lint --format json src/       # for editors and CI
 bonsai-lint --write-baseline src/    # record today's findings, exit 0
-bonsai-lint --lang php src/          # one language only: `php` or `typescript`
+bonsai-lint --lang php src/          # one language only: `php`, `typescript` or `vue`
 ```
 
 <details>
@@ -98,7 +98,8 @@ bonsai-lint --format json .
 {
   "thresholds": {
     "php": 15,
-    "typescript": 15
+    "typescript": 15,
+    "vue": 15
   },
   "breaches": 3,
   "findings": [
@@ -238,7 +239,7 @@ threshold = 20
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `threshold` | `15` | Fail above this score. A `[php]` or `[typescript]` section overrides it per language. |
+| `threshold` | `15` | Fail above this score. A `[php]`, `[typescript]` or `[vue]` section overrides it per language. |
 | `exclude` | `[]` | Globs, relative to the config's own directory. `*` stops at `/` and `**` crosses it, as in `.gitignore`. |
 | `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
 | `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |
@@ -392,7 +393,8 @@ Migrating? Expect your numbers to move, mostly upward, for these reasons and no 
 
 <img src="editors/vscode/images/diagnostic.png" alt="A cognitive complexity warning underlining a TypeScript function name, with the Problems panel showing one diagnostic" width="720">
 
-The [VS Code extension](editors/vscode) reports diagnostics for all five language IDs. It
+The [VS Code extension](editors/vscode) reports diagnostics for every editor language it is
+configured for. It
 analyses the buffer as you type, not the file on disk, and it deliberately does **not** pass a
 threshold unless you set one, so the editor shows exactly what CI would fail on, your
 `bonsai-lint.toml` and baselines included.

@@ -34,6 +34,7 @@ pub fn findings(source: &str) -> Vec<Finding> {
         ));
     }
     merge_toplevel(&mut found);
+    bonsai_core::disambiguate(&mut found);
     found
 }
 
