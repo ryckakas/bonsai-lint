@@ -75,6 +75,11 @@ A unit is reported on its signature line, below any `#[Attribute]` or `@decorato
 `<toplevel>` unit is reported on line 1, and a suppression marker for it lives in the comment
 block at the top of the file, behind the open tag or shebang.
 
+A `.vue` file is the exception to both. Only its script blocks are parsed, so `<toplevel>` is
+reported at the start of the first one rather than line 1, and a marker above `<template>` is
+outside every parsed region and does nothing at all. Put it at the top of a script block; a
+marker in any block suppresses the one `<toplevel>` the component reports.
+
 Units are named from wherever they are bound, since most closures are anonymous where they are
 written:
 

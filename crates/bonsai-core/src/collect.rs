@@ -118,9 +118,6 @@ pub fn declaration_row(node: Node<'_>, lang: &Language) -> usize {
     })
 }
 
-/// Code outside any function is invisible to a purely unit-based scan, which is exactly where
-/// procedural scripts and module-level initialisation hide. A zero score is not reported, since
-/// most files legitimately have no top-level logic and emitting them all would be noise.
 /// Where the parsed region starts. A whole-file parse reports one range beginning at row 0, so
 /// this is 1 for every language that is not embedded in a host syntax.
 fn region_line(tree: &Tree) -> usize {
@@ -129,6 +126,9 @@ fn region_line(tree: &Tree) -> usize {
         .map_or(1, |range| range.start_point.row + 1)
 }
 
+/// Code outside any function is invisible to a purely unit-based scan, which is exactly where
+/// procedural scripts and module-level initialisation hide. A zero score is not reported, since
+/// most files legitimately have no top-level logic and emitting them all would be noise.
 fn toplevel_finding(
     root: Node<'_>,
     src: &[u8],
@@ -164,8 +164,9 @@ fn toplevel_finding(
 
 /// Only positional and anonymous names can collide in a way the author did not choose. Declared
 /// and bound names that collide are a genuine duplicate in the source, which is the author's
-/// problem rather than the namer's.
-fn disambiguate(findings: &mut [Finding]) {
+/// problem rather than the namer's. Public because a file parsed as several regions has to be
+/// reconciled once more after the regions are combined.
+pub fn disambiguate(findings: &mut [Finding]) {
     let mut counts: HashMap<(Option<String>, String), usize> = HashMap::new();
 
     for finding in findings.iter_mut() {

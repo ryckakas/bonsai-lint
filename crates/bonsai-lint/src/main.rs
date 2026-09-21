@@ -283,7 +283,7 @@ fn scan_stdin(
         descriptor,
         &source,
         domain.toplevel,
-        &path,
+        &shown,
         &mut outcome.warnings,
     );
     outcome.located = findings

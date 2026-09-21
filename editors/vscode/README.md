@@ -37,7 +37,7 @@ to the `bonsai-lint` output channel, and the first occurrence of each problem po
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `bonsai-lint.enable` | `true` | Report cognitive complexity. |
-| `bonsai-lint.languages` | all five | Editor language ids to analyse. |
+| `bonsai-lint.languages` | all six | Editor language ids to analyse. |
 | `bonsai-lint.path` | `""` | Path to a binary, absolute or relative to the workspace folder. Empty uses the bundled one, then `PATH`. |
 | `bonsai-lint.threshold` | unset | Force one whole-number threshold. **Leave unset** so the repository wins. |
 

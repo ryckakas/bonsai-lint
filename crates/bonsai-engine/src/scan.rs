@@ -206,6 +206,8 @@ impl Parsers {
             ));
         }
         merge_toplevel(&mut findings);
+        // Each region disambiguated only against itself, so two regions can still collide.
+        bonsai_core::disambiguate(&mut findings);
         findings
     }
 }
@@ -243,6 +245,16 @@ fn merge_toplevel(findings: &mut Vec<bonsai_core::Finding>) {
         .filter(|f| is_toplevel(f))
         .map(|f| f.score)
         .sum();
+
+    // The merged finding is one unit, so a marker in any of its regions applies to all of it.
+    if let Some(marked) = findings
+        .iter()
+        .filter(|f| is_toplevel(f))
+        .find(|f| f.suppression != bonsai_core::Suppression::None)
+        .map(|f| f.suppression.clone())
+    {
+        findings[first].suppression = marked;
+    }
 
     let mut kept = false;
     findings.retain(|finding| {

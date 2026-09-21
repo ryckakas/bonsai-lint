@@ -6,7 +6,7 @@ pub mod spec;
 pub mod suppression;
 pub mod walk;
 
-pub use collect::{analyze, declaration_row};
+pub use collect::{analyze, declaration_row, disambiguate};
 pub use finding::{
     Callee, Finding, NameOrigin, Suppression, UnitName, ANONYMOUS_UNIT, SUPPRESSION_MARKER,
     TOPLEVEL_UNIT,
