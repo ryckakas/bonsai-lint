@@ -1,0 +1,210 @@
+//! The harness every CLI suite shares: a throwaway project, the binary under test, and the
+//! source snippets whose scores the assertions are written against.
+// Each suite compiles this module on its own, so a helper it does not use is not dead.
+#![allow(dead_code, unreachable_pub)]
+
+use std::fmt::Write as _;
+use std::fs;
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+pub const BUSY_PHP: &str =
+    "<?php\nfunction busy($a, $b) {\n    if ($a) { if ($b) { return 1; } }\n    return 0;\n}\n";
+
+pub const BUSY_PHP_TOO: &str =
+    "<?php\nfunction busier($a, $b) {\n    if ($a) { if ($b) { return 1; } }\n    return 0;\n}\n";
+
+pub const CALM_PHP: &str = "<?php\nfunction calm() { return 1; }\n";
+
+pub const CALM_TS: &str = "function calm() { return 1; }\n";
+
+pub const BUSY_TS: &str =
+    "function busy(a, b) {\n    if (a) { if (b) { return 1; } }\n    return 0;\n}\n";
+
+pub const BUSY_VUE: &str = "<template>\n  <p v-if=\"a && b\">x</p>\n</template>\n\n<script setup lang=\"ts\">\nfunction busy(a: number, b: number) {\n    if (a) { if (b) { return 1 } }\n    return 0\n}\n</script>\n";
+
+pub struct Project {
+    _dir: tempfile::TempDir,
+    pub root: PathBuf,
+}
+
+impl Project {
+    pub fn new() -> Self {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let root = dir.path().canonicalize().expect("canonical temp dir");
+        Self { _dir: dir, root }
+    }
+
+    pub fn file(&self, relative: &str, content: &str) -> &Self {
+        let path = self.root.join(relative);
+        fs::create_dir_all(path.parent().expect("has parent")).expect("mkdir");
+        fs::write(path, content).expect("write");
+        self
+    }
+
+    pub fn read(&self, relative: &str) -> String {
+        fs::read_to_string(self.root.join(relative)).expect("file exists")
+    }
+
+    pub fn command(&self, args: &[&str]) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_bonsai-lint"));
+        command.args(args).current_dir(&self.root);
+        command
+    }
+
+    pub fn run(&self, args: &[&str]) -> Output {
+        self.command(args).output().expect("binary runs")
+    }
+
+    pub fn run_with_stdin(&self, args: &[&str], input: &str) -> Output {
+        let mut child = self
+            .command(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("binary starts");
+        child
+            .stdin
+            .take()
+            .expect("stdin is piped")
+            .write_all(input.as_bytes())
+            .expect("stdin accepts input");
+        child.wait_with_output().expect("binary exits")
+    }
+}
+
+pub fn stdout(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+pub fn stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+pub fn code(output: &Output) -> i32 {
+    output.status.code().expect("exited normally")
+}
+
+pub fn report(output: &Output) -> serde_json::Value {
+    serde_json::from_str(&stdout(output))
+        .unwrap_or_else(|error| panic!("{error}\nstdout:\n{}", stdout(output)))
+}
+
+pub fn ranked_scores(output: &Output) -> Vec<u64> {
+    report(output)["findings"]
+        .as_array()
+        .expect("findings is an array")
+        .iter()
+        .map(|finding| finding["score"].as_u64().expect("score is a number"))
+        .collect()
+}
+
+pub fn scores(output: &Output) -> Vec<u64> {
+    let mut scores = ranked_scores(output);
+    scores.sort_unstable();
+    scores
+}
+
+pub fn paths(output: &Output) -> Vec<String> {
+    report(output)["findings"]
+        .as_array()
+        .expect("findings is an array")
+        .iter()
+        .map(|finding| {
+            finding["path"]
+                .as_str()
+                .expect("path is a string")
+                .to_string()
+        })
+        .collect()
+}
+
+/// Nested ifs score 1+2+..+depth, which is how these fixtures land either side of a threshold.
+pub fn nested_php(name: &str, depth: usize) -> String {
+    nest(&format!("<?php\nfunction {name}($a) {{\n"), "$a", depth)
+}
+
+pub fn nested_ts(name: &str, depth: usize) -> String {
+    nest(&format!("function {name}(a) {{\n"), "a", depth)
+}
+
+pub fn nest(header: &str, condition: &str, depth: usize) -> String {
+    let mut source = header.to_string();
+    for level in 0..depth {
+        writeln!(source, "{}if ({condition}) {{", "    ".repeat(level + 1)).expect("string write");
+    }
+    source.push_str("    return 1;\n");
+    for level in (0..depth).rev() {
+        writeln!(source, "{}}}", "    ".repeat(level + 1)).expect("string write");
+    }
+    source.push_str("}\n");
+    source
+}
+
+pub fn over_threshold(name: &str) -> String {
+    nested_php(name, 6)
+}
+
+pub fn collect_baselines(
+    root: &Path,
+    dir: &Path,
+    stack: &mut Vec<PathBuf>,
+    found: &mut Vec<(String, String)>,
+) {
+    for entry in fs::read_dir(dir).expect("read dir").flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            stack.push(path);
+        } else if path
+            .file_name()
+            .is_some_and(|name| name == ".bonsai-lint-baseline.json")
+        {
+            let key = path
+                .strip_prefix(root)
+                .expect("under root")
+                .to_string_lossy()
+                .replace('\\', "/");
+            found.push((key, fs::read_to_string(&path).expect("read baseline")));
+        }
+    }
+}
+
+pub fn baselines(project: &Project) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    let mut stack = vec![project.root.clone()];
+    while let Some(dir) = stack.pop() {
+        collect_baselines(&project.root, &dir, &mut stack, &mut found);
+    }
+    found.sort();
+    found
+}
+
+pub fn remove_baselines(project: &Project) {
+    for (relative, _) in baselines(project) {
+        fs::remove_file(project.root.join(relative)).expect("remove baseline");
+    }
+}
+
+/// A component whose template is `padding` lines long, so a finding's line moves but its baseline
+/// key must not.
+pub fn vue_component(name: &str, depth: usize, padding: usize) -> String {
+    let mut source = String::from("<template>\n");
+    for index in 0..padding {
+        writeln!(source, "  <p v-if=\"a && b\">{index}</p>").expect("string write");
+    }
+    source.push_str("</template>\n\n<script setup lang=\"ts\">\n");
+    source.push_str(&nested_ts(name, depth));
+    source.push_str("</script>\n");
+    source
+}
+
+/// Repeated because a scheduling bug that reorders output does not do so on every run.
+pub fn assert_matches_serial(project: &Project, format: &str, jobs: &str, serial: &Output) {
+    for _ in 0..3 {
+        let parallel = project.run(&["--all", "--format", format, "--jobs", jobs, "."]);
+        assert_eq!(stdout(&parallel), stdout(serial), "{format} jobs={jobs}");
+        assert_eq!(stderr(&parallel), stderr(serial), "{format} jobs={jobs}");
+        assert_eq!(code(&parallel), code(serial), "{format} jobs={jobs}");
+    }
+}
