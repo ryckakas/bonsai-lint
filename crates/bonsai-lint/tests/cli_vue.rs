@@ -2,7 +2,9 @@
 
 mod common;
 
-use common::{baselines, code, report, stderr, stdout, vue_component, Project, BUSY_TS, BUSY_VUE};
+use common::{
+    baselines, code, paths, report, stderr, stdout, vue_component, Project, BUSY_TS, BUSY_VUE,
+};
 fn vue_domains() -> Project {
     let project = Project::new();
     project.file(
@@ -43,14 +45,8 @@ fn a_vue_threshold_section_applies_only_to_vue() {
 
     let output = project.run(&["--format", "json", "."]);
 
-    let names: Vec<String> = report(&output)["findings"]
-        .as_array()
-        .expect("findings is an array")
-        .iter()
-        .map(|finding| finding["name"].to_string())
-        .collect();
-    assert_eq!(report(&output)["breaches"], 1);
-    assert!(names.iter().any(|name| name.contains("busy")));
+    // Both fixtures declare `busy`, so only the path proves which one was reported.
+    assert_eq!(paths(&output), vec!["src/plain.ts"]);
 }
 
 #[test]
@@ -230,4 +226,90 @@ fn a_comment_at_the_end_of_a_block_does_not_blank_the_component() {
     let output = project.run(&["--over", "0", "--format", "json", "."]);
 
     assert_eq!(report(&output)["findings"][0]["name"], "busy");
+}
+
+/// Each region is parsed on its own, so two regions disambiguate only against themselves unless
+/// the driver reconciles them afterwards. Colliding names cannot both be baselined.
+#[test]
+fn units_colliding_across_script_blocks_are_disambiguated() {
+    let project = Project::new();
+    project.file("bonsai-lint.toml", "threshold = 0\n");
+    project.file(
+        "src/Panel.vue",
+        "<script lang=\"ts\">\nwatch(a, () => { if (x) { if (y) { return 1 } } return 0 })\n</script>\n\
+         <script setup lang=\"ts\">\nwatch(b, () => { if (z) { return 1 } return 0 })\n</script>\n",
+    );
+
+    let names: Vec<String> = report(&project.run(&["--format", "json", "."]))["findings"]
+        .as_array()
+        .expect("findings is an array")
+        .iter()
+        .map(|finding| finding["name"].to_string())
+        .collect();
+    assert_eq!(names.len(), 2);
+    assert_ne!(names[0], names[1]);
+
+    assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
+    assert_eq!(
+        code(&project.run(&["."])),
+        0,
+        "the file must be baselineable"
+    );
+}
+
+/// The blocks' file-level code adds up, through the driver's own merge rather than a test copy.
+#[test]
+fn top_level_code_from_both_blocks_is_summed_by_the_driver() {
+    let project = Project::new();
+    project.file("bonsai-lint.toml", "threshold = 0\n");
+    project.file(
+        "src/Panel.vue",
+        "<script lang=\"ts\">\nif (a) { b() }\n</script>\n\
+         <script setup lang=\"ts\">\nif (c) { if (d) { e() } }\n</script>\n",
+    );
+
+    let findings = report(&project.run(&["--format", "json", "."]));
+    let findings = findings["findings"]
+        .as_array()
+        .expect("findings is an array");
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["name"], "<toplevel>");
+    assert_eq!(findings[0]["score"], 4);
+}
+
+/// A marker in any script block applies to the one `<toplevel>` the component reports.
+#[test]
+fn a_marker_in_the_second_block_suppresses_the_merged_toplevel() {
+    let project = Project::new();
+    project.file("bonsai-lint.toml", "threshold = 0\n");
+    project.file(
+        "src/Panel.vue",
+        "<script lang=\"ts\">\nif (a) { b() }\n</script>\n\
+         <script setup lang=\"ts\">\n// bonsai-lint-ignore: accepted bootstrap\n\
+         if (c) { if (d) { e() } }\n</script>\n",
+    );
+
+    assert_eq!(
+        report(&project.run(&["--format", "json", "."]))["breaches"],
+        0
+    );
+}
+
+/// The host grammar cannot fail spec compilation, so this warning is what stands in for it.
+/// `sfc.rs` proves the extractor sets it; this proves it reaches the user.
+#[test]
+fn a_component_yielding_no_script_block_warns_on_stderr() {
+    let project = Project::new();
+    project.file(
+        "src/Panel.vue",
+        "<template><p/></template>\n<!-- <script setup> was here -->\n",
+    );
+
+    let output = project.run(&["--over", "0", "."]);
+
+    assert!(
+        stderr(&output).contains("no script block could be read"),
+        "{}",
+        stderr(&output)
+    );
 }
