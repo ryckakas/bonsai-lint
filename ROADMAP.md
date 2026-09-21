@@ -35,6 +35,17 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
 
 ## Smaller known items
 
+- **Two units with one qualified name cannot both be baselined.** A baseline is
+  `{path: {qualified_name: score}}`, so when a file declares the same name twice the second write
+  wins and the other unit can never be accepted — an unchanged re-run fails forever. The trigger
+  is a name the namer cannot qualify. `export const Widget = defineComponent({ setup() {} })`
+  yields a bare `setup`, because `bound_name` does not unwrap a lone *object* argument the way
+  `is_sole_callable_argument` unwraps a lone callable, so two components in one file collide.
+  `disambiguate` deliberately leaves declared duplicates alone, which is right for the report but
+  leaves the baseline with an un-silenceable finding. Teaching `bound_name` to unwrap a sole
+  object argument would give `Widget::setup` and fix both, at the cost of changing existing
+  baseline keys.
+
 - **A domain cannot opt a language out.** Per-language thresholds work per domain, but there is
   no way to say that a domain is TypeScript only. The workaround is an `exclude` glob.
   Analysed in [docs/features/domain-language-scope.md](docs/features/domain-language-scope.md).

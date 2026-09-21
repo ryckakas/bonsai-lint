@@ -51,7 +51,7 @@ fn html_parser() -> Parser {
 
 fn blocks(root: Node<'_>, src: &[u8]) -> (Vec<Block>, usize) {
     let mut scripts = Vec::new();
-    collect_scripts(root, src, &mut scripts);
+    collect_scripts(root, &mut scripts);
     let found = scripts.len();
     let blocks = scripts
         .into_iter()
@@ -61,11 +61,10 @@ fn blocks(root: Node<'_>, src: &[u8]) -> (Vec<Block>, usize) {
 }
 
 /// A pre-order walk yields the blocks in document order, which is what `set_included_ranges`
-/// requires. Ancestors are checked rather than the parent alone so that an `ERROR` node produced
-/// by template syntax the HTML grammar dislikes cannot hide a script block.
-fn collect_scripts<'t>(node: Node<'t>, src: &[u8], out: &mut Vec<Node<'t>>) {
+/// requires.
+fn collect_scripts<'t>(node: Node<'t>, out: &mut Vec<Node<'t>>) {
     if node.kind() == "script_element" {
-        if !inside_template(node, src) {
+        if !nested(node) {
             out.push(node);
         }
         return;
@@ -73,14 +72,17 @@ fn collect_scripts<'t>(node: Node<'t>, src: &[u8], out: &mut Vec<Node<'t>>) {
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_scripts(child, src, out);
+        collect_scripts(child, out);
     }
 }
 
-fn inside_template(node: Node<'_>, src: &[u8]) -> bool {
+/// A component's blocks are top level, so any element ancestor means this script belongs to a
+/// `<template>` or a custom block like `<docs>` and is not one. An `ERROR` ancestor is stepped
+/// over, because template syntax the HTML grammar dislikes must not hide a real block.
+fn nested(node: Node<'_>) -> bool {
     let mut parent = node.parent();
     while let Some(ancestor) = parent {
-        if ancestor.kind() == "element" && tag_name(ancestor, src) == Some("template") {
+        if ancestor.kind() == "element" {
             return true;
         }
         parent = ancestor.parent();
@@ -133,11 +135,6 @@ fn attribute_value<'a>(attribute: Node<'_>, src: &'a [u8]) -> Option<&'a str> {
         None => named_child(attribute, "attribute_value")?,
     };
     value.utf8_text(src).ok()
-}
-
-fn tag_name<'a>(element: Node<'_>, src: &'a [u8]) -> Option<&'a str> {
-    let start = named_child(element, "start_tag")?;
-    named_child(start, "tag_name")?.utf8_text(src).ok()
 }
 
 fn named_child<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> {

@@ -215,3 +215,19 @@ fn a_domain_can_turn_off_toplevel_scoring_for_vue_without_affecting_its_neighbou
     assert_eq!(toplevel.len(), 1, "{toplevel:?}");
     assert!(toplevel[0].contains("plain"), "{toplevel:?}");
 }
+
+/// End to end: the driver parses each script block on its own, so a comment closing one cannot
+/// silently blank the next.
+#[test]
+fn a_comment_at_the_end_of_a_block_does_not_blank_the_component() {
+    let project = Project::new();
+    project.file(
+        "src/Panel.vue",
+        "<script>const x = 1 // note</script>\n\
+         <script setup>function busy(n) { if (n) { if (n) { return 1 } } return 0 }</script>\n",
+    );
+
+    let output = project.run(&["--over", "0", "--format", "json", "."]);
+
+    assert_eq!(report(&output)["findings"][0]["name"], "busy");
+}

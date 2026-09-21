@@ -139,3 +139,15 @@ fn a_byte_order_mark_keeps_the_row_correct() {
         "\u{feff}<template><p/></template>\n<script setup lang=\"ts\">\nconst a = 1\n</script>\n";
     assert_eq!(extract(source).ranges[0].start_point.row, 1);
 }
+
+/// A component may carry custom blocks such as `<docs>` or `<i18n>`. A `<script>` shown inside
+/// one is documentation, not a block of the component.
+#[test]
+fn a_script_inside_a_custom_block_is_not_a_block() {
+    let source =
+        "<docs>\nExample:\n<script>function example(){ if (x) { y() } }</script>\n</docs>\n\
+                  <template><p/></template>\n<script setup>\nconst a = 1\n</script>\n";
+    let ranges = extract(source).ranges;
+    assert_eq!(ranges.len(), 1);
+    assert_eq!(ranges[0].start_point.row, 5);
+}

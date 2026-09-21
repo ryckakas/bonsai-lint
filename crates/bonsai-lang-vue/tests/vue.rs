@@ -133,3 +133,25 @@ fn a_suppression_marker_inside_a_script_block_is_honoured() {
     );
     assert!(find(&found, "f").is_suppressed());
 }
+
+/// Regions are parsed one at a time. Concatenated, an unterminated line comment ending the first
+/// block would run into the second and swallow every finding in it.
+#[test]
+fn a_line_comment_ending_one_block_does_not_swallow_the_next() {
+    let found = findings(
+        "<script>const x = 1 // note</script>\n\
+         <script setup>function f(n) { if (n) { return 1 } return 0 }</script>\n",
+    );
+    assert_eq!(find(&found, "f").score, 1);
+}
+
+#[test]
+fn top_level_code_in_both_blocks_adds_up_to_one_finding() {
+    let found = findings(
+        "<script lang=\"ts\">\nif (a) { b() }\n</script>\n\
+         <script setup lang=\"ts\">\nif (c) { if (d) { e() } }\n</script>\n",
+    );
+    let toplevel = find(&found, TOPLEVEL_UNIT);
+    assert_eq!(toplevel.score, 4);
+    assert_eq!(toplevel.line, 1);
+}
