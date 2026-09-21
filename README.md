@@ -155,11 +155,18 @@ cannot read what it was pointed at must not report success.
 | `.ts`, `.mts`, `.cts` | TypeScript | `typescript` |
 | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
 | `.vue` | the `<script>` blocks only | `vue` |
-| `*.d.ts` | skipped, signatures only | |
+| `*.d.ts`, `*.d.mts`, `*.d.cts` | skipped, signatures only | |
+| `*.min.js`, `*.min.mjs`, `*.min.cjs` | skipped, generated output | |
 
 The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
 `typescript` covers every JavaScript and TypeScript file however it is parsed. An id that is not
 one of these is an error, not a silent no-op.
+
+A declaration file and a minified one are both skipped outright, for opposite reasons: the first
+holds only signatures so every unit scores zero, and the second is generated output whose whole
+body rolls up into one unit nobody will refactor. The skipped names are a list of whole suffixes
+in `registry::UNSCORED`, so `app.mini.js`, `jasmine.js` and a file simply called `min.js` are all
+still scanned.
 
 `.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
 annotations are the one thing this misparses.

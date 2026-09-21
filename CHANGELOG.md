@@ -13,6 +13,13 @@ what a user reads on the GitHub release page.
 
 ### Added
 
+- Minified JavaScript is skipped, the way `*.d.ts` already was: a bundle's nesting rolls up into
+  one unit whose score outranks every real finding, and it is generated output nobody is going
+  to refactor. The skipped names now live in one list of whole suffixes, which also closes a gap
+  where `*.d.mts` and `*.d.cts` were scanned despite being declaration files. Names that merely
+  resemble one, such as `app.mini.js`, are untouched. A baseline holding a newly skipped file
+  will report that entry as stale.
+
 - **Vue single-file components.** `.vue` files are scanned under a new `vue` language id, so
   `--lang vue`, `--over vue=N` and a `[vue]` section in the config all work. Both `<script>` and
   `<script setup>` are scored, with `lang="ts"` selecting the TypeScript grammar and anything

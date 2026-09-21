@@ -259,3 +259,45 @@ fn a_vue_component_without_a_script_block_is_read_without_error() {
     assert!(outcome.warnings.is_empty());
     assert!(outcome.located.is_empty());
 }
+
+/// A declaration file scores nothing but signatures, and minified output rolls up into one
+/// enormous unit that outranks every real finding. Every declaration spelling counts: `.d.mts`
+/// and `.d.cts` are as much declaration files as `.d.ts`.
+#[test]
+fn generated_and_declaration_files_are_not_scanned() {
+    let (_dir, root) = project();
+    for name in [
+        "types.d.ts",
+        "types.d.mts",
+        "types.d.cts",
+        "lib.min.js",
+        "lib.min.mjs",
+        "lib.min.cjs",
+    ] {
+        write(&root, &format!("src/{name}"), TS_UNIT.as_bytes());
+    }
+
+    assert_eq!(scan(&root, &["."], None).stats.files, 0);
+}
+
+/// The suffixes are matched whole. Substring matching would have swallowed every one of these,
+/// and silently: a file that is never scanned reports nothing to notice.
+#[test]
+fn a_name_that_merely_looks_generated_is_still_scanned() {
+    let (_dir, root) = project();
+    let names = [
+        "min.js",       // the marker, but as the whole stem
+        "app.mini.js",  // `.min` is a prefix of `.mini`
+        "admin.js",     // contains `min`
+        "determine.ts", // contains `min`
+        "jasmine.js",   // contains `min`
+        "d.ts",         // the marker, but as the whole stem
+        "lib.min.css",  // minified, but not a language we score anyway
+    ];
+    for name in names {
+        write(&root, &format!("src/{name}"), TS_UNIT.as_bytes());
+    }
+
+    // `.css` is not a scanned extension, so it never reaches the suffix list.
+    assert_eq!(scan(&root, &["."], None).stats.files, names.len() - 1);
+}

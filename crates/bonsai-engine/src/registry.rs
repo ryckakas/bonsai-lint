@@ -37,12 +37,17 @@ pub fn language_ids() -> Vec<&'static str> {
     ids
 }
 
-/// Declaration files hold only signatures, so every unit in them scores zero and they are pure
-/// report noise.
+/// Names that carry no code worth scoring. A declaration file holds only signatures, so every
+/// unit in it scores zero; minified output rolls up into one enormous unit nobody will refactor.
+/// These are whole suffixes rather than substrings, so `app.mini.js` and `min.js` are untouched.
+const UNSCORED: &[&str] = &[
+    ".d.ts", ".d.mts", ".d.cts", ".min.js", ".min.mjs", ".min.cjs",
+];
+
 #[must_use]
 pub fn for_path(path: &Path) -> Option<&'static LanguageDescriptor> {
     let name = path.file_name()?.to_str()?;
-    if name.ends_with(".d.ts") {
+    if UNSCORED.iter().any(|suffix| name.ends_with(suffix)) {
         return None;
     }
 
