@@ -14,8 +14,8 @@ pub use finding::{
 pub use language::{Flags, KindInfo, Language, Role, SpecErrors};
 pub use spec::{FieldNames, Hooks, KindSets, LanguageSpec};
 
-/// What the registry stores for a language. Compilation is memoised behind each language
-/// crate's own `OnceLock`, so the facade never names a grammar crate's types.
+/// What the registry stores for a language. Compilation is memoised behind
+/// [`compiled_once!`], so the facade never names a grammar crate's types.
 #[derive(Debug)]
 pub struct LanguageDescriptor {
     pub id: &'static str,

@@ -99,6 +99,30 @@ jobs:
       - name: Build with features "${{ matrix.features }}"
         run: cargo build -p bonsai-lint --no-default-features --features "${{ matrix.features }}"
 
+  wasm:
+    # The wasm32 arm of `compiled_once!` is compiled by nothing else here, so without this job
+    # it rots silently: native stays green while the playground module stops building.
+    name: WebAssembly target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # llvm-tools is not optional: build-wasm.sh needs its llvm-ar, because the system ar
+      # writes BSD archives and wasm-ld only reads GNU ones.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: llvm-tools
+
+      - uses: Swatinem/rust-cache@v2
+
+      # vendor-grammars.py patches the grammars from the local registry rather than the network.
+      - name: Fetch dependencies
+        run: cargo fetch
+
+      - name: Build the playground module
+        run: crates/bonsai-wasm/build-wasm.sh
+
   msrv:
     name: Minimum supported Rust version
     runs-on: ubuntu-latest
