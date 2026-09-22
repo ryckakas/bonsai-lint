@@ -1,3 +1,4 @@
+#[cfg(not(target_family = "wasm"))]
 use std::sync::OnceLock;
 
 use bonsai_core::naming::{compact, strip_quotes};
@@ -126,9 +127,31 @@ const TRANSPARENT: &[&str] = &[
     "type_assertion",
 ];
 
+// tree-sitter gates `unsafe impl Sync for Language` behind `cfg(not(target_family = "wasm"))`,
+// so a `static OnceLock<Language>` cannot exist on wasm32. That target is single-threaded, so a
+// thread-local cell plus a one-time leak yields the same `&'static` with no unsafe and no
+// behavioural difference. Native builds keep the `OnceLock` exactly as before.
+#[cfg(target_family = "wasm")]
+macro_rules! compiled_once {
+    ($build:expr) => {{
+        thread_local! {
+            static COMPILED: std::cell::OnceCell<&'static Language> =
+                const { std::cell::OnceCell::new() };
+        }
+        COMPILED.with(|cell| *cell.get_or_init(|| Box::leak(Box::new($build))))
+    }};
+}
+
+#[cfg(not(target_family = "wasm"))]
+macro_rules! compiled_once {
+    ($build:expr) => {{
+        static COMPILED: OnceLock<Language> = OnceLock::new();
+        COMPILED.get_or_init(|| $build)
+    }};
+}
+
 fn compiled_typescript() -> &'static Language {
-    static COMPILED: OnceLock<Language> = OnceLock::new();
-    COMPILED.get_or_init(|| {
+    compiled_once!({
         SPEC.compile(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
             .unwrap_or_else(|errors| {
                 panic!("TypeScript spec does not match the linked grammar: {errors}")
@@ -137,8 +160,7 @@ fn compiled_typescript() -> &'static Language {
 }
 
 fn compiled_tsx() -> &'static Language {
-    static COMPILED: OnceLock<Language> = OnceLock::new();
-    COMPILED.get_or_init(|| {
+    compiled_once!({
         SPEC.compile(tree_sitter_typescript::LANGUAGE_TSX.into())
             .unwrap_or_else(|errors| panic!("TSX spec does not match the linked grammar: {errors}"))
     })

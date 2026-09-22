@@ -1,0 +1,4 @@
+# Reproduced by vendor-grammars.py rather than committed — several megabytes of parser C
+# that upstream should be carrying once the build.rs patches land.
+vendor/
+target/
