@@ -307,3 +307,31 @@ fn required_field(
     }
     id
 }
+
+/// Memoises a compiled [`Language`] as a `&'static`.
+///
+/// Split per target because tree-sitter gates `unsafe impl Sync for Language` off for wasm, so
+/// a `static OnceLock<Language>` will not compile there. wasm32 is single-threaded, so a
+/// thread-local plus a one-time leak is equivalent and still needs no unsafe.
+#[cfg(not(target_family = "wasm"))]
+#[macro_export]
+macro_rules! compiled_once {
+    ($build:expr) => {{
+        static COMPILED: ::std::sync::OnceLock<$crate::Language> = ::std::sync::OnceLock::new();
+        COMPILED.get_or_init(|| $build)
+    }};
+}
+
+#[cfg(target_family = "wasm")]
+#[macro_export]
+macro_rules! compiled_once {
+    ($build:expr) => {{
+        thread_local! {
+            static COMPILED: ::std::cell::OnceCell<&'static $crate::Language> =
+                const { ::std::cell::OnceCell::new() };
+        }
+        COMPILED.with(|cell| {
+            *cell.get_or_init(|| ::std::boxed::Box::leak(::std::boxed::Box::new($build)))
+        })
+    }};
+}

@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
@@ -88,8 +86,7 @@ const CALL: &[&str] = &[
 ];
 
 fn compiled() -> &'static Language {
-    static COMPILED: OnceLock<Language> = OnceLock::new();
-    COMPILED.get_or_init(|| {
+    bonsai_core::compiled_once!({
         SPEC.compile(tree_sitter_php::LANGUAGE_PHP.into())
             .unwrap_or_else(|errors| panic!("PHP spec does not match the linked grammar: {errors}"))
     })

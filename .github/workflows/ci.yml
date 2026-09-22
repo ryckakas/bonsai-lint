@@ -99,6 +99,42 @@ jobs:
       - name: Build with features "${{ matrix.features }}"
         run: cargo build -p bonsai-lint --no-default-features --features "${{ matrix.features }}"
 
+  wasm:
+    # The wasm32 arm of `compiled_once!` is compiled by nothing else here, so without this job
+    # it rots silently: native stays green while the playground module stops building.
+    name: WebAssembly target
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # llvm-tools is not optional: build-wasm.sh needs its llvm-ar, because the system ar
+      # writes BSD archives and wasm-ld only reads GNU ones.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: llvm-tools
+
+      - uses: Swatinem/rust-cache@v2
+
+      # vendor-grammars.py patches the grammars from the local registry rather than the network.
+      - name: Fetch dependencies
+        run: cargo fetch
+
+      # Must precede clippy, not just the build: the crate's `[patch.crates-io]` points into
+      # vendor/, so cargo cannot resolve the manifest at all until this has run.
+      - name: Vendor the patched grammars
+        run: python3 crates/bonsai-wasm/vendor-grammars.py
+
+      # Its own workspace, so the root `cargo fmt --all` and clippy jobs cannot see it.
+      - name: Format and lint
+        run: |
+          cargo fmt --manifest-path crates/bonsai-wasm/Cargo.toml -- --check
+          cargo clippy --manifest-path crates/bonsai-wasm/Cargo.toml \
+            --release --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Build the playground module
+        run: crates/bonsai-wasm/build-wasm.sh
+
   msrv:
     name: Minimum supported Rust version
     runs-on: ubuntu-latest

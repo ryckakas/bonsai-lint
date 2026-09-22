@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
@@ -127,8 +125,7 @@ const TRANSPARENT: &[&str] = &[
 ];
 
 fn compiled_typescript() -> &'static Language {
-    static COMPILED: OnceLock<Language> = OnceLock::new();
-    COMPILED.get_or_init(|| {
+    bonsai_core::compiled_once!({
         SPEC.compile(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
             .unwrap_or_else(|errors| {
                 panic!("TypeScript spec does not match the linked grammar: {errors}")
@@ -137,8 +134,7 @@ fn compiled_typescript() -> &'static Language {
 }
 
 fn compiled_tsx() -> &'static Language {
-    static COMPILED: OnceLock<Language> = OnceLock::new();
-    COMPILED.get_or_init(|| {
+    bonsai_core::compiled_once!({
         SPEC.compile(tree_sitter_typescript::LANGUAGE_TSX.into())
             .unwrap_or_else(|errors| panic!("TSX spec does not match the linked grammar: {errors}"))
     })
