@@ -11,6 +11,12 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-22
+
+### Changed
+
+- Documentation only, with no change to any score.
+
 ## [0.2.0] - 2026-09-21
 
 ### Added
@@ -77,7 +83,8 @@ Initial release.
 - Published as a GitHub release, an npm package, and a Homebrew formula, alongside a VS Code
   extension versioned independently.
 
-[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/ryckakas/bonsai-lint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ryckakas/bonsai-lint/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/ryckakas/bonsai-lint/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ryckakas/bonsai-lint/releases/tag/v0.1.0

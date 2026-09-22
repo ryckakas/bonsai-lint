@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.90"
 license = "MIT"
@@ -19,12 +19,12 @@ repository = "https://github.com/ryckakas/bonsai-lint"
 homepage = "https://github.com/ryckakas/bonsai-lint"
 
 [workspace.dependencies]
-bonsai-core = { path = "crates/bonsai-core", version = "0.2.0" }
-bonsai-lang-php = { path = "crates/bonsai-lang-php", version = "0.2.0" }
-bonsai-lang-ts = { path = "crates/bonsai-lang-ts", version = "0.2.0" }
-bonsai-lang-vue = { path = "crates/bonsai-lang-vue", version = "0.2.0" }
-bonsai-engine = { path = "crates/bonsai-engine", version = "0.2.0", default-features = false }
-bonsai-testkit = { path = "crates/bonsai-testkit", version = "0.2.0" }
+bonsai-core = { path = "crates/bonsai-core", version = "0.2.1" }
+bonsai-lang-php = { path = "crates/bonsai-lang-php", version = "0.2.1" }
+bonsai-lang-ts = { path = "crates/bonsai-lang-ts", version = "0.2.1" }
+bonsai-lang-vue = { path = "crates/bonsai-lang-vue", version = "0.2.1" }
+bonsai-engine = { path = "crates/bonsai-engine", version = "0.2.1", default-features = false }
+bonsai-testkit = { path = "crates/bonsai-testkit", version = "0.2.1" }
 tree-sitter = "0.27"
 tree-sitter-php = "0.24"
 tree-sitter-typescript = "0.23"
