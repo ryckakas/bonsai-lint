@@ -1,4 +1,4 @@
-//! Conformance against the `SonarSource` cognitive complexity specification.
+//! Conformance against the cognitive complexity scoring rules.
 
 mod common;
 
@@ -27,9 +27,8 @@ fn negation_starts_a_new_sequence() {
     assert_scores(&[("if (a && !(b && c)) { f(); }", 3)]);
 }
 
-/// Correct by omission: `??` is absent from the operator normaliser. The reference JavaScript
-/// analyser scores it, so without this test someone could "fix" it to match and silently move
-/// every score.
+/// Correct by omission: `??` is absent from the operator normaliser. Other implementations score
+/// it, so without this test someone could "fix" it to match and silently move every score.
 #[test]
 fn null_coalescing_scores_zero() {
     assert_scores(&[
@@ -99,8 +98,8 @@ fn labelled_jumps_cost_one_and_plain_jumps_are_free() {
     ]);
 }
 
-/// The specification's own worked example: a lambda scores +0 but raises the nesting level, and
-/// the total is attributed to the enclosing unit.
+/// A lambda scores +0 but raises the nesting level, and the total is attributed to the
+/// enclosing unit.
 #[test]
 fn closures_raise_nesting_without_scoring() {
     assert_scores(&[

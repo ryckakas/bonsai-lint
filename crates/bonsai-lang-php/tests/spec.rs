@@ -1,4 +1,4 @@
-//! Conformance against the `SonarSource` cognitive complexity specification.
+//! Conformance against the cognitive complexity scoring rules.
 //!
 //! Each case states the increments it expects so a failure says which rule broke, not just
 //! which number moved.
@@ -17,8 +17,8 @@ fn operator_sequences_cost_per_run_not_per_operator() {
     ]);
 }
 
-/// The reference implementation skips parentheses when flattening a sequence, so grouping alone
-/// does not start a new run. Only a change of operator does.
+/// Parentheses are skipped when flattening a sequence, so grouping alone does not start a new
+/// run. Only a change of operator does.
 #[test]
 fn parentheses_do_not_break_an_operator_run() {
     assert_scores(&[
@@ -32,7 +32,7 @@ fn parentheses_do_not_break_an_operator_run() {
 }
 
 /// A negation is not a logical expression, so it ends the sequence and its contents are scored
-/// as a fresh one. This is what the specification's `a && !(b && c)` example shows.
+/// as a fresh one, which is what `a && !(b && c)` costing 3 reflects.
 #[test]
 fn negation_starts_a_new_sequence() {
     assert_scores(&[("if ($a && !($b && $c)) { echo 1; }", 3)]);
@@ -105,8 +105,8 @@ fn multi_level_jumps_cost_one_and_plain_jumps_are_free() {
     ]);
 }
 
-/// The specification's own worked example: a lambda scores +0 itself but raises the nesting
-/// level, and the total is attributed to the enclosing unit.
+/// A lambda scores +0 itself but raises the nesting level, and the total is attributed to the
+/// enclosing unit.
 #[test]
 fn closures_raise_nesting_without_scoring() {
     assert_scores(&[
