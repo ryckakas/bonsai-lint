@@ -9,6 +9,7 @@
 //! The ABI is raw C rather than wasm-bindgen: the whole surface is one string in and one
 //! string out, which does not justify a code-generation toolchain in the build.
 
+use std::alloc::{alloc, dealloc, Layout};
 use std::cell::RefCell;
 
 use bonsai_core::{Finding, LanguageDescriptor};
@@ -25,14 +26,20 @@ const LANG_TYPESCRIPT: u32 = 0;
 const LANG_PHP: u32 = 1;
 const LANG_VUE: u32 = 2;
 
-/// Reserves `len` bytes for the host to write source into. The host owns the allocation
-/// until it calls [`bl_free`].
+// A raw `Layout` rather than `Vec::with_capacity`, because freeing has to name the exact
+// layout that was allocated and `with_capacity` only promises *at least* the requested size.
+fn layout(len: usize) -> Option<Layout> {
+    Layout::from_size_align(len, 1).ok()
+}
+
+/// Reserves `len` bytes for the host to write source into, or returns null if that is refused.
+/// The host owns the allocation until it calls [`bl_free`] with the same `len`.
 #[no_mangle]
 pub extern "C" fn bl_alloc(len: usize) -> *mut u8 {
-    let mut buffer = Vec::<u8>::with_capacity(len);
-    let ptr = buffer.as_mut_ptr();
-    std::mem::forget(buffer);
-    ptr
+    match layout(len) {
+        Some(layout) if len > 0 => unsafe { alloc(layout) },
+        _ => std::ptr::null_mut(),
+    }
 }
 
 /// Releases an allocation made by [`bl_alloc`].
@@ -41,8 +48,10 @@ pub extern "C" fn bl_alloc(len: usize) -> *mut u8 {
 /// `ptr` must come from [`bl_alloc`] with the same `len`, and must not be used afterwards.
 #[no_mangle]
 pub unsafe extern "C" fn bl_free(ptr: *mut u8, len: usize) {
-    if !ptr.is_null() {
-        drop(unsafe { Vec::from_raw_parts(ptr, 0, len) });
+    if let Some(layout) = layout(len) {
+        if !ptr.is_null() && len > 0 {
+            unsafe { dealloc(ptr, layout) };
+        }
     }
 }
 
@@ -116,7 +125,12 @@ fn analyze(source: &str, language: u32) -> Option<Vec<Finding>> {
     }
     let tree = parser.parse(source, None)?;
 
-    Some(bonsai_core::analyze(&tree, source.as_bytes(), compiled, true))
+    Some(bonsai_core::analyze(
+        &tree,
+        source.as_bytes(),
+        compiled,
+        true,
+    ))
 }
 
 /// Hand-rolled rather than via serde: the shape is three fields and pulling in a serialiser
@@ -134,7 +148,11 @@ fn to_json(findings: &[Finding]) -> String {
         out.push_str(",\"name\":\"");
         escape_into(&finding.qualified_name(), &mut out);
         out.push_str("\",\"suppressed\":");
-        out.push_str(if finding.is_suppressed() { "true" } else { "false" });
+        out.push_str(if finding.is_suppressed() {
+            "true"
+        } else {
+            "false"
+        });
         out.push('}');
     }
     out.push(']');

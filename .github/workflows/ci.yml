@@ -120,6 +120,13 @@ jobs:
       - name: Fetch dependencies
         run: cargo fetch
 
+      # Its own workspace, so the root `cargo fmt --all` and clippy jobs cannot see it.
+      - name: Format and lint
+        run: |
+          cargo fmt --manifest-path crates/bonsai-wasm/Cargo.toml -- --check
+          cargo clippy --manifest-path crates/bonsai-wasm/Cargo.toml \
+            --release --target wasm32-unknown-unknown -- -D warnings
+
       - name: Build the playground module
         run: crates/bonsai-wasm/build-wasm.sh
 
