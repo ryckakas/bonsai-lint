@@ -2,9 +2,8 @@
 
 [← Back to README](../README.md)
 
-Three rules from the [specification](https://www.sonarsource.com/resources/cognitive-complexity/):
-shorthand that doesn't break reading flow is free; **+1** for each break in the linear flow of
-the code; **+nesting** for a flow-breaker that sits inside other flow-breakers.
+Three rules: shorthand that doesn't break reading flow is free; **+1** for each break in the
+linear flow of the code; **+nesting** for a flow-breaker that sits inside other flow-breakers.
 
 | Construct | Increment | Raises nesting |
 | --- | --- | --- |
@@ -44,12 +43,12 @@ it, you switch operator mode three times.
 A closure scores nothing itself but raises the nesting level, and its cost lands on the unit
 that contains it:
 
-```java
-void myMethod2() {
-  Runnable r = () -> {     // +0 but nesting level is now 1
-    if (condition1) { }    // +2 nesting=1
+```ts
+function outer() {
+  const run = () => {      // +0, but the nesting level is now 1
+    if (condition) { }     // +2, nesting = 1
   };
-}                          // Cognitive Complexity 2
+}                          // 2, attributed to outer
 ```
 
 The practical consequence, and the reason it matters most in JavaScript:
@@ -138,18 +137,18 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
 - `.js` is parsed with the TypeScript grammar. Flow-annotated `.js` will misparse.
 - `super.f()` and `ClassName.f()` count as self-reference for recursion, as `this.f()` does.
 
-## Divergences from eslint-plugin-sonarjs
+## Choices that move the numbers
 
 Implementations of cognitive complexity make different choices in a handful of places, and
-those choices change the numbers. Here is every one bonsai-lint makes differently from
-`eslint-plugin-sonarjs`, so anyone comparing output can see exactly where a gap comes from.
+those choices change the numbers. Here is every one bonsai-lint makes, so a score that doesn't
+match another tool has an explanation rather than a mystery.
 
 The first is the one that moves numbers: bonsai-lint scores a nested function at the depth it sits
-at and rolls it into the unit that contains it, where `eslint-plugin-sonarjs` scores each
+at and rolls it into the unit that contains it, where most implementations score each
 function from zero on its own. Per-function says how hard each piece is in isolation;
 rolling up says how hard the whole thing is to read in place.
 
-| | `eslint-plugin-sonarjs` | bonsai-lint |
+| | Elsewhere | bonsai-lint |
 | --- | --- | --- |
 | Closure inside a function | scored separately, from zero | carries the nesting it sits at |
 | `??`, `a?.b` | +1 | free |
@@ -157,33 +156,19 @@ rolling up says how hard the whole thing is to read in place.
 | `const x = a \|\| []` | exempt | +1 |
 | Code outside any function | not scored | scored as `<toplevel>` |
 
-## Where these rules come from
+## How these rules are pinned
 
-Three primary sources were read directly while building the scorer. Where they disagree, the
-specification decides.
+Every worked example above is also a fixture, under `crates/bonsai-lang-php/tests/` and
+`crates/bonsai-lang-ts/tests/`, asserted against a stated total — so a scoring change that
+contradicts this document fails the build rather than quietly rewriting it. The two cases that
+tell competing readings of a boolean run apart each carry their own test:
 
-**The [specification](https://www.sonarsource.com/resources/cognitive-complexity/)** supplies
-the worked examples above. The lambda under *Nesting compounds across function boundaries* is
-reproduced from it unchanged, annotation and all: the closure itself is `+0`, it raises the
-nesting level, and the resulting **2** is attributed to the enclosing method rather than to the
-closure. That single example settles the roll-up question.
+```text
+if (a && (b || c) || d)   // 3  grouping is transparent: one && run, then one || run
+if (a && !(b && c))       // 3  a negation is not a logical expression, so it ends the run
+```
 
-**`sonar-java`**, SonarSource's own Java implementation, matches it. Its
-`CognitiveComplexityVisitor` raises the nesting level around `visitLambdaExpression` and
-`visitClass` and walks an entire method with one visitor, instead of starting a fresh score at
-each function boundary. When flattening a boolean sequence it calls
-`ExpressionUtils.skipParentheses` — which is where `a && (b || c) || d` costing **2** comes
-from. Grouping is transparent to a run; a negation is not, because it is not a logical
-expression.
-
-**`eslint-plugin-sonarjs`** pushes a new scope at nesting level 0 for every function and reports
-each one independently. That is the single divergence that moves numbers the most, and the
-reason for the table above.
-
-The metrics fixture shipped alongside `sonar-java` carries its expected values inline, including
-the two cases that tell the readings apart — `a && (b||c) || d // +2` and
-`a && b || foo(b && c) // +3`. Those, with the specification's worked examples, are translated
-into the fixtures under `crates/bonsai-lang-php/tests/` and `crates/bonsai-lang-ts/tests/` and
-checked against their stated totals. `eslint-plugin-sonarjs` is deliberately not used as an
-oracle: its golden output would differ on every function that contains a closure, which in
-JavaScript is most of them.
+No other tool is used as an oracle, deliberately. Scoring a nested function in place rather than
+from zero makes golden output from a per-function implementation differ on every function that
+contains a closure — in JavaScript, most of them. Agreement would prove nothing and
+disagreement would prove nothing either, so the fixtures stand on their stated totals instead.

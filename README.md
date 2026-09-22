@@ -40,8 +40,7 @@ lines in 0.8 seconds**.
 
 Cognitive complexity measures how hard code is to *read*, where cyclomatic complexity measures
 how hard it is to *test*. A `switch` with twenty arms is cyclomatically awful and cognitively
-fine; three nested `if`s are the reverse. The metric is
-[SonarSource's](https://www.sonarsource.com/resources/cognitive-complexity/).
+fine; three nested `if`s are the reverse.
 
 ## Install
 
@@ -190,7 +189,7 @@ added together into the one `<toplevel>` a component reports. Reported lines are
 Two consequences are worth knowing:
 
 - **The template is deliberately not scored.** A `v-if` chain is real branching, but the
-  specification was not written against templates and counting them would make a component
+  the metric is defined over script code, and counting a template would make a component
   incomparable with the same logic written in TypeScript. A `render()` function *is* scored,
   because it is ordinary script code, so moving logic out of a template and into `render()`
   makes it visible, and a component that never had a template was never hidden.
@@ -335,9 +334,8 @@ function is that function's; write it on the `<?php` line to address the file in
 
 ## Scoring
 
-Three rules from the [specification](https://www.sonarsource.com/resources/cognitive-complexity/):
-shorthand that doesn't break reading flow is free; **+1** for each break in linear flow;
-**+nesting** when a flow-breaker sits inside other flow-breakers. Full table in
+Three rules: shorthand that doesn't break reading flow is free; **+1** for each break in linear
+flow; **+nesting** when a flow-breaker sits inside other flow-breakers. Full table in
 [docs/scoring-rules.md](docs/scoring-rules.md).
 
 <details>
@@ -360,12 +358,12 @@ Files with no top-level logic report nothing, so this costs you no noise. Turn i
 </details>
 
 <details>
-<summary><b>How it differs from eslint-plugin-sonarjs</b></summary>
+<summary><b>Choices that move the numbers</b></summary>
 
-Numbers from bonsai-lint will not always match `eslint-plugin-sonarjs`. Every difference is a
+Numbers from bonsai-lint will not always match another implementation. Every difference is a
 deliberate choice, and this is all of them, so you can judge which suits you:
 
-| | `eslint-plugin-sonarjs` | bonsai-lint |
+| | Elsewhere | bonsai-lint |
 | --- | --- | --- |
 | Closure inside a function | scored separately, from zero | carries the nesting it sits at |
 | `??`, `a?.b` | +1 | free |
