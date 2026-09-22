@@ -120,6 +120,11 @@ jobs:
       - name: Fetch dependencies
         run: cargo fetch
 
+      # Must precede clippy, not just the build: the crate's `[patch.crates-io]` points into
+      # vendor/, so cargo cannot resolve the manifest at all until this has run.
+      - name: Vendor the patched grammars
+        run: python3 crates/bonsai-wasm/vendor-grammars.py
+
       # Its own workspace, so the root `cargo fmt --all` and clippy jobs cannot see it.
       - name: Format and lint
         run: |

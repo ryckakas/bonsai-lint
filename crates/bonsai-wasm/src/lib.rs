@@ -11,6 +11,7 @@
 
 use std::alloc::{alloc, dealloc, Layout};
 use std::cell::RefCell;
+use std::fmt::Write as _;
 
 use bonsai_core::{Finding, LanguageDescriptor};
 
@@ -167,7 +168,10 @@ fn escape_into(text: &str, out: &mut String) {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c if (c as u32) < 0x20 => {
+                // Writing into a String is infallible, so there is no error case to handle.
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
             c => out.push(c),
         }
     }
