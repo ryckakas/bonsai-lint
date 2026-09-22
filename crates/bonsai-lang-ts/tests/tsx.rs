@@ -1,4 +1,4 @@
-//! JSX-specific behaviour. The reference JavaScript analyser exempts short-circuit rendering;
+//! JSX-specific behaviour. Other implementations exempt short-circuit rendering;
 //! we count it, because it is a branch and a ternary in the same position unambiguously scores.
 
 mod common;
