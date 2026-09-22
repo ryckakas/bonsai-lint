@@ -140,8 +140,8 @@ fn compiled_tsx() -> &'static Language {
     })
 }
 
-/// `??` is deliberately absent, matching the specification's treatment of null-coalescing as
-/// shorthand. The reference JavaScript analyser scores it, which is a documented divergence.
+/// `??` is deliberately absent: null-coalescing is shorthand, not a break in flow. Other
+/// implementations score it, which is a documented divergence.
 /// `in` and `instanceof` are comparisons, not flow breaks.
 fn normalize_logical_operator(operator: &str) -> Option<&'static str> {
     match operator {
@@ -151,7 +151,7 @@ fn normalize_logical_operator(operator: &str) -> Option<&'static str> {
     }
 }
 
-/// `break outer;` is the specification's labelled break; a plain `break` reads linearly.
+/// `break outer;` is a labelled break; a plain `break` reads linearly.
 fn is_penalized_jump(node: Node<'_>, _src: &[u8]) -> bool {
     node.child_by_field_name("label").is_some()
 }

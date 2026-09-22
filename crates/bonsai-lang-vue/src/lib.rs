@@ -2,8 +2,8 @@ mod sfc;
 
 use bonsai_core::{Language, LanguageDescriptor, LanguageSpec};
 
-/// Only the script blocks score. A `v-if` chain is branching, but the specification was not
-/// written against templates and counting them would make a component incomparable with the same
+/// Only the script blocks score. A `v-if` chain is branching, but the metric is defined over
+/// script code, and counting a template would make a component incomparable with the same
 /// logic written in TypeScript.
 pub static VUE: LanguageDescriptor = LanguageDescriptor {
     id: "vue",
