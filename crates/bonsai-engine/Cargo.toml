@@ -10,7 +10,8 @@ homepage.workspace = true
 readme = "../../README.md"
 
 [features]
-default = ["php", "ts", "vue"]
+default = ["php", "ts", "vue", "go"]
+go = ["dep:bonsai-lang-go"]
 php = ["dep:bonsai-lang-php"]
 ts = ["dep:bonsai-lang-ts"]
 # Vue reuses the TypeScript spec, so it cannot be built without it.
@@ -18,6 +19,7 @@ vue = ["ts", "dep:bonsai-lang-vue"]
 
 [dependencies]
 bonsai-core = { workspace = true }
+bonsai-lang-go = { workspace = true, optional = true }
 bonsai-lang-php = { workspace = true, optional = true }
 bonsai-lang-ts = { workspace = true, optional = true }
 bonsai-lang-vue = { workspace = true, optional = true }

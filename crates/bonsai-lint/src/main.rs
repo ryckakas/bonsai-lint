@@ -16,7 +16,7 @@ use clap::{Parser as ClapParser, ValueEnum};
 #[command(
     name = "bonsai-lint",
     version,
-    about = "Cognitive complexity linter for PHP, JS, TS and Vue"
+    about = "Cognitive complexity linter for PHP, JS, TS, Vue and Go"
 )]
 #[allow(clippy::struct_excessive_bools)]
 struct Args {
@@ -44,7 +44,7 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     baseline: Option<PathBuf>,
 
-    /// Restrict the scan to these languages (`php`, `typescript`, `vue`)
+    /// Restrict the scan to these languages (`php`, `typescript`, `vue`, `go`)
     #[arg(long, value_delimiter = ',', value_name = "ID")]
     lang: Vec<String>,
 

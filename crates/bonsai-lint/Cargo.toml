@@ -1,6 +1,6 @@
 [package]
 name = "bonsai-lint"
-description = "Cognitive complexity linter for PHP, JavaScript, TypeScript and Vue, as a single static binary"
+description = "Cognitive complexity linter for PHP, JavaScript, TypeScript, Vue and Go, as a single static binary"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 readme = "../../README.md"
-keywords = ["linter", "static-analysis", "complexity", "php", "typescript"]
+keywords = ["linter", "complexity", "php", "typescript", "go"]
 categories = ["development-tools"]
 
 [[bin]]
@@ -16,7 +16,8 @@ name = "bonsai-lint"
 path = "src/main.rs"
 
 [features]
-default = ["php", "ts", "vue"]
+default = ["php", "ts", "vue", "go"]
+go = ["bonsai-engine/go"]
 php = ["bonsai-engine/php"]
 ts = ["bonsai-engine/ts"]
 vue = ["bonsai-engine/vue"]

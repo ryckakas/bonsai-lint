@@ -79,6 +79,7 @@ name = "bonsai-engine"
 version = "0.2.1"
 dependencies = [
  "bonsai-core",
+ "bonsai-lang-go",
  "bonsai-lang-php",
  "bonsai-lang-ts",
  "bonsai-lang-vue",

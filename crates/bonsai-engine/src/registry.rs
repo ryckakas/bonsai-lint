@@ -20,6 +20,8 @@ pub fn descriptors() -> &'static [&'static LanguageDescriptor] {
         }
         #[cfg(feature = "vue")]
         all.push(&bonsai_lang_vue::VUE);
+        #[cfg(feature = "go")]
+        all.push(&bonsai_lang_go::GO);
         all
     })
 }
