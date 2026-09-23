@@ -26,6 +26,7 @@ thread_local! {
 const LANG_TYPESCRIPT: u32 = 0;
 const LANG_PHP: u32 = 1;
 const LANG_VUE: u32 = 2;
+const LANG_GO: u32 = 3;
 
 // A raw `Layout` rather than `Vec::with_capacity`, because freeing has to name the exact
 // layout that was allocated and `with_capacity` only promises *at least* the requested size.
@@ -93,6 +94,7 @@ fn descriptor(language: u32) -> Option<&'static LanguageDescriptor> {
         LANG_TYPESCRIPT => Some(&bonsai_lang_ts::TYPESCRIPT),
         LANG_PHP => Some(&bonsai_lang_php::PHP),
         LANG_VUE => Some(&bonsai_lang_vue::VUE),
+        LANG_GO => Some(&bonsai_lang_go::GO),
         _ => None,
     }
 }
@@ -102,6 +104,9 @@ fn descriptor(language: u32) -> Option<&'static LanguageDescriptor> {
 /// reporting nothing for it would be baffling.
 fn analyze(source: &str, language: u32) -> Option<Vec<Finding>> {
     let descriptor = descriptor(language)?;
+    if descriptor.generated(source) {
+        return Some(Vec::new());
+    }
 
     // A language embedded in a host syntax — Vue — resolves its own grammar and the ranges
     // worth parsing. Everything else parses the whole buffer with one grammar.

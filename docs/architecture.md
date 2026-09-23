@@ -5,12 +5,14 @@
 ```text
 crates/
 ├── bonsai-core/        the scorer: parsed tree in, scores out. no I/O, no serde, no grammars
+├── bonsai-lang-go/     Go node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
 ├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
 ├── bonsai-engine/      registry, configuration, domains, baselines, the scan driver
 ├── bonsai-lint/        the CLI, producing the `bonsai-lint` binary
-└── bonsai-testkit/     the grammar contract harness, used by every language crate
+├── bonsai-testkit/     the grammar contract harness, used by every language crate
+└── bonsai-wasm/        the playground's WebAssembly bindings, a separate workspace
 ```
 
 `bonsai-core` depends on nothing but `tree-sitter`. It can be embedded without dragging in
@@ -36,10 +38,19 @@ forever.
 1. Add a crate with the grammar dependency and a `LanguageSpec`.
 2. Write a fixture that exercises every kind you declared, and wire up
    `GrammarFixture::assert_contract()`. It will tell you what you got wrong.
-3. Add a golden-score corpus under `tests/fixtures/`.
-4. Register the descriptor in `bonsai-engine/src/registry.rs` behind a cargo feature.
+3. Pin the scores in `tests/spec.rs`: tables of snippets asserted against stated totals, with
+   the same test names the other languages use, beside `naming.rs`, `suppression.rs` and
+   `toplevel.rs`.
+4. Register the descriptor in `bonsai-engine/src/registry.rs` behind a cargo feature, forwarded
+   by `bonsai-lint` and on in both `default` lists.
+5. Name the id in the CLI's `about` and `--lang` help, add the feature to the CI matrix, and give
+   it a `cli_<id>.rs` end-to-end suite. `cli_report.rs` lists every threshold key.
+6. Outside the workspace: a `LANG_` constant and a vendored grammar patch in `bonsai-wasm`, and
+   an activation event and `bonsai-lint.languages` entry in the extension.
 
-Most of the work is the fixture and the score corpus, not the spec.
+Most of the work is the fixture and the score corpus, not the spec. A grammar can still need a
+change in the walker when it produces a shape no earlier language did: Go's bare `else` block and
+its `if` initializer were both new.
 
 ### Languages embedded in a host syntax
 
@@ -83,6 +94,22 @@ compiled per grammar. The alternative, a `vue` feature inside `bonsai-lang-ts`, 
 `tree-sitter-html` in the dependency graph of every TypeScript build and introduce the first
 `#[cfg]` inside a language crate, where gating otherwise lives only in `bonsai-engine`.
 
+### Methods declared beside their type
+
+A Go method sits at file scope, not inside its type, so the container a class body supplies
+elsewhere comes from `Hooks::unit_receiver` instead: `func (s *Stack[T]) Push()` is keyed
+`Stack::Push`. The same hook names the receiver binding, which is what makes `s.Push()` a
+self-call, and a unit that has a receiver never treats a bare call of its own name as recursion,
+since Go cannot call a method without one.
+
+### Generated files
+
+`LanguageDescriptor::is_generated` lets a language recognise machine-written files by their
+contents. Go's convention is a `// Code generated … DO NOT EDIT.` line before the `package`
+clause. The check needs the source, so it runs on the worker after the read, and the file is then
+dropped uncounted, exactly as a `.min.js` that the planner never admits. `--stdin` and the wasm
+build apply the same check, so an editor showing a generated file agrees with CI.
+
 ### The grammar contract
 
 `GrammarFixture::assert_contract()` makes six assertions, because an id-indexed table has
@@ -97,8 +124,8 @@ failure modes a string match does not:
    is live;
 5. `id_for_node_kind` agrees with `kind_id` for every declared kind, so tree-sitter aliasing
    cannot make the whole table miss;
-6. every child under an `if`'s alternative field is an else or else-if kind, which a grammar can
-   break without renaming anything.
+6. every child under an `if`'s alternative field is an else or else-if kind, or a bare `if` as
+   Go's `else if` is, which a grammar can break without renaming anything.
 
 ## Building
 
@@ -116,7 +143,7 @@ CI runs exactly these on every pull request, plus the feature subsets below and 
 minimum supported Rust version. `cargo build --release` produces the binary users get.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
-subset — including none. CI builds all seven combinations.
+subset — including none. CI builds all nine combinations.
 
 ```bash
 cargo build -p bonsai-lint --no-default-features --features php

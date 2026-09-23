@@ -44,7 +44,8 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   `disambiguate` deliberately leaves declared duplicates alone, which is right for the report but
   leaves the baseline with an un-silenceable finding. Teaching `bound_name` to unwrap a sole
   object argument would give `Widget::setup` and fix both, at the cost of changing existing
-  baseline keys.
+  baseline keys. Go reaches the same collision through package-level tables: every row of
+  `map[string]*cmd{"hg": {run: func…}, "git": {run: func…}}` binds a literal to `run`.
 
 - **A domain cannot opt a language out.** Per-language thresholds work per domain, but there is
   no way to say that a domain is TypeScript only. The workaround is an `exclude` glob.
@@ -57,6 +58,5 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   would remove the stored tokens that have to be rotated when they expire.
 - **A long lived editor server.** The extension currently starts a process per analysis. A
   `--server` mode reusing the `--stdin` input shape would cut the per keystroke cost.
-- **Go support.** Around 0.2 MB of additional grammar, and the scorer already generalises.
 - **Type aware linting for the extension.** The TypeScript source has no linter beyond `tsc`.
   Its async surface is where `no-floating-promises` would earn its place.

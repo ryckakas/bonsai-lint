@@ -44,6 +44,13 @@ PATCH = """
 
 GRAMMARS = [
     {
+        "crate": "tree-sitter-go",
+        "version": "0.25",
+        "build": "bindings/rust/build.rs",
+        "anchor": '    c_config.std("c11").include(src_dir);\n',
+        "config": "c_config",
+    },
+    {
         "crate": "tree-sitter-typescript",
         "version": "0.23",
         "build": "bindings/rust/build.rs",

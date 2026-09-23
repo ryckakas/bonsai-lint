@@ -5,9 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 `bonsai-lint` is a cognitive complexity linter written in Rust that reads PHP, JavaScript,
-TypeScript and Vue single-file components via tree-sitter grammars, without executing any of it.
-One static binary, no PHP or Node runtime required to run the analysis. It ships as a Cargo
-workspace plus an independent VS Code extension.
+TypeScript, Vue single-file components and Go via tree-sitter grammars, without executing any of
+it. One static binary, no PHP, Node or Go toolchain required to run the analysis. It ships as a
+Cargo workspace plus an independent VS Code extension.
 
 ## Commands
 
@@ -22,7 +22,7 @@ cargo build --release                                 # produces target/release/
 
 CI (`.github/workflows/ci.yml`) runs exactly the fmt/clippy/test commands above, plus a build
 matrix across Linux/macOS/Windows, a feature-combination build (`php`, `ts`, `php,ts`, `vue`,
-`ts,vue`, `php,ts,vue`, none — each
+`ts,vue`, `php,ts,vue`, `go`, `php,ts,vue,go`, none — each
 `cargo build -p bonsai-lint --no-default-features --features "<set>"`), and a
 build-only check on the MSRV read from `Cargo.toml` (`rust-version`). Match these locally before
 pushing rather than relying on CI to catch it.
@@ -47,12 +47,14 @@ npx --yes @vscode/vsce package --out /tmp/extension.vsix
 ```
 crates/
 ├── bonsai-core/        the scorer: parsed tree in, scores out. No I/O, no serde, no grammars.
+├── bonsai-lang-go/     Go node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
 ├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
 ├── bonsai-engine/      registry, configuration, domains, baselines, the scan driver
 ├── bonsai-lint/        the CLI, producing the `bonsai-lint` binary
-└── bonsai-testkit/     the grammar contract harness, used by every language crate
+├── bonsai-testkit/     the grammar contract harness, used by every language crate
+└── bonsai-wasm/        the playground's WebAssembly bindings, a separate workspace
 ```
 
 `bonsai-core` depends on nothing but `tree-sitter`, so it can be embedded without pulling in
@@ -76,10 +78,12 @@ The reasoning is in [docs/architecture.md](docs/architecture.md); don't collapse
 reading it.
 
 **Adding a language** means: a new crate with the grammar dependency and a `LanguageSpec`; a
-fixture exercising every declared kind, wired through `GrammarFixture::assert_contract()`; a
-golden-score corpus under `tests/fixtures/`; and registering the descriptor in
-`bonsai-engine/src/registry.rs` behind a cargo feature. Most of the effort is the fixture and
-score corpus, not the spec itself.
+fixture exercising every declared kind, wired through `GrammarFixture::assert_contract()`; the
+scores pinned as `(snippet, total)` tables in `tests/spec.rs`; and registering the descriptor in
+`bonsai-engine/src/registry.rs` behind a cargo feature. The full checklist (CLI help, CI matrix,
+`cli_<id>.rs`, wasm, extension) is in [docs/architecture.md](docs/architecture.md). Most of the
+effort is the fixture and score tables, not the spec itself, unless the grammar produces a shape
+the walker has never met, as Go's bare `else` block and `if` initializer did.
 
 **`GrammarFixture::assert_contract()`** (`bonsai-testkit`) makes six assertions per language,
 because an id-indexed table fails in ways a string match doesn't: the fixture parses cleanly; the
@@ -87,7 +91,8 @@ spec compiles against the grammar (resolves every kind/field); every declared ki
 produced by the fixture, not merely present in the grammar's symbol table; where a grammar
 renamed a kind across releases and both spellings are declared, one is live; `id_for_node_kind`
 agrees with `kind_id` for every declared kind (tree-sitter aliasing can otherwise make the whole
-table miss silently); and every child under an `if`'s alternative field is an else/else-if kind.
+table miss silently); and every child under an `if`'s alternative field is an else/else-if kind,
+or a bare `if` (Go's `else if`).
 When touching a `LanguageSpec` or bumping a `tree-sitter-*` grammar version, run this contract
 first — it is designed to tell you exactly what broke.
 
@@ -114,6 +119,9 @@ them when touching scan/domain/path code:
   batch. Warnings and errors have no such sort: they accumulate in merge order alone. So a broken
   replay shows up on stderr, not in the report, and a test for it needs several invalid-UTF-8
   files, not one.
+- A file its language marks as generated (`LanguageDescriptor::is_generated`, Go's
+  `// Code generated … DO NOT EDIT.` header) is read, then dropped on the worker without being
+  counted, like a `.min.js` the plan never admits; `--stdin` answers it with an empty report.
 - Invalid UTF-8 is decoded leniently with a warning (replacement bytes land in strings/comments,
   which don't score); an unreadable file is a hard error and fails the run.
 - A closed stdout ends output quietly and leaves the exit code to the findings, not to the write
@@ -129,6 +137,9 @@ projects on crates.io/npm/VS Code Marketplace).
 - `bonsai-lang-php` and `bonsai-lang-ts` each have `tests/grammar.rs` (the contract, via
   `bonsai-testkit`), plus `naming.rs`, `spec.rs`, `suppression.rs`, `toplevel.rs`, and for TS,
   `tsx.rs`. Fixtures live in `tests/fixtures/`, shared helpers in `tests/common/mod.rs`.
+- `bonsai-lang-go` has the same five suites plus `generated.rs` (the generated-file header rule).
+  Its `common::findings` also rejects a snippet that does not parse cleanly, since Go syntax is
+  easy to get subtly wrong inside a string.
 - `bonsai-lang-vue` reuses the TypeScript spec under a second id, so it has no naming or scoring
   suite of its own. It has `grammar.rs` (the spec against both TS grammars), `host_grammar.rs`
   (the HTML grammar's kinds, which nothing else would fail on), `sfc.rs` (block extraction) and
@@ -136,10 +147,11 @@ projects on crates.io/npm/VS Code Marketplace).
 - `bonsai-engine` integration tests (`baseline.rs`, `config.rs`, `scan.rs`) exercise config
   discovery, domains, and baseline read/write against real temp directories.
 - `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area (`cli_report.rs`,
-  `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`) over a
+  `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`,
+  `cli_go.rs`) over a
   shared `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in
   a fifth of a second while `cli_parallel` is the slow one.
-- Cross-language parity (same logic in PHP and TypeScript scoring identically) is a tested
+- Cross-language parity (same logic in PHP, TypeScript and Go scoring identically) is a tested
   property, not an assumption — see the README's "same code scores the same" example when
   changing shared scoring logic in `bonsai-core`.
 
@@ -175,7 +187,7 @@ Azure DevOps PAT).
 publishes it as that release's notes, so a missing or misnamed section ships an empty release
 page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY-MM-DD`.
 
-A release bumps `version` in the root `Cargo.toml` **and** the six internal path dependencies
+A release bumps `version` in the root `Cargo.toml` **and** the seven internal path dependencies
 beside it, which must match or cargo refuses to build. The npm package and Homebrew formula take
 their version from that one field; neither is edited by hand. The extension is bumped afterwards,
 because its lockfile can only pin a CLI version that is already published.

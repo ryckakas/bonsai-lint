@@ -8,9 +8,9 @@
 your syntax trees.*
 
 A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript,
-TypeScript and Vue single-file components. Use it for any one of them, or all at once. No PHP
-runtime, no Node runtime, no Composer entry, nothing added to your project. Scans **1.26 million
-lines in 0.8 seconds**.
+TypeScript, Vue single-file components and Go. Use it for any one of them, or all at once. No
+PHP runtime, no Node runtime, no Go toolchain, no Composer entry, nothing added to your project.
+Scans **1.26 million lines in 0.8 seconds**.
 
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bonsai-lint?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/bonsai-lint)
@@ -25,7 +25,7 @@ lines in 0.8 seconds**.
   both and they score on one metric in one pass, and the same logic written in either language
   gets the same number. That is tested.
 - **No runtime, no plugins, no conflicts.** Nothing to wire into a PHPStan or ESLint setup, no
-  plugin versions to keep in step, no Composer entry. A 6 MB binary, 1 MB to download, or
+  plugin versions to keep in step, no Composer entry. A 6.6 MB binary, 1 MB to download, or
   `npx bonsai-lint` and install nothing at all.
 - **Never executes your code.** Syntax-only: no autoloader, no reflection, no module
   resolution. Safe to point at third-party or untrusted source.
@@ -53,7 +53,8 @@ curl -LsSf https://github.com/ryckakas/bonsai-lint/releases/latest/download/bons
 ```
 
 The npm package fetches the prebuilt binary for your platform on install. Nothing is compiled,
-and Node only launches it. The analysis itself is pure Rust.
+and Node only launches it. The analysis itself is pure Rust. A Go project needs nothing
+Go-specific: Homebrew or the installer script puts the same binary on the path.
 
 ## Use it
 
@@ -63,7 +64,7 @@ bonsai-lint --over 10 src/           # stricter; `--over php=10,typescript=20` p
 bonsai-lint --all src/               # every unit, ranked
 bonsai-lint --format json src/       # for editors and CI
 bonsai-lint --write-baseline src/    # record today's findings, exit 0
-bonsai-lint --lang php src/          # one language only: `php`, `typescript` or `vue`
+bonsai-lint --lang php src/          # one language only: `php`, `typescript`, `vue` or `go`
 ```
 
 <details>
@@ -96,6 +97,7 @@ bonsai-lint --format json .
 ```json
 {
   "thresholds": {
+    "go": 15,
     "php": 15,
     "typescript": 15,
     "vue": 15
@@ -155,8 +157,10 @@ cannot read what it was pointed at must not report success.
 | `.ts`, `.mts`, `.cts` | TypeScript | `typescript` |
 | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
 | `.vue` | the `<script>` blocks only | `vue` |
+| `.go` | Go | `go` |
 | `*.d.ts`, `*.d.mts`, `*.d.cts` | skipped, signatures only | |
 | `*.min.js`, `*.min.mjs`, `*.min.cjs` | skipped, generated output | |
+| `.go` headed `// Code generated … DO NOT EDIT.` | skipped, generated output | |
 
 The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
 `typescript` covers every JavaScript and TypeScript file however it is parsed. An id that is not
@@ -167,6 +171,15 @@ holds only signatures so every unit scores zero, and the second is generated out
 body rolls up into one unit nobody will refactor. The skipped names are a list of whole suffixes
 in `registry::UNSCORED`, so `app.mini.js`, `jasmine.js` and a file simply called `min.js` are all
 still scanned.
+
+Go marks generated code in the file rather than its name, so a `.go` file is read first and then
+turned away if a `// Code generated … DO NOT EDIT.` line comes before its `package` clause, which
+is the convention the Go toolchain itself follows. Such a file is neither scored nor counted, on
+disk and through `--stdin` alike. `vendor/` and `testdata/` get no special treatment: if a
+repository commits them, `exclude = ["vendor/**", "**/testdata/**"]` keeps them out.
+
+A Go method is keyed by its receiver type, so `func (s *Stack[T]) Push()` reports as
+`Stack::Push` and keeps its baseline entry when the receiver switches between pointer and value.
 
 `.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
 annotations are the one thing this misparses.
@@ -238,7 +251,7 @@ threshold = 20
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `threshold` | `15` | Fail above this score. A `[php]`, `[typescript]` or `[vue]` section overrides it per language. |
+| `threshold` | `15` | Fail above this score. A `[php]`, `[typescript]`, `[vue]` or `[go]` section overrides it per language. |
 | `exclude` | `[]` | Globs, relative to the config's own directory. `*` stops at `/` and `**` crosses it, as in `.gitignore`. |
 | `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
 | `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |
@@ -402,6 +415,7 @@ threshold unless you set one, so the editor shows exactly what CI would fail on,
 | Corpus | Time |
 | --- | --- |
 | 1.26 million lines of PHP, JavaScript and TypeScript | **0.77s** |
+| 2.85 million lines of Go, its own standard library | **0.79s** |
 
 Roughly **1.6 million lines per second**, across three languages, in one pass, on a ten-core
 M5. No warm-up, no daemon, no language server. One process, start to finish.
@@ -411,7 +425,7 @@ scan on one core, at 3.15s. The report is byte for byte identical either way —
 collected and ranked after the scan, never printed as they arrive — so a diff of two runs is
 always a real change, not a scheduling artefact.
 
-One binary, 6.3 MB on disk and about 1 MB to download, with every language built in. There is
+One binary, 6.6 MB on disk and about 1 MB to download, with every language built in. There is
 no variant to choose and nothing to enable.
 
 ## Documentation

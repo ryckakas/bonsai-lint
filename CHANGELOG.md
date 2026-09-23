@@ -11,6 +11,33 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- **Go.** `.go` files are scanned under a new `go` language id, so `--lang go`, `--over go=N` and
+  a `[go]` section in the config all work. A method is keyed by its receiver type, so
+  `func (s *Stack[T]) Push()` reports as `Stack::Push` and its baseline entry survives switching
+  between a pointer and a value receiver. A call through the receiver, `s.Push()`, counts as
+  recursion; a bare `Push()` inside the method names a free function or builtin and does not. An
+  `if` or `switch` initializer is scored as part of the header, `select` costs one increment like
+  a `switch`, and `defer`, `go` and `fallthrough` are free. Package-level function literals are
+  units named by their binding, and a file's repeated `init` functions are told apart as `init`,
+  `init~2`. Built behind a `go` cargo feature, on by default.
+
+  A file with a `// Code generated … DO NOT EDIT.` line before its `package` clause is skipped,
+  neither scored nor counted, on disk and through `--stdin`: it is how the Go toolchain itself
+  recognises generated code. `vendor/` and `testdata/` are not special-cased; exclude them if a
+  repository commits them.
+
+  Upgrading a repository that contains `.go` files will report findings that were previously
+  invisible. Run `bonsai-lint --write-baseline .` to adopt them.
+
+### Changed
+
+- For embedders of `bonsai-core`: `Hooks` gains `unit_receiver` and `LanguageDescriptor` gains
+  `is_generated`, which the existing languages leave empty. The walker now scores an `if`
+  initializer and treats an `if` placed directly under an alternative as an `else if`. Only Go
+  produces either shape, so no PHP, JavaScript, TypeScript or Vue score moves.
+
 ## [0.2.1] - 2026-09-22
 
 ### Changed

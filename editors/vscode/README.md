@@ -1,6 +1,6 @@
 # bonsai-lint for VS Code
 
-Flags functions that are hard to read, across PHP, JavaScript, TypeScript and Vue. Powered by
+Flags functions that are hard to read, across PHP, JavaScript, TypeScript, Vue and Go. Powered by
 [bonsai-lint](https://github.com/ryckakas/bonsai-lint), a single Rust binary, with no PHP
 runtime and no Node runtime involved in the analysis.
 
@@ -37,7 +37,7 @@ to the `bonsai-lint` output channel, and the first occurrence of each problem po
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `bonsai-lint.enable` | `true` | Report cognitive complexity. |
-| `bonsai-lint.languages` | all six | Editor language ids to analyse. |
+| `bonsai-lint.languages` | all seven | Editor language ids to analyse. |
 | `bonsai-lint.path` | `""` | Path to a binary, absolute or relative to the workspace folder. Empty uses the bundled one, then `PATH`. |
 | `bonsai-lint.threshold` | unset | Force one whole-number threshold. **Leave unset** so the repository wins. |
 
