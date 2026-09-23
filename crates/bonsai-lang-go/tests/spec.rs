@@ -75,15 +75,14 @@ fn else_branches_take_a_flat_increment() {
     ]);
 }
 
-/// Pins the `statement_list` inside a 0.25 `block`: without it `walk_else` would take the lone
-/// `if` for an else-if and score this 2.
+/// An `if` alone inside the else braces is nested code, not an else-if, because the whole else
+/// block is walked one level deeper.
 #[test]
 fn an_if_alone_inside_else_braces_still_nests() {
     assert_scores(&[("if a { f() } else { if b { g() } }", 4)]);
 }
 
-/// The other side of the same dependency: the whole else body is walked, not its first
-/// statement.
+/// Every statement in the else block is scored, not just the first.
 #[test]
 fn an_else_block_is_scored_whole() {
     assert_scores(&[("if a { f() } else { g(); if b { h() } }", 4)]);

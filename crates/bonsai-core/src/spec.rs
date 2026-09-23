@@ -3,6 +3,8 @@ use std::fmt::Debug;
 use tree_sitter::Node;
 
 use crate::finding::{Callee, UnitName, UnitScope};
+use crate::language::Language;
+use crate::walk::IfPart;
 
 #[derive(Debug)]
 pub struct LanguageSpec {
@@ -97,5 +99,11 @@ pub trait Hooks: Sync + Debug {
 
     fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
         node
+    }
+
+    /// Hands `visit` the parts of an if or else-if node, for a grammar whose chains the field
+    /// names alone cannot describe.
+    fn if_parts<'t>(&self, node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
+        crate::walk::if_parts_by_fields(node, lang, visit);
     }
 }

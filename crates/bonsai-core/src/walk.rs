@@ -94,79 +94,86 @@ fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
     walk_children(node, nesting, cx, score);
 }
 
+/// One piece of an `if`, as its language reads the tree. What each piece costs is decided here,
+/// in core, so every language scores a chain the same way however its grammar shapes it.
+#[derive(Debug, Clone, Copy)]
+pub enum IfPart<'t> {
+    /// Scored at the if's own depth.
+    Header(Node<'t>),
+    /// Scored one level deeper.
+    Then(Node<'t>),
+    /// The next link of the chain, read by `if_parts` in turn and scored a flat +1.
+    ElseIf(Node<'t>),
+    /// +1, with its body one level deeper.
+    Else(Option<Node<'t>>),
+    /// Walked at the if's depth. The grammar contract fails on it, naming the kind.
+    Unrecognised(Node<'t>),
+}
+
 /// `flat` marks an `if` that is really the tail of an `else if`, which the spec scores as a
 /// single flat +1 so that long chains aren't punished for depth.
 fn walk_if(node: Node<'_>, nesting: u32, flat: bool, cx: &WalkCx<'_>, score: &mut u32) {
     *score += if flat { 1 } else { 1 + nesting };
+    cx.lang.spec.hooks.if_parts(node, cx.lang, &mut |part| {
+        score_if_part(part, nesting, cx, score);
+    });
+}
 
-    let lang = cx.lang;
-    walk_if_header(node, nesting, cx, score);
+fn score_if_part(part: IfPart<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
+    match part {
+        IfPart::Header(node) | IfPart::Unrecognised(node) => walk(node, nesting, cx, score),
+        IfPart::Then(node) => walk(node, nesting + 1, cx, score),
+        IfPart::ElseIf(node) => walk_if(node, nesting, true, cx, score),
+        IfPart::Else(None) => *score += 1,
+        IfPart::Else(Some(body)) => {
+            *score += 1;
+            walk(body, nesting + 1, cx, score);
+        }
+    }
+}
+
+/// Reads an if-chain through the spec's field names and else/else-if kinds, which is how a
+/// language reads it unless its hooks override `if_parts`. Public so an override can defer to it.
+pub fn if_parts_by_fields<'t>(node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
+    if let Some(condition) = field(node, lang.fields.condition) {
+        visit(IfPart::Header(condition));
+    }
+    if lang.role(node) == Role::ElseIf {
+        if let Some(body) = field(node, lang.fields.body) {
+            visit(IfPart::Then(body));
+        }
+        return;
+    }
+
     if let Some(then) = field(node, lang.fields.if_then) {
-        walk(then, nesting + 1, cx, score);
+        visit(IfPart::Then(then));
     }
 
     let Some(alternative) = lang.fields.if_alternative else {
         return;
     };
-
     let mut cursor = node.walk();
     for alt in node.children_by_field_id(alternative, &mut cursor) {
-        match lang.role(alt) {
-            Role::ElseIf => walk_else_if(alt, nesting, cx, score),
-            Role::Else => walk_else(alt, nesting, cx, score),
-            // Go has no else node: an `else if` is the alternative itself.
-            Role::If => walk_if(alt, nesting, true, cx, score),
-            _ => walk(alt, nesting, cx, score),
-        }
+        visit(alternative_part(alt, lang));
     }
 }
 
-/// Go's `if err := f(); err != nil` runs an initializer beside the condition. Both are header,
-/// scored at the if's own depth.
-fn walk_if_header(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
-    let condition = cx.lang.fields.condition;
-    let mut cursor = node.walk();
-    if !cursor.goto_first_child() {
-        return;
-    }
-    loop {
-        let id = cursor.field_id();
-        let is_header = id.is_some() && (id == condition || cx.lang.is_header_field(id));
-        if is_header && cursor.node().is_named() {
-            walk(cursor.node(), nesting, cx, score);
-        }
-        if !cursor.goto_next_sibling() {
-            break;
-        }
-    }
-}
-
-fn walk_else_if(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
-    *score += 1;
-    if let Some(condition) = field(node, cx.lang.fields.condition) {
-        walk(condition, nesting, cx, score);
-    }
-    if let Some(body) = field(node, cx.lang.fields.body) {
-        walk(body, nesting + 1, cx, score);
+fn alternative_part<'t>(alt: Node<'t>, lang: &Language) -> IfPart<'t> {
+    match lang.role(alt) {
+        Role::ElseIf => IfPart::ElseIf(alt),
+        Role::Else => else_part(alt, lang),
+        _ => IfPart::Unrecognised(alt),
     }
 }
 
 /// `else if` written as two words parses as an else clause wrapping an `if`. It must score the
-/// same as `elseif`, so the inner `if` takes the flat increment and the `else` adds nothing.
-/// Languages that wrap every chain link in an else clause reach each one through here.
-fn walk_else(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
-    let body = field(node, cx.lang.fields.else_body)
-        .or_else(|| first_significant_named_child(node, cx.lang));
-
+/// same as `elseif`, so the inner `if` is the next link and the `else` adds nothing.
+fn else_part<'t>(node: Node<'t>, lang: &Language) -> IfPart<'t> {
+    let body =
+        field(node, lang.fields.else_body).or_else(|| first_significant_named_child(node, lang));
     match body {
-        Some(inner) if cx.lang.role(inner) == Role::If => {
-            walk_if(inner, nesting, true, cx, score);
-        }
-        Some(inner) => {
-            *score += 1;
-            walk(inner, nesting + 1, cx, score);
-        }
-        None => *score += 1,
+        Some(inner) if lang.role(inner) == Role::If => IfPart::ElseIf(inner),
+        body => IfPart::Else(body),
     }
 }
 

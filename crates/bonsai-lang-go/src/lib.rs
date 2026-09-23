@@ -1,7 +1,9 @@
+use std::num::NonZeroU16;
+
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
-    Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
-    UnitScope,
+    Callee, FieldNames, Hooks, IfPart, KindSets, Language, LanguageDescriptor, LanguageSpec,
+    UnitName, UnitScope,
 };
 use tree_sitter::Node;
 
@@ -36,9 +38,8 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         nesting_function: &["func_literal"],
         if_statement: &["if_statement"],
         else_if_clause: &[],
-        // Go has no else node: the alternative is the block itself, whose `statement_list` is
-        // the body `walk_else` unwraps to.
-        else_clause: &["block"],
+        // Go has no else node: `if_parts` reads the block or `if` under the alternative.
+        else_clause: &[],
         nesting_control: &[
             "for_statement",
             "expression_switch_statement",
@@ -98,6 +99,44 @@ impl Hooks for GoHooks {
     fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
         suppression_anchor(node)
     }
+
+    fn if_parts<'t>(&self, node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
+        if_parts(node, lang, visit);
+    }
+}
+
+/// `if err := f(); err != nil` runs its initializer beside the condition, so both are header.
+/// The alternative is either the chain's next `if` or the else block itself.
+fn if_parts<'t>(node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
+    let mut cursor = node.walk();
+    if !cursor.goto_first_child() {
+        return;
+    }
+    loop {
+        if let Some(part) = if_part(cursor.field_id(), cursor.node(), lang) {
+            visit(part);
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+}
+
+fn if_part<'t>(field: Option<NonZeroU16>, child: Node<'t>, lang: &Language) -> Option<IfPart<'t>> {
+    if field.is_none() || !child.is_named() {
+        return None;
+    }
+    if field == lang.fields.if_then {
+        return Some(IfPart::Then(child));
+    }
+    if field == lang.fields.if_alternative {
+        return Some(match child.kind() {
+            "if_statement" => IfPart::ElseIf(child),
+            "block" => IfPart::Else(Some(child)),
+            _ => IfPart::Unrecognised(child),
+        });
+    }
+    (field == lang.fields.condition || lang.is_header_field(field)).then_some(IfPart::Header(child))
 }
 
 /// Go's convention (<https://go.dev/s/generatedcode>) as `go/ast.IsGenerated` reads it: a

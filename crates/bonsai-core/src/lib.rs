@@ -13,6 +13,7 @@ pub use finding::{
 };
 pub use language::{Flags, KindInfo, Language, Role, SpecErrors};
 pub use spec::{FieldNames, Hooks, KindSets, LanguageSpec};
+pub use walk::IfPart;
 
 /// What the registry stores for a file type. Compilation is memoised behind
 /// [`compiled_once!`], so the facade never names a grammar crate's types.
