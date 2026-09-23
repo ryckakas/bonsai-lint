@@ -1,6 +1,6 @@
 # bonsai-lint
 
-![bonsai-lint: cognitive complexity linter for PHP, JavaScript and TypeScript](docs/images/cover-hero.png)
+![bonsai-lint: cognitive complexity linter for PHP, JavaScript, TypeScript and Go](docs/images/cover-hero.jpg)
 
 **Find the code that's hard to read, in seconds, in one project or a whole monorepo.**
 
