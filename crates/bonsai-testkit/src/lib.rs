@@ -114,8 +114,9 @@ impl GrammarFixture {
         );
     }
 
-    /// The walker assumes every child under an `if`'s alternative field is an else or else-if
-    /// clause. A grammar can break that without renaming anything.
+    /// The walker assumes every child under an `if`'s alternative field is an else clause, an
+    /// else-if clause, or a bare `if` (Go's else-if). A grammar can break that without renaming
+    /// anything.
     fn assert_if_alternatives_are_else_kinds(&self, tree: &tree_sitter::Tree) {
         let language = self
             .spec
@@ -186,7 +187,7 @@ fn collect_odd_alternatives(
     let mut cursor = node.walk();
     let odd = node
         .children_by_field_id(alternative, &mut cursor)
-        .filter(|alt| !matches!(language.role(*alt), Role::Else | Role::ElseIf))
+        .filter(|alt| !matches!(language.role(*alt), Role::Else | Role::ElseIf | Role::If))
         .map(|alt| alt.kind().to_string());
     offenders.extend(odd);
 }

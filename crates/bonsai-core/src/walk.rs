@@ -1,5 +1,6 @@
 use tree_sitter::Node;
 
+use crate::finding::UnitReceiver;
 use crate::language::{field, Flags, Language, Role};
 
 pub struct WalkCx<'a> {
@@ -7,6 +8,7 @@ pub struct WalkCx<'a> {
     pub src: &'a [u8],
     pub unit: &'a str,
     pub container: Option<&'a str>,
+    pub receiver: Option<&'a UnitReceiver>,
     /// Set only for the top-level pass. Inside a unit body a nested function-like rolls up, but
     /// at file scope it is a unit in its own right and `collect` already reports it, so counting
     /// it here as well would double it.
@@ -99,9 +101,7 @@ fn walk_if(node: Node<'_>, nesting: u32, flat: bool, cx: &WalkCx<'_>, score: &mu
     *score += if flat { 1 } else { 1 + nesting };
 
     let lang = cx.lang;
-    if let Some(condition) = field(node, lang.fields.condition) {
-        walk(condition, nesting, cx, score);
-    }
+    walk_if_header(node, nesting, cx, score);
     if let Some(then) = field(node, lang.fields.if_then) {
         walk(then, nesting + 1, cx, score);
     }
@@ -115,7 +115,29 @@ fn walk_if(node: Node<'_>, nesting: u32, flat: bool, cx: &WalkCx<'_>, score: &mu
         match lang.role(alt) {
             Role::ElseIf => walk_else_if(alt, nesting, cx, score),
             Role::Else => walk_else(alt, nesting, cx, score),
+            // Go has no else node: an `else if` is the alternative itself.
+            Role::If => walk_if(alt, nesting, true, cx, score),
             _ => walk(alt, nesting, cx, score),
+        }
+    }
+}
+
+/// Go's `if err := f(); err != nil` runs an initializer beside the condition. Both are header,
+/// scored at the if's own depth.
+fn walk_if_header(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
+    let condition = cx.lang.fields.condition;
+    let mut cursor = node.walk();
+    if !cursor.goto_first_child() {
+        return;
+    }
+    loop {
+        let id = cursor.field_id();
+        let is_header = id.is_some() && (id == condition || cx.lang.is_header_field(id));
+        if is_header && cursor.node().is_named() {
+            walk(cursor.node(), nesting, cx, score);
+        }
+        if !cursor.goto_next_sibling() {
+            break;
         }
     }
 }
@@ -132,7 +154,7 @@ fn walk_else_if(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) 
 
 /// `else if` written as two words parses as an else clause wrapping an `if`. It must score the
 /// same as `elseif`, so the inner `if` takes the flat increment and the `else` adds nothing.
-/// Languages without an else-if clause kind reach every chain link through here.
+/// Languages that wrap every chain link in an else clause reach each one through here.
 fn walk_else(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
     let body = field(node, cx.lang.fields.else_body)
         .or_else(|| first_significant_named_child(node, cx.lang));
@@ -278,17 +300,23 @@ fn is_recursive_call(node: Node<'_>, cx: &WalkCx<'_>) -> bool {
         return false;
     };
 
-    if let Some(receiver) = callee.receiver {
-        let Ok(text) = receiver.utf8_text(cx.src) else {
-            return false;
-        };
-        if !(cx.lang.spec.hooks.is_self_receiver)(text, cx.container) {
-            return false;
-        }
-    }
+    let through_self = match callee.receiver {
+        Some(receiver) => receiver
+            .utf8_text(cx.src)
+            .is_ok_and(|text| is_self(text, cx)),
+        // A method that declares its receiver can only reach itself through it, so a bare call
+        // of the same name is a free function.
+        None => cx.receiver.is_none(),
+    };
 
-    callee
-        .name
-        .utf8_text(cx.src)
-        .is_ok_and(|text| text == cx.unit)
+    through_self
+        && callee
+            .name
+            .utf8_text(cx.src)
+            .is_ok_and(|text| text == cx.unit)
+}
+
+fn is_self(text: &str, cx: &WalkCx<'_>) -> bool {
+    cx.receiver.and_then(|receiver| receiver.binding.as_deref()) == Some(text)
+        || (cx.lang.spec.hooks.is_self_receiver)(text, cx.container)
 }

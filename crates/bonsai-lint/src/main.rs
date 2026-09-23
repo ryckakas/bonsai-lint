@@ -276,6 +276,9 @@ fn scan_stdin(
     }
 
     let source = decode(bytes, &path, &mut outcome.warnings);
+    if descriptor.generated(&source) {
+        return Ok(outcome);
+    }
     let key_path = normalize_key(&absolute, &domain.root);
 
     let shown = display_path(&path);

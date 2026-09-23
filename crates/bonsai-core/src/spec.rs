@@ -1,6 +1,6 @@
 use tree_sitter::Node;
 
-use crate::finding::{Callee, UnitName};
+use crate::finding::{Callee, UnitName, UnitReceiver};
 
 #[derive(Debug)]
 pub struct LanguageSpec {
@@ -81,6 +81,7 @@ pub struct Hooks {
     pub resolve_callee: for<'t> fn(Node<'t>) -> Option<Callee<'t>>,
     pub is_self_receiver: fn(&str, Option<&str>) -> bool,
     pub unit_name: for<'t> fn(Node<'t>, &[u8]) -> UnitName,
+    pub unit_receiver: for<'t> fn(Node<'t>, &[u8]) -> Option<UnitReceiver>,
     pub container_name: for<'t> fn(Node<'t>, &[u8]) -> Option<String>,
     pub suppression_anchor: for<'t> fn(Node<'t>) -> Node<'t>,
 }

@@ -8,8 +8,8 @@ pub mod walk;
 
 pub use collect::{analyze, declaration_row, disambiguate};
 pub use finding::{
-    Callee, Finding, NameOrigin, Suppression, UnitName, ANONYMOUS_UNIT, SUPPRESSION_MARKER,
-    TOPLEVEL_UNIT,
+    Callee, Finding, NameOrigin, Suppression, UnitName, UnitReceiver, ANONYMOUS_UNIT,
+    SUPPRESSION_MARKER, TOPLEVEL_UNIT,
 };
 pub use language::{Flags, KindInfo, Language, Role, SpecErrors};
 pub use spec::{FieldNames, Hooks, KindSets, LanguageSpec};
@@ -24,6 +24,16 @@ pub struct LanguageDescriptor {
     pub compiled: fn() -> &'static Language,
     /// `None` parses the whole file with `compiled`.
     pub extract: Option<fn(&str) -> Extraction>,
+    /// A language's own convention for marking machine-written files, which are neither scored
+    /// nor counted: nobody refactors them, so a finding there is noise.
+    pub is_generated: Option<fn(&str) -> bool>,
+}
+
+impl LanguageDescriptor {
+    #[must_use]
+    pub fn generated(&self, source: &str) -> bool {
+        self.is_generated.is_some_and(|check| check(source))
+    }
 }
 
 /// Ranges are parsed against the whole file rather than an extracted substring, so node positions

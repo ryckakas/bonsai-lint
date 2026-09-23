@@ -11,6 +11,7 @@ pub static VUE: LanguageDescriptor = LanguageDescriptor {
     spec: &VUE_SPEC,
     compiled: compiled_tsx,
     extract: Some(sfc::extract),
+    is_generated: None,
 };
 
 pub static VUE_SPEC: LanguageSpec = bonsai_lang_ts::spec("vue");

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use tree_sitter::{Node, Tree};
 
-use crate::finding::{Finding, NameOrigin, Suppression, TOPLEVEL_UNIT};
+use crate::finding::{Finding, NameOrigin, Suppression, UnitReceiver, TOPLEVEL_UNIT};
 use crate::language::{field, Flags, Language, Role};
 use crate::suppression::{toplevel_suppression, unit_marker};
 use crate::walk::{score_node, score_nodes, WalkCx};
@@ -78,6 +78,8 @@ fn score_unit(
 ) -> Option<Finding> {
     field(node, lang.fields.body)?;
     let name = (lang.spec.hooks.unit_name)(node, src);
+    let receiver = (lang.spec.hooks.unit_receiver)(node, src);
+    let container = unit_container(container, receiver.as_ref());
     let marker = unit_marker(node, src, lang);
     if let Some((comment, _)) = &marker {
         claimed.insert(*comment);
@@ -88,14 +90,15 @@ fn score_unit(
             lang,
             src,
             unit: &name.text,
-            container,
+            container: container.as_deref(),
+            receiver: receiver.as_ref(),
             skip_units: false,
         };
         field(node, lang.fields.body).map_or(0, |body| score_node(body, &cx))
     };
 
     Some(Finding {
-        container: container.map(ToString::to_string),
+        container,
         name: name.text,
         origin: name.origin,
         line: declaration_row(node, lang) + 1,
@@ -103,6 +106,14 @@ fn score_unit(
         suppression: marker.map_or(Suppression::None, |(_, found)| found),
         language: lang.spec.id,
     })
+}
+
+fn unit_container(outer: Option<&str>, receiver: Option<&UnitReceiver>) -> Option<String> {
+    match (outer, receiver) {
+        (Some(outer), Some(receiver)) => Some(format!("{outer}::{}", receiver.type_name)),
+        (None, Some(receiver)) => Some(receiver.type_name.clone()),
+        (outer, None) => outer.map(ToString::to_string),
+    }
 }
 
 /// A declaration node starts at its attributes or decorators, not at its signature line.
@@ -141,6 +152,7 @@ fn toplevel_finding(
         src,
         unit: TOPLEVEL_UNIT,
         container: None,
+        receiver: None,
         skip_units: true,
     };
 

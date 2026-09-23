@@ -66,6 +66,14 @@ impl UnitName {
     }
 }
 
+/// A method declared beside its type rather than inside it: the type supplies the container a
+/// class body would, and a call through the binding is the method reaching itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnitReceiver {
+    pub type_name: String,
+    pub binding: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
     pub container: Option<String>,

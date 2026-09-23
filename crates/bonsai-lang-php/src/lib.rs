@@ -1,6 +1,7 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
+    UnitReceiver,
 };
 use tree_sitter::Node;
 
@@ -10,6 +11,7 @@ pub static PHP: LanguageDescriptor = LanguageDescriptor {
     spec: &SPEC,
     compiled,
     extract: None,
+    is_generated: None,
 };
 
 pub static SPEC: LanguageSpec = LanguageSpec {
@@ -63,6 +65,7 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         resolve_callee,
         is_self_receiver,
         unit_name,
+        unit_receiver,
         container_name,
         suppression_anchor,
     },
@@ -150,6 +153,10 @@ fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
         return UnitName::positional(name);
     }
     UnitName::anonymous()
+}
+
+fn unit_receiver(_node: Node<'_>, _src: &[u8]) -> Option<UnitReceiver> {
+    None
 }
 
 fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {

@@ -386,6 +386,11 @@ fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
         }
     };
 
+    // Read before it can be recognised, but then uncounted, like a `.min.js` the plan never admits.
+    if job.descriptor.generated(&source) {
+        return scored;
+    }
+
     scored.domain = Some(job.domain);
     scored.located = parsers
         .analyze(
