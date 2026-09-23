@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use tree_sitter::{Node, Tree};
 
-use crate::finding::{Finding, NameOrigin, Suppression, UnitReceiver, TOPLEVEL_UNIT};
+use crate::finding::{Finding, NameOrigin, Suppression, UnitScope, TOPLEVEL_UNIT};
 use crate::language::{field, Flags, Language, Role};
 use crate::suppression::{toplevel_suppression, unit_marker};
 use crate::walk::{score_node, score_nodes, WalkCx};
@@ -61,10 +61,14 @@ fn container_path(
     lang: &Language,
     outer: Option<&str>,
 ) -> Option<String> {
-    match (lang.spec.hooks.container_name(node, src), outer) {
-        (Some(name), Some(outer)) => Some(format!("{outer}::{name}")),
-        (Some(name), None) => Some(name),
-        (None, outer) => outer.map(ToString::to_string),
+    joined(outer, lang.spec.hooks.container_name(node, src))
+}
+
+fn joined(outer: Option<&str>, segment: Option<String>) -> Option<String> {
+    match (outer, segment) {
+        (Some(outer), Some(segment)) => Some(format!("{outer}::{segment}")),
+        (None, segment) => segment,
+        (outer, None) => outer.map(ToString::to_string),
     }
 }
 
@@ -78,8 +82,8 @@ fn score_unit(
 ) -> Option<Finding> {
     field(node, lang.fields.body)?;
     let name = lang.spec.hooks.unit_name(node, src);
-    let receiver = lang.spec.hooks.unit_receiver(node, src);
-    let container = unit_container(container, receiver.as_ref());
+    let mut unit_scope = lang.spec.hooks.unit_scope(node, src, container);
+    let container = joined(container, unit_scope.container.take());
     let marker = unit_marker(node, src, lang);
     if let Some((comment, _)) = &marker {
         claimed.insert(*comment);
@@ -90,8 +94,7 @@ fn score_unit(
             lang,
             src,
             unit: &name.text,
-            container: container.as_deref(),
-            receiver: receiver.as_ref(),
+            scope: &unit_scope,
             skip_units: false,
         };
         field(node, lang.fields.body).map_or(0, |body| score_node(body, &cx))
@@ -106,14 +109,6 @@ fn score_unit(
         suppression: marker.map_or(Suppression::None, |(_, found)| found),
         language: lang.spec.id,
     })
-}
-
-fn unit_container(outer: Option<&str>, receiver: Option<&UnitReceiver>) -> Option<String> {
-    match (outer, receiver) {
-        (Some(outer), Some(receiver)) => Some(format!("{outer}::{}", receiver.type_name)),
-        (None, Some(receiver)) => Some(receiver.type_name.clone()),
-        (outer, None) => outer.map(ToString::to_string),
-    }
 }
 
 /// A declaration node starts at its attributes or decorators, not at its signature line.
@@ -151,8 +146,7 @@ fn toplevel_finding(
         lang,
         src,
         unit: TOPLEVEL_UNIT,
-        container: None,
-        receiver: None,
+        scope: &UnitScope::default(),
         skip_units: true,
     };
 

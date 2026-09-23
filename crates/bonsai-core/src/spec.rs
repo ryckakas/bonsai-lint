@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use tree_sitter::Node;
 
-use crate::finding::{Callee, UnitName, UnitReceiver};
+use crate::finding::{Callee, UnitName, UnitScope};
 
 #[derive(Debug)]
 pub struct LanguageSpec {
@@ -86,13 +86,10 @@ pub trait Hooks: Sync + Debug {
 
     fn resolve_callee<'t>(&self, node: Node<'t>) -> Option<Callee<'t>>;
 
-    fn is_self_receiver(&self, text: &str, container: Option<&str>) -> bool;
-
     fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName;
 
-    fn unit_receiver(&self, _node: Node<'_>, _src: &[u8]) -> Option<UnitReceiver> {
-        None
-    }
+    /// `container` is the path of the containers enclosing the unit, already joined.
+    fn unit_scope(&self, node: Node<'_>, src: &[u8], container: Option<&str>) -> UnitScope;
 
     fn container_name(&self, _node: Node<'_>, _src: &[u8]) -> Option<String> {
         None

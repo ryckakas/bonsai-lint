@@ -1,14 +1,13 @@
 use tree_sitter::Node;
 
-use crate::finding::UnitReceiver;
+use crate::finding::UnitScope;
 use crate::language::{field, Flags, Language, Role};
 
 pub struct WalkCx<'a> {
     pub lang: &'a Language,
     pub src: &'a [u8],
     pub unit: &'a str,
-    pub container: Option<&'a str>,
-    pub receiver: Option<&'a UnitReceiver>,
+    pub scope: &'a UnitScope,
     /// Set only for the top-level pass. Inside a unit body a nested function-like rolls up, but
     /// at file scope it is a unit in its own right and `collect` already reports it, so counting
     /// it here as well would double it.
@@ -300,23 +299,16 @@ fn is_recursive_call(node: Node<'_>, cx: &WalkCx<'_>) -> bool {
         return false;
     };
 
-    let through_self = match callee.receiver {
-        Some(receiver) => receiver
-            .utf8_text(cx.src)
-            .is_ok_and(|text| is_self(text, cx)),
-        // A method that declares its receiver can only reach itself through it, so a bare call
-        // of the same name is a free function.
-        None => cx.receiver.is_none(),
-    };
+    let names_unit = callee
+        .name
+        .utf8_text(cx.src)
+        .is_ok_and(|text| text == cx.unit);
 
-    through_self
-        && callee
-            .name
-            .utf8_text(cx.src)
-            .is_ok_and(|text| text == cx.unit)
-}
-
-fn is_self(text: &str, cx: &WalkCx<'_>) -> bool {
-    cx.receiver.and_then(|receiver| receiver.binding.as_deref()) == Some(text)
-        || cx.lang.spec.hooks.is_self_receiver(text, cx.container)
+    names_unit
+        && match callee.receiver {
+            Some(receiver) => receiver
+                .utf8_text(cx.src)
+                .is_ok_and(|text| cx.scope.self_receivers.iter().any(|name| name == text)),
+            None => cx.scope.bare_call_recurses,
+        }
 }

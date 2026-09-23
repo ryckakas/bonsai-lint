@@ -1,7 +1,7 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
-    UnitReceiver,
+    UnitScope,
 };
 use tree_sitter::Node;
 
@@ -87,16 +87,12 @@ impl Hooks for GoHooks {
         resolve_callee(node)
     }
 
-    fn is_self_receiver(&self, text: &str, container: Option<&str>) -> bool {
-        is_self_receiver(text, container)
-    }
-
     fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
         unit_name(node, src)
     }
 
-    fn unit_receiver(&self, node: Node<'_>, src: &[u8]) -> Option<UnitReceiver> {
-        unit_receiver(node, src)
+    fn unit_scope(&self, node: Node<'_>, src: &[u8], _container: Option<&str>) -> UnitScope {
+        unit_scope(node, src)
     }
 
     fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
@@ -193,11 +189,6 @@ fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
     }
 }
 
-/// A method expression, `Stack.Push(s)`, names the method through its type.
-fn is_self_receiver(text: &str, container: Option<&str>) -> bool {
-    container == Some(text)
-}
-
 fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
     if let Some(name) = node
         .child_by_field_name("name")
@@ -224,21 +215,39 @@ fn is_repeatable(node: Node<'_>, name: &str) -> bool {
     name == "_" || (name == "init" && node.kind() == "function_declaration")
 }
 
-/// `func (s *Stack[T]) Push()` is `Stack::Push`, and reaches itself through `s`.
-fn unit_receiver(node: Node<'_>, src: &[u8]) -> Option<UnitReceiver> {
+/// `func (s *Stack[T]) Push()` is `Stack::Push`. It reaches itself through `s`, or through its
+/// type as the method expression `Stack.Push(s)`; a bare `Push()` is some other function.
+fn unit_scope(node: Node<'_>, src: &[u8]) -> UnitScope {
+    let Some((type_name, binding)) = receiver(node, src) else {
+        return UnitScope {
+            container: None,
+            self_receivers: Vec::new(),
+            bare_call_recurses: true,
+        };
+    };
+    let mut self_receivers: Vec<_> = binding.into_iter().map(Into::into).collect();
+    self_receivers.push(type_name.clone().into());
+    UnitScope {
+        container: Some(type_name),
+        self_receivers,
+        bare_call_recurses: false,
+    }
+}
+
+/// The receiver's type name and, unless it is blank, its binding.
+fn receiver(node: Node<'_>, src: &[u8]) -> Option<(String, Option<String>)> {
     let receiver = node.child_by_field_name("receiver")?;
     let mut cursor = receiver.walk();
     let parameter = receiver
         .named_children(&mut cursor)
         .find(|child| child.kind() == "parameter_declaration")?;
 
-    Some(UnitReceiver {
-        type_name: receiver_type(parameter.child_by_field_name("type")?, src)?,
-        binding: parameter
-            .child_by_field_name("name")
-            .and_then(|name| text(name, src))
-            .filter(|name| name != "_"),
-    })
+    let type_name = receiver_type(parameter.child_by_field_name("type")?, src)?;
+    let binding = parameter
+        .child_by_field_name("name")
+        .and_then(|name| text(name, src))
+        .filter(|name| name != "_");
+    Some((type_name, binding))
 }
 
 fn receiver_type(node: Node<'_>, src: &[u8]) -> Option<String> {

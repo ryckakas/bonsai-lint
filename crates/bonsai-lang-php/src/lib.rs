@@ -1,6 +1,7 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
+    UnitScope,
 };
 use tree_sitter::Node;
 
@@ -88,12 +89,12 @@ impl Hooks for PhpHooks {
         resolve_callee(node)
     }
 
-    fn is_self_receiver(&self, text: &str, container: Option<&str>) -> bool {
-        is_self_receiver(text, container)
-    }
-
     fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
         unit_name(node, src)
+    }
+
+    fn unit_scope(&self, _node: Node<'_>, _src: &[u8], _container: Option<&str>) -> UnitScope {
+        unit_scope()
     }
 
     fn container_name(&self, node: Node<'_>, src: &[u8]) -> Option<String> {
@@ -168,8 +169,13 @@ fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
     }
 }
 
-fn is_self_receiver(text: &str, _container: Option<&str>) -> bool {
-    matches!(text, "$this" | "self" | "static")
+/// `parent::` reaches the method this one overrides, not this one.
+fn unit_scope() -> UnitScope {
+    UnitScope {
+        container: None,
+        self_receivers: vec!["$this".into(), "self".into(), "static".into()],
+        bare_call_recurses: true,
+    }
 }
 
 fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {

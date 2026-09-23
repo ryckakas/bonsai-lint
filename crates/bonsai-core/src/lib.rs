@@ -8,7 +8,7 @@ pub mod walk;
 
 pub use collect::{analyze, declaration_row, disambiguate};
 pub use finding::{
-    Callee, Finding, NameOrigin, Suppression, UnitName, UnitReceiver, ANONYMOUS_UNIT,
+    Callee, Finding, NameOrigin, Suppression, UnitName, UnitScope, ANONYMOUS_UNIT,
     SUPPRESSION_MARKER, TOPLEVEL_UNIT,
 };
 pub use language::{Flags, KindInfo, Language, Role, SpecErrors};

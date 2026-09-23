@@ -1,6 +1,7 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
+    UnitScope,
 };
 use tree_sitter::Node;
 
@@ -130,12 +131,12 @@ impl Hooks for TsHooks {
         resolve_callee(node)
     }
 
-    fn is_self_receiver(&self, text: &str, container: Option<&str>) -> bool {
-        is_self_receiver(text, container)
-    }
-
     fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
         unit_name(node, src)
+    }
+
+    fn unit_scope(&self, _node: Node<'_>, _src: &[u8], container: Option<&str>) -> UnitScope {
+        unit_scope(container)
     }
 
     fn container_name(&self, node: Node<'_>, src: &[u8]) -> Option<String> {
@@ -217,9 +218,20 @@ fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
     }
 }
 
-fn is_self_receiver(text: &str, container: Option<&str>) -> bool {
-    matches!(text, "this" | "super")
-        || container.is_some_and(|path| path.rsplit("::").next() == Some(text))
+/// A static method is reached through its class's name, which is the path's last segment even
+/// when a quoted key holding `::` makes the container's own name longer.
+fn unit_scope(container: Option<&str>) -> UnitScope {
+    let mut self_receivers = vec!["this".into(), "super".into()];
+    self_receivers.extend(
+        container
+            .and_then(|path| path.rsplit("::").next())
+            .map(|last| last.to_string().into()),
+    );
+    UnitScope {
+        container: None,
+        self_receivers,
+        bare_call_recurses: true,
+    }
 }
 
 fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {

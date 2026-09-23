@@ -128,6 +128,67 @@ fn direct_recursion_costs_one() {
     ]);
 }
 
+fn score_of_target(source: &str) -> u32 {
+    common::findings(source)
+        .into_iter()
+        .find(|finding| finding.name == "target")
+        .unwrap_or_else(|| panic!("no finding produced for:\n{source}"))
+        .score
+}
+
+#[test]
+fn a_method_recurses_through_this_super_or_its_container() {
+    for (source, expected) in [
+        ("class C { target() { return this.target(); } }", 1),
+        ("class C { target() { return super.target(); } }", 1),
+        ("class C { static target() { return C.target(); } }", 1),
+        ("class C { target() { return D.target(); } }", 0),
+        (
+            "namespace N { class C { target() { return C.target(); } } }",
+            1,
+        ),
+        (
+            "namespace N { class C { target() { return N.target(); } } }",
+            0,
+        ),
+        (
+            "const api = { users: { target() { return users.target(); } } };",
+            1,
+        ),
+        (
+            "const api = { users: { target() { return api.target(); } } };",
+            0,
+        ),
+    ] {
+        assert_eq!(score_of_target(source), expected, "scoring:\n{source}");
+    }
+}
+
+/// The receiver is matched against the last `::` segment of the container path, so a quoted
+/// key that itself contains `::` answers to its tail.
+#[test]
+fn a_quoted_key_with_a_separator_answers_to_its_last_segment() {
+    assert_eq!(
+        score_of_target(r#"const o = { "a::b": { target() { return b.target(); } } };"#),
+        1
+    );
+}
+
+/// Pinned so the seam refactor cannot move it; counting it differently is a scoring decision.
+#[test]
+fn a_bare_namesake_call_inside_a_method_counts() {
+    assert_eq!(
+        score_of_target("class C { target() { return target(); } }"),
+        1
+    );
+}
+
+/// Pinned so the seam refactor cannot move it; counting it differently is a scoring decision.
+#[test]
+fn this_counts_as_self_even_in_a_free_function() {
+    assert_scores(&[("return this.target();", 1), ("return super.target();", 1)]);
+}
+
 #[test]
 fn a_linear_function_scores_zero() {
     assert_scores(&[("const a = 1; const b = 2; return a + b;", 0)]);
