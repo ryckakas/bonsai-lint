@@ -97,6 +97,17 @@ fn json_thresholds_are_keyed_by_language_id() {
 }
 
 #[test]
+fn help_offers_every_language_built_in() {
+    let output = Project::new().run(&["--help"]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let help = stdout(&output);
+    for id in ["go", "php", "typescript", "vue"] {
+        assert!(help.contains(&format!("`{id}`")), "{help}");
+    }
+}
+
+#[test]
 fn the_language_filter_covers_every_grammar_of_a_language() {
     let project = Project::new();
     project

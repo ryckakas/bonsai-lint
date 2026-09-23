@@ -385,7 +385,8 @@ fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
         }
     };
 
-    // Read before it can be recognised, but then uncounted, like a `.min.js` the plan never admits.
+    // Read before it can be recognised, but then uncounted, like an unscored name the plan never
+    // admits.
     if job.descriptor.is_generated(&source) {
         return scored;
     }

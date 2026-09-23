@@ -12,9 +12,9 @@ pub struct LanguageSpec {
     pub kinds: KindSets,
     pub fields: FieldNames,
     pub hooks: &'static dyn Hooks,
-    /// Kinds a grammar is allowed not to have. The PHP grammar renamed anonymous functions
-    /// between releases, so both spellings are declared and whichever is live wins, rather than
-    /// pinning users to one grammar version.
+    /// Kinds a grammar is allowed not to have. When a grammar renames a kind between releases,
+    /// both spellings are declared and whichever is live wins, rather than pinning users to one
+    /// grammar version.
     pub optional_kinds: &'static [&'static str],
 }
 
@@ -81,6 +81,55 @@ pub struct FieldNames {
 /// A method is required when every language must answer it, and defaulted only when the default
 /// is right for a language without the feature. A method added later ships with a default that
 /// keeps today's behaviour, so no existing language has to change.
+///
+/// The smallest language both traits accept. It implements only what is required, so adding a
+/// required method breaks this example on purpose.
+///
+/// ```no_run
+/// use bonsai_core::{
+///     Callee, Hooks, Language, LanguageDescriptor, LanguageSpec, UnitName, UnitScope,
+/// };
+/// use tree_sitter::Node;
+///
+/// #[derive(Debug)]
+/// struct Minimal;
+///
+/// impl Hooks for Minimal {
+///     fn normalize_logical_operator(&self, _: &str) -> Option<&'static str> {
+///         None
+///     }
+///
+///     fn is_penalized_jump(&self, _: Node<'_>, _: &[u8]) -> bool {
+///         false
+///     }
+///
+///     fn resolve_callee<'t>(&self, _: Node<'t>) -> Option<Callee<'t>> {
+///         None
+///     }
+///
+///     fn unit_name(&self, _: Node<'_>, _: &[u8]) -> UnitName {
+///         UnitName::anonymous()
+///     }
+///
+///     fn unit_scope(&self, _: Node<'_>, _: &[u8], _: Option<&str>) -> UnitScope {
+///         UnitScope::default()
+///     }
+/// }
+///
+/// impl LanguageDescriptor for Minimal {
+///     fn spec(&self) -> &'static LanguageSpec {
+///         unimplemented!()
+///     }
+///
+///     fn extensions(&self) -> &'static [&'static str] {
+///         &[]
+///     }
+///
+///     fn compiled(&self) -> &'static Language {
+///         unimplemented!()
+///     }
+/// }
+/// ```
 pub trait Hooks: Sync + Debug {
     fn normalize_logical_operator(&self, operator: &str) -> Option<&'static str>;
 

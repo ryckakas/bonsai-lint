@@ -33,10 +33,21 @@ what a user reads on the GitHub release page.
 
 ### Changed
 
-- For embedders of `bonsai-core`: `Hooks` gains `unit_receiver` and `LanguageDescriptor` gains
-  `is_generated`, which the existing languages leave empty. The walker now scores an `if`
-  initializer and treats an `if` placed directly under an alternative as an `else if`. Only Go
-  produces either shape, so no PHP, JavaScript, TypeScript or Vue score moves.
+- For embedders of `bonsai-core` and `bonsai-engine`, the language seam is now two traits with
+  default methods, so a new hook no longer forces an edit into every language crate. No score
+  moves.
+  - `Hooks` is a trait, reached through `LanguageSpec.hooks: &'static dyn Hooks`.
+    `unit_scope`, returning a `UnitScope`, replaces `is_self_receiver`: it names the receiver
+    spellings through which a call reaches the unit, and whether a bare call does. The new
+    `if_parts` lets a language read its own if-chains as `IfPart`s, defaulting to
+    `walk::if_parts_by_fields`; the walker keeps the arithmetic.
+  - `LanguageDescriptor` is a trait, taken as `&'static dyn LanguageDescriptor` by
+    `registry::descriptors`, `registry::for_path` and `Scanner::analyze_source`. Its `id` field
+    is gone, and `extract`, `is_generated` and `unscored_suffixes` are defaulted methods.
+  - The `.d.ts` and `.min.js` suffix lists moved from the engine to the TypeScript and TSX
+    descriptors.
+- `--help` no longer names languages in its description, and `--lang` lists the ids built into
+  the binary, so a build with fewer language features no longer offers ones it cannot scan.
 
 ## [0.2.1] - 2026-09-22
 

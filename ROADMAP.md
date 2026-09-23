@@ -5,6 +5,28 @@
 Nothing here is promised for a particular release. Items are listed in the order they are
 likely to be worth doing, and each one records the measurement that motivated it.
 
+## Installing through the Go toolchain
+
+Go is scored as of 0.3.0, but every install route is still foreign to a Go project: npm,
+Homebrew, cargo or a shell script. A Go team expects `go install …@version`, or, since Go 1.24,
+a `tool` line in `go.mod` that `go get -tool` adds and `go tool bonsai-lint` runs, pinned and
+checksummed with the rest of the module's dependencies.
+
+`go install` builds Go source and bonsai-lint is Rust, so the Go side is a small launcher of the
+same shape as the npm package: a `cmd/bonsai-lint` package that downloads the release binary for
+its `GOOS`/`GOARCH`, checks it against the release's checksum, caches it and runs it. It reads its
+own module version from `debug.ReadBuildInfo`, so `@v0.3.0` always runs 0.3.0.
+
+Two constraints decide the layout:
+
+- **The module belongs at the repository root.** Go resolves a module version to the tag of the
+  same name, so a root `go.mod` makes the existing `v0.3.0` release tags valid module versions. A
+  module in a subdirectory needs tags prefixed with its path, such as `cmd/bonsai-lint/v0.3.0`,
+  and `dist`'s tag pattern would match those too and try to cut a release for each.
+- **A published version is permanent.** The module proxy and checksum database keep every version
+  they have served, so a broken launcher cannot be re-tagged, only retracted from a later
+  `go.mod`. It should be proven against a pre-release tag before a real release carries it.
+
 ## Faster discovery
 
 Scoring is parallel as of the `--jobs` work; discovery is not, and it is now the whole of what

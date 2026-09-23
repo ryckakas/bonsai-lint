@@ -37,9 +37,9 @@ pub trait LanguageDescriptor: Sync + std::fmt::Debug {
         false
     }
 
-    /// File names that carry no code worth scoring despite their extension: a declaration file
-    /// holds only signatures, and minified output is one unit nobody will refactor. Whole
-    /// suffixes, not substrings, so `app.mini.js` and `min.js` still score.
+    /// File names that carry no code worth scoring despite their extension: signatures only, or
+    /// minified output that is one unit nobody will refactor. Whole suffixes, not substrings, so
+    /// a name that merely contains one still scores.
     fn unscored_suffixes(&self) -> &'static [&'static str] {
         &[]
     }

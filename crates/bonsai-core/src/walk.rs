@@ -52,8 +52,8 @@ fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
         }
     }
 
-    // Must be tested ahead of the role match: PHP's `function_definition` is both a unit kind
-    // and a nesting-function kind, and nesting has to win when it appears inside another unit.
+    // Must be tested ahead of the role match: a kind can be both a unit and a nesting function,
+    // and nesting has to win when it appears inside another unit.
     if info.flags.has(Flags::NESTING_FN) {
         walk_children(node, nesting + 1, cx, score);
         return;
@@ -178,8 +178,8 @@ fn else_part<'t>(node: Node<'t>, lang: &Language) -> IfPart<'t> {
 }
 
 /// Branch bodies nest; the controlling header does not. Anything before the body is header too,
-/// because PHP's `foreach` subject has no field name. Every header-field child is exempted, not
-/// just the first, since TypeScript's `for_statement.condition` is `multiple`.
+/// because a grammar can leave part of a header, such as a loop's subject, without a field name.
+/// Every header-field child is exempted, not just the first, since a header field can repeat.
 fn walk_control(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
     let body_start = field(node, cx.lang.fields.body).map(|body| body.start_byte());
 

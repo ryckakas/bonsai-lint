@@ -70,6 +70,7 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         control_header: &["condition", "initialize", "update"],
     },
     hooks: &PhpHooks,
+    // An earlier grammar release's name for `anonymous_function`.
     optional_kinds: &["anonymous_function_creation_expression"],
 };
 

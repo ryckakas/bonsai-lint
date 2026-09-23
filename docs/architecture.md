@@ -20,9 +20,13 @@ serde, the filesystem or any grammar.
 
 ## The language seam
 
-A language is described by data, not code. `LanguageSpec` is a `&'static` value giving the node
-kinds for each role, the field names the walker should read, and a handful of function pointers
-for the parts that genuinely differ between languages.
+A language is described mostly by data. `LanguageSpec` is a `&'static` value giving the node
+kinds for each role and the field names the walker should read. What a table cannot say, such as
+how a unit is named, what a call resolves to or where an if-chain's parts are, it says through
+`Hooks`, a trait. A second trait, `LanguageDescriptor`, says which files belong to the language
+and where the code in them is. The two vary independently: Vue reads its code exactly as
+TypeScript does but finds it inside a `.vue` file, and `.ts` and `.tsx` are one reading over two
+grammars.
 
 That spec is then *compiled* once per process against a `tree_sitter::Language`, resolving every
 kind string to a `u16` id and every field name to a `FieldId`, into flat arrays. The walker
@@ -33,9 +37,28 @@ Compilation is fallible, and that is the point: if a grammar upgrade renames a n
 fails to compile with a message naming it, rather than silently scoring zero for that construct
 forever.
 
+### What a language decides, and what core decides
+
+The hooks read the tree; core does the arithmetic. A language decides which receiver spellings
+reach the unit being scored, which nodes make up an `if` chain, and which file names hold no
+code. Core decides what each of those costs: +1, +nesting, a flat +1 per `else if`, one per run
+of like operators. With the arithmetic in one place, scoring the same logic the same in every
+language is a property of the design rather than something each crate has to get right.
+
+A trait method is required only when every language must answer it, and has a default only when
+that default is right for a language without the feature. A method added later ships with a
+default that keeps today's behaviour, so adding one never edits an existing language. The example
+on `Hooks` implements only the required methods, so a new required method fails
+`cargo test -p bonsai-core --doc` and has to be argued for.
+
+That is also the limit of the design. A new *kind* of variation still costs one change in core, a
+new trait method, even though no other language sees it. Go needed two: how a method reaches
+itself, `unit_scope`, and how an if-chain is read, `if_parts`.
+
 ### Adding a language
 
-1. Add a crate with the grammar dependency and a `LanguageSpec`.
+1. Add a crate with the grammar dependency, a `LanguageSpec`, a type implementing `Hooks` and a
+   descriptor implementing `LanguageDescriptor`.
 2. Write a fixture that exercises every kind you declared, and wire up
    `GrammarFixture::assert_contract()`. It will tell you what you got wrong.
 3. Pin the scores in `tests/spec.rs`: tables of snippets asserted against stated totals, with
@@ -43,14 +66,16 @@ forever.
    `toplevel.rs`.
 4. Register the descriptor in `bonsai-engine/src/registry.rs` behind a cargo feature, forwarded
    by `bonsai-lint` and on in both `default` lists.
-5. Name the id in the CLI's `about` and `--lang` help, add the feature to the CI matrix, and give
-   it a `cli_<id>.rs` end-to-end suite. `cli_report.rs` lists every threshold key.
+5. Add the feature to the CI matrix and give it a `cli_<id>.rs` end-to-end suite.
+   `cli_report.rs` lists every threshold key. The `--lang` help reads the registry, so the CLI
+   needs no edit.
 6. Outside the workspace: a `LANG_` constant and a vendored grammar patch in `bonsai-wasm`, and
    an activation event and `bonsai-lint.languages` entry in the extension.
 
-Most of the work is the fixture and the score corpus, not the spec. A grammar can still need a
-change in the walker when it produces a shape no earlier language did: Go's bare `else` block and
-its `if` initializer were both new.
+Most of the work is the fixture and the score corpus, not the spec, and nothing in core or the
+engine changes beyond the registry line and the features. A grammar whose shape the defaults
+cannot read overrides that hook in its own crate: Go overrides `if_parts`, because its `else` has
+no node of its own and its `if` takes an initializer beside the condition.
 
 ### Languages embedded in a host syntax
 
@@ -94,13 +119,18 @@ compiled per grammar. The alternative, a `vue` feature inside `bonsai-lang-ts`, 
 `tree-sitter-html` in the dependency graph of every TypeScript build and introduce the first
 `#[cfg]` inside a language crate, where gating otherwise lives only in `bonsai-engine`.
 
-### Methods declared beside their type
+### How a call reaches its own unit
 
-A Go method sits at file scope, not inside its type, so the container a class body supplies
-elsewhere comes from `Hooks::unit_receiver` instead: `func (s *Stack[T]) Push()` is keyed
-`Stack::Push`. The same hook names the receiver binding, which is what makes `s.Push()` a
-self-call, and a unit that has a receiver never treats a bare call of its own name as recursion,
-since Go cannot call a method without one.
+Recursion costs +1, and only a direct syntactic self-reference is detectable. What counts as one
+differs by language, so `Hooks::unit_scope` answers it once per unit with a `UnitScope`: the
+receiver spellings through which a call of the unit's name reaches the unit, and whether a bare
+call does. PHP lists `$this`, `self` and `static`. TypeScript lists `this`, `super` and the last
+segment of the enclosing container's path. Both let a bare call count.
+
+A Go method sits at file scope, not inside its type, so its `UnitScope` also carries the path
+segment a class body supplies elsewhere: `func (s *Stack[T]) Push()` is keyed `Stack::Push`. It
+reaches itself through `s`, or through `Stack` in the method expression `Stack.Push(s)`, and never
+through a bare `Push()`, since Go cannot call a method without its receiver.
 
 ### Generated files
 
@@ -109,6 +139,10 @@ contents. Go's convention is a `// Code generated … DO NOT EDIT.` line before 
 clause. The check needs the source, so it runs on the worker after the read, and the file is then
 dropped uncounted, exactly as a `.min.js` that the planner never admits. `--stdin` and the wasm
 build apply the same check, so an editor showing a generated file agrees with CI.
+
+`LanguageDescriptor::unscored_suffixes` is the same idea decided by name alone, before the read:
+the TypeScript descriptor lists `.d.ts`, `.d.mts` and `.d.cts`, and the TSX one the `.min.js`
+family.
 
 ### The grammar contract
 
@@ -124,8 +158,9 @@ failure modes a string match does not:
    is live;
 5. `id_for_node_kind` agrees with `kind_id` for every declared kind, so tree-sitter aliasing
    cannot make the whole table miss;
-6. every child under an `if`'s alternative field is an else or else-if kind, or a bare `if` as
-   Go's `else if` is, which a grammar can break without renaming anything.
+6. for every `if` and else-if node in the fixture, the language's own `if_parts` recognises every
+   part of the chain. A grammar can reshape a chain without renaming anything, and an
+   unrecognised part would otherwise be scored as plain code.
 
 ## Building
 

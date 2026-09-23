@@ -60,14 +60,21 @@ crates/
 `bonsai-core` depends on nothing but `tree-sitter`, so it can be embedded without pulling in
 serde, the filesystem, or any grammar crate.
 
-**The language seam is data, not code.** A `LanguageSpec` is a `&'static` value naming the node
-kinds for each syntactic role, the field names the walker reads, and a few function pointers for
-the parts that genuinely differ between languages. That spec is compiled once per process
-against a `tree_sitter::Language`, resolving every kind string to a `u16` id and every field name
-to a `FieldId` into flat arrays — the walker indexes by `node.kind_id()` rather than comparing
-strings, so adding languages doesn't cost anything at scan time. Compilation is fallible on
-purpose: a grammar upgrade that renames a node fails spec compilation with a message naming it,
-rather than silently scoring that construct as zero forever.
+**The language seam is data plus two traits.** A `LanguageSpec` is a `&'static` value naming the
+node kinds for each syntactic role and the field names the walker reads, plus
+`&'static dyn Hooks` for the tree-reading that genuinely differs between languages (unit names,
+callees, `unit_scope` for recursion, `if_parts` for if-chains). `LanguageDescriptor` is the
+per-file-type trait (extensions, `extract`, `is_generated`, `unscored_suffixes`). Hooks read the
+tree; the scoring arithmetic stays in core, so parity between languages is structural. A trait
+method is required only when every language must answer it, and one added later ships with a
+default that keeps today's behaviour; the `Hooks` doc example implements only the required
+methods, so `cargo test -p bonsai-core --doc` fails if that rule is broken. That spec is
+compiled once per process against a `tree_sitter::Language`, resolving every kind string to a
+`u16` id and every field name to a `FieldId` into flat arrays — the walker indexes by
+`node.kind_id()` rather than comparing strings, so adding languages doesn't cost anything at
+scan time. Compilation is fallible on purpose: a grammar upgrade that renames a node fails spec
+compilation with a message naming it, rather than silently scoring that construct as zero
+forever.
 
 **A language id is not a claim about languages.** Vue is a file format whose script blocks are
 TypeScript, and `VUE_SPEC` is the TypeScript spec under another name, so the scores are identical.
@@ -77,13 +84,15 @@ It carries its own id because the id is what `--lang`, `--over LANG=N`, a `[sect
 The reasoning is in [docs/architecture.md](docs/architecture.md); don't collapse the id without
 reading it.
 
-**Adding a language** means: a new crate with the grammar dependency and a `LanguageSpec`; a
-fixture exercising every declared kind, wired through `GrammarFixture::assert_contract()`; the
-scores pinned as `(snippet, total)` tables in `tests/spec.rs`; and registering the descriptor in
-`bonsai-engine/src/registry.rs` behind a cargo feature. The full checklist (CLI help, CI matrix,
-`cli_<id>.rs`, wasm, extension) is in [docs/architecture.md](docs/architecture.md). Most of the
-effort is the fixture and score tables, not the spec itself, unless the grammar produces a shape
-the walker has never met, as Go's bare `else` block and `if` initializer did.
+**Adding a language** means: a new crate with the grammar dependency, a `LanguageSpec`, and types
+implementing `Hooks` and `LanguageDescriptor`; a fixture exercising every declared kind, wired
+through `GrammarFixture::assert_contract()`; the scores pinned as `(snippet, total)` tables in
+`tests/spec.rs`; and registering the descriptor in `bonsai-engine/src/registry.rs` behind a cargo
+feature. The full checklist (CI matrix, `cli_<id>.rs`, wasm, extension) is in
+[docs/architecture.md](docs/architecture.md); the CLI's `--lang` help reads the registry and
+needs no edit. Most of the effort is the fixture and score tables, not the spec itself. A grammar
+shape the defaults can't read is handled by overriding that hook in the language's own crate, as
+Go overrides `if_parts` for its node-less `else` and its `if` initializer.
 
 **`GrammarFixture::assert_contract()`** (`bonsai-testkit`) makes six assertions per language,
 because an id-indexed table fails in ways a string match doesn't: the fixture parses cleanly; the
@@ -91,8 +100,8 @@ spec compiles against the grammar (resolves every kind/field); every declared ki
 produced by the fixture, not merely present in the grammar's symbol table; where a grammar
 renamed a kind across releases and both spellings are declared, one is live; `id_for_node_kind`
 agrees with `kind_id` for every declared kind (tree-sitter aliasing can otherwise make the whole
-table miss silently); and every child under an `if`'s alternative field is an else/else-if kind,
-or a bare `if` (Go's `else if`).
+table miss silently); and for every `if`/else-if node, the language's own `if_parts` recognises
+every part of the chain (no `IfPart::Unrecognised`).
 When touching a `LanguageSpec` or bumping a `tree-sitter-*` grammar version, run this contract
 first — it is designed to tell you exactly what broke.
 

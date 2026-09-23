@@ -12,6 +12,9 @@ TypeScript, Vue single-file components and Go. Use it for any one of them, or al
 PHP runtime, no Node runtime, no Go toolchain, no Composer entry, nothing added to your project.
 Scans **1.26 million lines in 0.8 seconds**.
 
+The official site is **[bonsai.kauneckas.dev](https://bonsai.kauneckas.dev)**: install and editor
+guides, and a [playground](https://bonsai.kauneckas.dev/play/) that scores code in your browser.
+
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bonsai-lint?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/bonsai-lint)
 [![dependencies](https://deps.rs/repo/github/ryckakas/bonsai-lint/status.svg)](https://deps.rs/repo/github/ryckakas/bonsai-lint)
@@ -168,9 +171,9 @@ one of these is an error, not a silent no-op.
 
 A declaration file and a minified one are both skipped outright, for opposite reasons: the first
 holds only signatures so every unit scores zero, and the second is generated output whose whole
-body rolls up into one unit nobody will refactor. The skipped names are a list of whole suffixes
-in `registry::UNSCORED`, so `app.mini.js`, `jasmine.js` and a file simply called `min.js` are all
-still scanned.
+body rolls up into one unit nobody will refactor. The skipped names are whole suffixes, listed by
+the TypeScript and TSX descriptors' `unscored_suffixes`, so `app.mini.js`, `jasmine.js` and a
+file simply called `min.js` are all still scanned.
 
 Go marks generated code in the file rather than its name, so a `.go` file is read first and then
 turned away if a `// Code generated … DO NOT EDIT.` line comes before its `package` clause, which
@@ -430,6 +433,8 @@ no variant to choose and nothing to enable.
 
 ## Documentation
 
+- [bonsai.kauneckas.dev](https://bonsai.kauneckas.dev): the official site, with guides and a
+  playground
 - [Scoring rules](docs/scoring-rules.md): the full increment table and per-language notes
 - [Architecture](docs/architecture.md): the language seam, and how to add a language
 - [Roadmap](ROADMAP.md): what is likely to come next, and why

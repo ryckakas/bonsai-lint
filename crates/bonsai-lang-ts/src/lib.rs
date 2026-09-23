@@ -67,8 +67,8 @@ pub const fn spec(id: &'static str) -> LanguageSpec {
             ],
             nesting_function: UNIT,
             if_statement: &["if_statement"],
-            // TypeScript has no else-if clause: `else if` is a nested `if_statement` inside the
-            // alternative, which `walk_else` already handles as the two-word form.
+            // TypeScript has no else-if clause: `else if` is an `if_statement` inside the else
+            // clause, which the default `if_parts` reads as the chain's next link.
             else_if_clause: &[],
             else_clause: &["else_clause"],
             nesting_control: &[
