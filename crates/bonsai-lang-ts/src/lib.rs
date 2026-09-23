@@ -1,31 +1,49 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
-    UnitReceiver,
 };
 use tree_sitter::Node;
 
+#[derive(Debug)]
+pub struct TsDialect {
+    extensions: &'static [&'static str],
+    compiled: fn() -> &'static Language,
+    unscored: &'static [&'static str],
+}
+
 /// `.ts` must not be parsed with the TSX grammar: an angle-bracket type assertion collides with
 /// a JSX element.
-pub static TYPESCRIPT: LanguageDescriptor = LanguageDescriptor {
-    id: "typescript",
+pub static TYPESCRIPT: TsDialect = TsDialect {
     extensions: &["ts", "mts", "cts"],
-    spec: &SPEC,
     compiled: compiled_typescript,
-    extract: None,
-    is_generated: None,
+    unscored: &[".d.ts", ".d.mts", ".d.cts"],
 };
 
 /// TSX is a superset of JavaScript and JSX, so it serves `.js` and `.jsx` too and
 /// `tree-sitter-javascript` is not a dependency.
-pub static TSX: LanguageDescriptor = LanguageDescriptor {
-    id: "tsx",
+pub static TSX: TsDialect = TsDialect {
     extensions: &["tsx", "jsx", "js", "mjs", "cjs"],
-    spec: &SPEC,
     compiled: compiled_tsx,
-    extract: None,
-    is_generated: None,
+    unscored: &[".min.js", ".min.mjs", ".min.cjs"],
 };
+
+impl LanguageDescriptor for TsDialect {
+    fn spec(&self) -> &'static LanguageSpec {
+        &SPEC
+    }
+
+    fn extensions(&self) -> &'static [&'static str] {
+        self.extensions
+    }
+
+    fn compiled(&self) -> &'static Language {
+        (self.compiled)()
+    }
+
+    fn unscored_suffixes(&self) -> &'static [&'static str] {
+        self.unscored
+    }
+}
 
 /// The two dialects differ only by JSX nodes and `type_assertion`, none of which the scorer
 /// references, so one spec serves both. The id is a parameter because an embedded dialect reuses
@@ -89,21 +107,45 @@ pub const fn spec(id: &'static str) -> LanguageSpec {
                 "right",
             ],
         },
-        hooks: Hooks {
-            normalize_logical_operator,
-            is_penalized_jump,
-            resolve_callee,
-            is_self_receiver,
-            unit_name,
-            unit_receiver,
-            container_name,
-            suppression_anchor,
-        },
+        hooks: &TsHooks,
         optional_kinds: &[],
     }
 }
 
 pub static SPEC: LanguageSpec = spec("typescript");
+
+#[derive(Debug)]
+struct TsHooks;
+
+impl Hooks for TsHooks {
+    fn normalize_logical_operator(&self, operator: &str) -> Option<&'static str> {
+        normalize_logical_operator(operator)
+    }
+
+    fn is_penalized_jump(&self, node: Node<'_>, src: &[u8]) -> bool {
+        is_penalized_jump(node, src)
+    }
+
+    fn resolve_callee<'t>(&self, node: Node<'t>) -> Option<Callee<'t>> {
+        resolve_callee(node)
+    }
+
+    fn is_self_receiver(&self, text: &str, container: Option<&str>) -> bool {
+        is_self_receiver(text, container)
+    }
+
+    fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
+        unit_name(node, src)
+    }
+
+    fn container_name(&self, node: Node<'_>, src: &[u8]) -> Option<String> {
+        container_name(node, src)
+    }
+
+    fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
+        suppression_anchor(node)
+    }
+}
 
 /// Bodyless declarations are deliberately absent: `method_signature`,
 /// `abstract_method_signature`, `function_signature`, `call_signature`, `construct_signature`,
@@ -194,10 +236,6 @@ fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
         return UnitName::positional(name);
     }
     UnitName::anonymous()
-}
-
-fn unit_receiver(_node: Node<'_>, _src: &[u8]) -> Option<UnitReceiver> {
-    None
 }
 
 fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {

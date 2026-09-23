@@ -1,11 +1,11 @@
 #![allow(unreachable_pub)]
 
-use bonsai_core::Finding;
+use bonsai_core::{Finding, LanguageDescriptor};
 use tree_sitter::Parser;
 
 #[allow(dead_code)]
 pub fn findings(source: &str) -> Vec<Finding> {
-    let language = (bonsai_lang_go::GO.compiled)();
+    let language = bonsai_lang_go::GO.compiled();
     let mut parser = Parser::new();
     parser
         .set_language(&language.ts)

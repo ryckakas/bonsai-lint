@@ -2,7 +2,7 @@ mod common;
 
 use std::fmt::Write;
 
-use bonsai_core::TOPLEVEL_UNIT;
+use bonsai_core::{LanguageDescriptor, TOPLEVEL_UNIT};
 use common::{find, findings};
 
 fn component(template_lines: usize) -> String {
@@ -113,7 +113,7 @@ fn the_same_logic_scores_the_same_in_a_vue_block_and_a_ts_file() {
 
     let vue = findings(&format!("<script setup>\n{body}\n</script>\n"));
 
-    let language = (bonsai_lang_ts::TSX.compiled)();
+    let language = bonsai_lang_ts::TSX.compiled();
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language.ts).expect("grammar loads");
     let tree = parser.parse(body, None).expect("parses");

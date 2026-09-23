@@ -1,18 +1,27 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
-    UnitReceiver,
 };
 use tree_sitter::Node;
 
-pub static PHP: LanguageDescriptor = LanguageDescriptor {
-    id: "php",
-    extensions: &["php", "phtml"],
-    spec: &SPEC,
-    compiled,
-    extract: None,
-    is_generated: None,
-};
+#[derive(Debug)]
+pub struct Php;
+
+pub static PHP: Php = Php;
+
+impl LanguageDescriptor for Php {
+    fn spec(&self) -> &'static LanguageSpec {
+        &SPEC
+    }
+
+    fn extensions(&self) -> &'static [&'static str] {
+        &["php", "phtml"]
+    }
+
+    fn compiled(&self) -> &'static Language {
+        compiled()
+    }
+}
 
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "php",
@@ -59,18 +68,42 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         logical_operator: "operator",
         control_header: &["condition", "initialize", "update"],
     },
-    hooks: Hooks {
-        normalize_logical_operator,
-        is_penalized_jump,
-        resolve_callee,
-        is_self_receiver,
-        unit_name,
-        unit_receiver,
-        container_name,
-        suppression_anchor,
-    },
+    hooks: &PhpHooks,
     optional_kinds: &["anonymous_function_creation_expression"],
 };
+
+#[derive(Debug)]
+struct PhpHooks;
+
+impl Hooks for PhpHooks {
+    fn normalize_logical_operator(&self, operator: &str) -> Option<&'static str> {
+        normalize_logical_operator(operator)
+    }
+
+    fn is_penalized_jump(&self, node: Node<'_>, src: &[u8]) -> bool {
+        is_penalized_jump(node, src)
+    }
+
+    fn resolve_callee<'t>(&self, node: Node<'t>) -> Option<Callee<'t>> {
+        resolve_callee(node)
+    }
+
+    fn is_self_receiver(&self, text: &str, container: Option<&str>) -> bool {
+        is_self_receiver(text, container)
+    }
+
+    fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
+        unit_name(node, src)
+    }
+
+    fn container_name(&self, node: Node<'_>, src: &[u8]) -> Option<String> {
+        container_name(node, src)
+    }
+
+    fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
+        suppression_anchor(node)
+    }
+}
 
 /// A closure at file scope is a unit like a `function`, so a routes file scores per route
 /// exactly as its JavaScript equivalent does.
@@ -153,10 +186,6 @@ fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
         return UnitName::positional(name);
     }
     UnitName::anonymous()
-}
-
-fn unit_receiver(_node: Node<'_>, _src: &[u8]) -> Option<UnitReceiver> {
-    None
 }
 
 fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {

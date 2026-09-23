@@ -4,8 +4,8 @@ use bonsai_core::{Finding, LanguageDescriptor};
 use tree_sitter::Parser;
 
 #[allow(dead_code)]
-pub fn findings_in(descriptor: &LanguageDescriptor, source: &str) -> Vec<Finding> {
-    let language = (descriptor.compiled)();
+pub fn findings_in(descriptor: &dyn LanguageDescriptor, source: &str) -> Vec<Finding> {
+    let language = descriptor.compiled();
     let mut parser = Parser::new();
     parser
         .set_language(&language.ts)

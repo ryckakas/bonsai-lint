@@ -16,7 +16,7 @@ pub fn suppression(node: Node<'_>, src: &[u8], lang: &Language) -> Suppression {
 }
 
 pub(crate) fn unit_marker(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Marker> {
-    let anchor = (lang.spec.hooks.suppression_anchor)(node);
+    let anchor = lang.spec.hooks.suppression_anchor(node);
     leading(anchor, src, lang).or_else(|| trailing(anchor, src, lang))
 }
 

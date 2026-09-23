@@ -61,7 +61,7 @@ fn container_path(
     lang: &Language,
     outer: Option<&str>,
 ) -> Option<String> {
-    match ((lang.spec.hooks.container_name)(node, src), outer) {
+    match (lang.spec.hooks.container_name(node, src), outer) {
         (Some(name), Some(outer)) => Some(format!("{outer}::{name}")),
         (Some(name), None) => Some(name),
         (None, outer) => outer.map(ToString::to_string),
@@ -77,8 +77,8 @@ fn score_unit(
     claimed: &mut HashSet<usize>,
 ) -> Option<Finding> {
     field(node, lang.fields.body)?;
-    let name = (lang.spec.hooks.unit_name)(node, src);
-    let receiver = (lang.spec.hooks.unit_receiver)(node, src);
+    let name = lang.spec.hooks.unit_name(node, src);
+    let receiver = lang.spec.hooks.unit_receiver(node, src);
     let container = unit_container(container, receiver.as_ref());
     let marker = unit_marker(node, src, lang);
     if let Some((comment, _)) = &marker {

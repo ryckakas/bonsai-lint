@@ -14,25 +14,33 @@ pub use finding::{
 pub use language::{Flags, KindInfo, Language, Role, SpecErrors};
 pub use spec::{FieldNames, Hooks, KindSets, LanguageSpec};
 
-/// What the registry stores for a language. Compilation is memoised behind
+/// What the registry stores for a file type. Compilation is memoised behind
 /// [`compiled_once!`], so the facade never names a grammar crate's types.
-#[derive(Debug)]
-pub struct LanguageDescriptor {
-    pub id: &'static str,
-    pub extensions: &'static [&'static str],
-    pub spec: &'static LanguageSpec,
-    pub compiled: fn() -> &'static Language,
+pub trait LanguageDescriptor: Sync + std::fmt::Debug {
+    fn spec(&self) -> &'static LanguageSpec;
+
+    fn extensions(&self) -> &'static [&'static str];
+
+    /// Each implementor returns its own `compiled_once!` static: one shared body would be a
+    /// single static, handing every descriptor whichever grammar compiled first.
+    fn compiled(&self) -> &'static Language;
+
     /// `None` parses the whole file with `compiled`.
-    pub extract: Option<fn(&str) -> Extraction>,
+    fn extract(&self, _source: &str) -> Option<Extraction> {
+        None
+    }
+
     /// A language's own convention for marking machine-written files, which are neither scored
     /// nor counted: nobody refactors them, so a finding there is noise.
-    pub is_generated: Option<fn(&str) -> bool>,
-}
+    fn is_generated(&self, _source: &str) -> bool {
+        false
+    }
 
-impl LanguageDescriptor {
-    #[must_use]
-    pub fn generated(&self, source: &str) -> bool {
-        self.is_generated.is_some_and(|check| check(source))
+    /// File names that carry no code worth scoring despite their extension: a declaration file
+    /// holds only signatures, and minified output is one unit nobody will refactor. Whole
+    /// suffixes, not substrings, so `app.mini.js` and `min.js` still score.
+    fn unscored_suffixes(&self) -> &'static [&'static str] {
+        &[]
     }
 }
 

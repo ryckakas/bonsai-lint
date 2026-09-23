@@ -71,7 +71,7 @@ fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
             return;
         }
         Role::Jump => {
-            if (cx.lang.spec.hooks.is_penalized_jump)(node, cx.src) {
+            if cx.lang.spec.hooks.is_penalized_jump(node, cx.src) {
                 *score += 1;
             }
             return;
@@ -290,13 +290,13 @@ fn logical_operator(node: Node<'_>, cx: &WalkCx<'_>) -> Option<&'static str> {
     let operator = field(node, cx.lang.fields.logical_operator)?
         .utf8_text(cx.src)
         .ok()?;
-    (cx.lang.spec.hooks.normalize_logical_operator)(operator)
+    cx.lang.spec.hooks.normalize_logical_operator(operator)
 }
 
 /// Only direct syntactic self-reference is detectable without symbol resolution; dynamic
 /// dispatch through a variable is out of reach and is documented as such rather than guessed at.
 fn is_recursive_call(node: Node<'_>, cx: &WalkCx<'_>) -> bool {
-    let Some(callee) = (cx.lang.spec.hooks.resolve_callee)(node) else {
+    let Some(callee) = cx.lang.spec.hooks.resolve_callee(node) else {
         return false;
     };
 
@@ -318,5 +318,5 @@ fn is_recursive_call(node: Node<'_>, cx: &WalkCx<'_>) -> bool {
 
 fn is_self(text: &str, cx: &WalkCx<'_>) -> bool {
     cx.receiver.and_then(|receiver| receiver.binding.as_deref()) == Some(text)
-        || (cx.lang.spec.hooks.is_self_receiver)(text, cx.container)
+        || cx.lang.spec.hooks.is_self_receiver(text, cx.container)
 }

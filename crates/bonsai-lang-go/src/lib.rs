@@ -5,14 +5,28 @@ use bonsai_core::{
 };
 use tree_sitter::Node;
 
-pub static GO: LanguageDescriptor = LanguageDescriptor {
-    id: "go",
-    extensions: &["go"],
-    spec: &SPEC,
-    compiled,
-    extract: None,
-    is_generated: Some(is_generated),
-};
+#[derive(Debug)]
+pub struct Go;
+
+pub static GO: Go = Go;
+
+impl LanguageDescriptor for Go {
+    fn spec(&self) -> &'static LanguageSpec {
+        &SPEC
+    }
+
+    fn extensions(&self) -> &'static [&'static str] {
+        &["go"]
+    }
+
+    fn compiled(&self) -> &'static Language {
+        compiled()
+    }
+
+    fn is_generated(&self, source: &str) -> bool {
+        is_generated(source)
+    }
+}
 
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "go",
@@ -53,18 +67,42 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         // The switches have no body field, so their header is known by field name alone.
         control_header: &["initializer", "condition", "value", "alias"],
     },
-    hooks: Hooks {
-        normalize_logical_operator,
-        is_penalized_jump,
-        resolve_callee,
-        is_self_receiver,
-        unit_name,
-        unit_receiver,
-        container_name,
-        suppression_anchor,
-    },
+    hooks: &GoHooks,
     optional_kinds: &[],
 };
+
+#[derive(Debug)]
+struct GoHooks;
+
+impl Hooks for GoHooks {
+    fn normalize_logical_operator(&self, operator: &str) -> Option<&'static str> {
+        normalize_logical_operator(operator)
+    }
+
+    fn is_penalized_jump(&self, node: Node<'_>, src: &[u8]) -> bool {
+        is_penalized_jump(node, src)
+    }
+
+    fn resolve_callee<'t>(&self, node: Node<'t>) -> Option<Callee<'t>> {
+        resolve_callee(node)
+    }
+
+    fn is_self_receiver(&self, text: &str, container: Option<&str>) -> bool {
+        is_self_receiver(text, container)
+    }
+
+    fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
+        unit_name(node, src)
+    }
+
+    fn unit_receiver(&self, node: Node<'_>, src: &[u8]) -> Option<UnitReceiver> {
+        unit_receiver(node, src)
+    }
+
+    fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
+        suppression_anchor(node)
+    }
+}
 
 /// Go's convention (<https://go.dev/s/generatedcode>) as `go/ast.IsGenerated` reads it: a
 /// `// Code generated … DO NOT EDIT.` line before the first line of code.
@@ -210,10 +248,6 @@ fn receiver_type(node: Node<'_>, src: &[u8]) -> Option<String> {
         "generic_type" => receiver_type(node.child_by_field_name("type")?, src),
         _ => None,
     }
-}
-
-fn container_name(_node: Node<'_>, _src: &[u8]) -> Option<String> {
-    None
 }
 
 /// Climbs to the declaration a marker would sit above: `var handler = func() {}` is suppressed
