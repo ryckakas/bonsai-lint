@@ -49,6 +49,13 @@ what a user reads on the GitHub release page.
 - `--help` no longer names languages in its description, and `--lang` lists the ids built into
   the binary, so a build with fewer language features no longer offers ones it cannot scan.
 
+### Fixed
+
+- A suppression marker above a declaration whose function is wrapped in a call, such as
+  `const useCart = defineStore('cart', () => …)` or `$handler = wrap(function () { … })`, now
+  suppresses that function. The unit was already named after the declaration, but the marker
+  search stopped at the call, so the marker was ignored.
+
 ## [0.2.1] - 2026-09-22
 
 ### Changed

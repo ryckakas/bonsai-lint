@@ -207,6 +207,34 @@ fn a_method_recurses_through_its_receiver() {
     assert_eq!(score_of(source, "Stack::Walk"), 1);
 }
 
+/// A pointer receiver's method expression is written `(*Stack).Push`, a generic one names its
+/// type parameters, and `(*s)` dereferences the binding: each is the method reaching itself.
+#[test]
+fn a_method_recurses_through_every_spelling_of_its_receiver() {
+    let source = "package p\n\
+        func (s *Stack) Push(v int) { (*Stack).Push(s, v) }\n\
+        func (s *Stack) Pop() { (*s).Pop() }\n\
+        func (q *Queue[T]) Put(v T) { (*Queue[T]).Put(q, v) }\n\
+        func (p Pair[K, V]) Len() int { return Pair[K, V].Len(p) }\n";
+    assert_eq!(score_of(source, "Stack::Push"), 1);
+    assert_eq!(score_of(source, "Stack::Pop"), 1);
+    assert_eq!(score_of(source, "Queue::Put"), 1);
+    assert_eq!(score_of(source, "Pair::Len"), 1);
+}
+
+/// With a single argument, `Walk[T](x)` parses as a conversion to the generic type `Walk[T]`;
+/// it is still the function calling itself.
+#[test]
+fn an_explicitly_instantiated_self_call_is_recursion() {
+    let source = "package p\n\
+        func Walk[T any](x T) { Walk[T](x) }\n\
+        func Zip[K comparable, V any](k K, v V) { Zip[K, V](k, v) }\n\
+        func Wrap[T any](x T) { Other[T](x) }\n";
+    assert_eq!(score_of(source, "Walk"), 1);
+    assert_eq!(score_of(source, "Zip"), 1);
+    assert_eq!(score_of(source, "Wrap"), 0);
+}
+
 /// A method cannot be called without its receiver, so a bare call of its own name is a free
 /// function, and a call through another value is another object's method.
 #[test]

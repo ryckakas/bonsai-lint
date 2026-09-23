@@ -64,6 +64,14 @@ fn a_marker_above_a_bound_literal_is_honoured() {
     assert_eq!(suppression_of(source, "handler"), reasoned("hand-tuned"));
 }
 
+/// The namer hands a lone callback the binding of the call wrapping it, so the marker above that
+/// binding must cover it too.
+#[test]
+fn a_marker_above_a_wrapped_literal_is_honoured() {
+    let source = "package p\n\n// bonsai-lint-ignore: route table\nvar handler = wrap(func() { if a { f() } })\n";
+    assert_eq!(suppression_of(source, "handler"), reasoned("route table"));
+}
+
 #[test]
 fn a_marker_inside_a_var_group_covers_only_its_own_spec() {
     let source = "package p\n\nvar (\n\t// bonsai-lint-ignore: vendored\n\thandler = func() { if a { f() } }\n\tother = func() { if b { f() } }\n)\n";

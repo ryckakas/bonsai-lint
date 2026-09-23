@@ -167,9 +167,13 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
   block still nests, as in PHP and TypeScript.
 - `defer`, `go` and `recover` are free; a function literal they launch raises nesting like any
   closure.
-- Recursion is a call through the receiver, `s.Push()`, or a method expression, `Stack.Push(s)`.
-  A method cannot be called without its receiver, so a bare `Push()` inside it names a free
-  function or a builtin and is not recursion, and neither is `strings.Split` inside `func Split`.
+- Recursion is a call through the receiver, `s.Push()` or `(*s).Push()`, or a method expression
+  such as `(*Stack).Push(s)` or `Stack[T].Push(s)`. A method cannot be called without its
+  receiver, so a bare `Push()` inside it names a free function or a builtin and is not recursion,
+  and neither is `strings.Split` inside `func Split`.
+- A generic function calling itself counts whether its type arguments are inferred, `Walk(x)`, or
+  written out, `Walk[T](x)`, even when they differ from its own: it is still a call to its own
+  name.
 - A file with a `// Code generated … DO NOT EDIT.` line before its `package` clause is neither
   scored nor counted.
 

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::num::NonZeroU16;
 
 use bonsai_core::naming::{compact, strip_quotes};
@@ -50,7 +51,8 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         unconditional_jump: &["goto_statement"],
         logical: &["binary_expression"],
         parenthesis: &["parenthesized_expression"],
-        call: &["call_expression"],
+        // A one-argument `F[T](x)` parses as a conversion to the generic type `F[T]`.
+        call: &["call_expression", "type_conversion_expression"],
         comment: &["comment"],
         leading_trivia: &[],
         preamble: &["package_clause"],
@@ -214,6 +216,9 @@ fn is_penalized_jump(node: Node<'_>, _src: &[u8]) -> bool {
 }
 
 fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
+    if node.kind() == "type_conversion_expression" {
+        return instantiated_callee(node);
+    }
     let callee = node.child_by_field_name("function")?;
     match callee.kind() {
         "identifier" => Some(Callee {
@@ -226,6 +231,20 @@ fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
         }),
         _ => None,
     }
+}
+
+/// The grammar cannot tell `Walk[T](x)` from a conversion to the generic type `Walk[T]`, and
+/// only the call reading can recurse.
+fn instantiated_callee(conversion: Node<'_>) -> Option<Callee<'_>> {
+    let name = conversion
+        .child_by_field_name("type")
+        .filter(|ty| ty.kind() == "generic_type")?
+        .child_by_field_name("type")
+        .filter(|name| name.kind() == "type_identifier")?;
+    Some(Callee {
+        receiver: None,
+        name,
+    })
 }
 
 fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
@@ -255,46 +274,73 @@ fn is_repeatable(node: Node<'_>, name: &str) -> bool {
 }
 
 /// `func (s *Stack[T]) Push()` is `Stack::Push`. It reaches itself through `s`, or through its
-/// type as the method expression `Stack.Push(s)`; a bare `Push()` is some other function.
+/// type in a method expression such as `(*Stack[T]).Push(s)`, and any of those dereferenced as
+/// `(*s)`; a bare `Push()` is some other function.
 fn unit_scope(node: Node<'_>, src: &[u8]) -> UnitScope {
-    let Some((type_name, binding)) = receiver(node, src) else {
+    let Some(receiver) = receiver(node, src) else {
         return UnitScope {
             container: None,
             self_receivers: Vec::new(),
             bare_call_recurses: true,
         };
     };
-    let mut self_receivers: Vec<_> = binding.into_iter().map(Into::into).collect();
-    self_receivers.push(type_name.clone().into());
+    let mut spellings = vec![receiver.name.clone()];
+    if receiver.written != receiver.name {
+        spellings.push(receiver.written);
+    }
+    spellings.extend(receiver.binding);
+    let self_receivers = spellings
+        .into_iter()
+        .flat_map(|spelling| [Cow::Owned(format!("(*{spelling})")), Cow::Owned(spelling)])
+        .collect();
     UnitScope {
-        container: Some(type_name),
+        container: Some(receiver.name),
         self_receivers,
         bare_call_recurses: false,
     }
 }
 
-/// The receiver's type name and, unless it is blank, its binding.
-fn receiver(node: Node<'_>, src: &[u8]) -> Option<(String, Option<String>)> {
+/// A method's receiver type, bare (`Stack`) and as written with its type parameters
+/// (`Stack[T]`), and its binding unless that is blank.
+struct Receiver {
+    name: String,
+    written: String,
+    binding: Option<String>,
+}
+
+fn receiver(node: Node<'_>, src: &[u8]) -> Option<Receiver> {
     let receiver = node.child_by_field_name("receiver")?;
     let mut cursor = receiver.walk();
     let parameter = receiver
         .named_children(&mut cursor)
         .find(|child| child.kind() == "parameter_declaration")?;
 
-    let type_name = receiver_type(parameter.child_by_field_name("type")?, src)?;
-    let binding = parameter
-        .child_by_field_name("name")
-        .and_then(|name| text(name, src))
-        .filter(|name| name != "_");
-    Some((type_name, binding))
+    let written = written_type(parameter.child_by_field_name("type")?)?;
+    Some(Receiver {
+        name: text(type_name(written)?, src)?,
+        written: text(written, src)?,
+        binding: parameter
+            .child_by_field_name("name")
+            .and_then(|name| text(name, src))
+            .filter(|name| name != "_"),
+    })
 }
 
-fn receiver_type(node: Node<'_>, src: &[u8]) -> Option<String> {
+/// Strips the pointer and any parentheses but keeps the type parameters.
+fn written_type(node: Node<'_>) -> Option<Node<'_>> {
     match node.kind() {
-        "type_identifier" => text(node, src),
-        "pointer_type" | "parenthesized_type" => receiver_type(node.named_child(0)?, src),
-        "generic_type" => receiver_type(node.child_by_field_name("type")?, src),
+        "type_identifier" | "generic_type" => Some(node),
+        "pointer_type" | "parenthesized_type" => written_type(node.named_child(0)?),
         _ => None,
+    }
+}
+
+fn type_name(written: Node<'_>) -> Option<Node<'_>> {
+    match written.kind() {
+        "generic_type" => written
+            .child_by_field_name("type")
+            .filter(|name| name.kind() == "type_identifier"),
+        _ => Some(written),
     }
 }
 
@@ -306,6 +352,10 @@ fn suppression_anchor(node: Node<'_>) -> Node<'_> {
         let Some(parent) = current.parent() else {
             return current;
         };
+        if let Some(call) = wrapping_call(parent, current) {
+            current = call;
+            continue;
+        }
         match parent.kind() {
             "expression_list"
             | "literal_element"
@@ -337,11 +387,7 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
         match parent.kind() {
             "expression_list" => return var_name(parent, current, src),
             "literal_element" => return map_key(parent, src),
-            "argument_list" if is_sole_callable_argument(parent, current) => {
-                current = parent
-                    .parent()
-                    .filter(|call| call.kind() == "call_expression")?;
-            }
+            "argument_list" => current = wrapping_call(parent, current)?,
             "parenthesized_expression" => current = parent,
             _ => return None,
         }
@@ -384,6 +430,17 @@ fn unquote(key: &str) -> String {
         .strip_prefix('`')
         .and_then(|rest| rest.strip_suffix('`'))
         .map_or_else(|| strip_quotes(trimmed), ToString::to_string)
+}
+
+/// The call whose lone callable argument `candidate` is. The namer and the marker search both
+/// unwrap `wrap(func() {})` through it, so a unit is suppressed where it is named.
+fn wrapping_call<'t>(arguments: Node<'t>, candidate: Node<'t>) -> Option<Node<'t>> {
+    if arguments.kind() != "argument_list" || !is_sole_callable_argument(arguments, candidate) {
+        return None;
+    }
+    arguments
+        .parent()
+        .filter(|call| call.kind() == "call_expression")
 }
 
 fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {

@@ -269,6 +269,10 @@ fn suppression_anchor(node: Node<'_>) -> Node<'_> {
         let Some(parent) = current.parent() else {
             return current;
         };
+        if let Some(call) = wrapping_call(parent, current) {
+            current = call;
+            continue;
+        }
         match parent.kind() {
             "variable_declarator"
             | "lexical_declaration"
@@ -315,15 +319,22 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             // `const useCart = defineStore('cart', () => {})` is `useCart`, not `defineStore#1`.
             // Only a lone callable argument is unwrapped, so `app.get('/x', fn)` — where the
             // call is nobody's value — still falls through to a positional key.
-            "arguments" if is_sole_callable_argument(parent, current) => {
-                current = parent
-                    .parent()
-                    .filter(|call| call.kind() == "call_expression")?;
-            }
+            "arguments" => current = wrapping_call(parent, current)?,
             kind if TRANSPARENT.contains(&kind) => current = parent,
             _ => return None,
         }
     }
+}
+
+/// The call whose lone callable argument `candidate` is. The namer and the marker search both
+/// unwrap `wrap(() => {})` through it, so a unit is suppressed where it is named.
+fn wrapping_call<'t>(arguments: Node<'t>, candidate: Node<'t>) -> Option<Node<'t>> {
+    if arguments.kind() != "arguments" || !is_sole_callable_argument(arguments, candidate) {
+        return None;
+    }
+    arguments
+        .parent()
+        .filter(|call| call.kind() == "call_expression")
 }
 
 fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {

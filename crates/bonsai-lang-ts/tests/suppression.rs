@@ -66,6 +66,17 @@ fn a_marker_above_a_bound_arrow_is_honoured() {
     );
 }
 
+/// The namer hands a lone callback the binding of the call wrapping it, so the marker above that
+/// binding must cover it too.
+#[test]
+fn a_marker_above_a_wrapped_arrow_is_honoured() {
+    let source = "// bonsai-lint-ignore: store factory\nexport const useCart = defineStore('cart', () => { if (a) { f(); } });\n";
+    assert_eq!(
+        suppression_of(source, "useCart"),
+        Suppression::Reasoned("store factory".to_string())
+    );
+}
+
 #[test]
 fn a_marker_above_a_class_field_arrow_is_honoured() {
     let source = "class F {\n  // bonsai-lint-ignore: framework contract\n  field = () => { if (a) { f(); } };\n}\n";

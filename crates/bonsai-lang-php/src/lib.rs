@@ -210,6 +210,10 @@ fn suppression_anchor(node: Node<'_>) -> Node<'_> {
         let Some(parent) = current.parent() else {
             return current;
         };
+        if let Some(call) = wrapping_call(parent) {
+            current = call;
+            continue;
+        }
         let is_value = |field: &str| {
             parent
                 .child_by_field_name(field)
@@ -247,10 +251,8 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             "array_element_initializer" => return array_key(parent, current, src),
             // A factory call hands its own binding to a lone callable argument; a call that is
             // nobody's value falls through to a positional key.
-            "arguments" if is_sole_callable_argument(parent, current) => {
-                current = parent.parent().filter(|call| CALL.contains(&call.kind()))?;
-            }
-            "argument" | "parenthesized_expression" => current = parent,
+            "argument" => current = wrapping_call(parent)?,
+            "parenthesized_expression" => current = parent,
             _ => return None,
         }
     }
@@ -265,6 +267,20 @@ fn array_key(element: Node<'_>, value: Node<'_>, src: &[u8]) -> Option<String> {
         return None;
     }
     text(key, src).map(|key| strip_quotes(&key))
+}
+
+/// The call whose lone callable argument `argument` is. The namer and the marker search both
+/// unwrap `wrap(function () {})` through it, so a unit is suppressed where it is named.
+fn wrapping_call(argument: Node<'_>) -> Option<Node<'_>> {
+    let arguments = argument
+        .parent()
+        .filter(|parent| argument.kind() == "argument" && parent.kind() == "arguments")?;
+    if !is_sole_callable_argument(arguments, argument) {
+        return None;
+    }
+    arguments
+        .parent()
+        .filter(|call| CALL.contains(&call.kind()))
 }
 
 fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {

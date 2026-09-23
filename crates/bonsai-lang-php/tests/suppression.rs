@@ -103,6 +103,17 @@ fn a_marker_above_an_assigned_closure_is_honoured() {
     );
 }
 
+/// The namer hands a lone callback the binding of the call wrapping it, so the marker above that
+/// binding must cover it too.
+#[test]
+fn a_marker_above_a_wrapped_closure_is_honoured() {
+    let source = "<?php\n// bonsai-lint-ignore: route table\n$handler = wrap(function () { if ($a) { echo 1; } });\n";
+    assert_eq!(
+        suppression_of(source, "handler"),
+        Suppression::Reasoned("route table".to_string())
+    );
+}
+
 /// File-level code is reported on line 1, so its marker trails the open tag or sits in the
 /// comment block at the top of the file.
 #[test]

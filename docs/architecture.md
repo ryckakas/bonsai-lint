@@ -129,8 +129,9 @@ segment of the enclosing container's path. Both let a bare call count.
 
 A Go method sits at file scope, not inside its type, so its `UnitScope` also carries the path
 segment a class body supplies elsewhere: `func (s *Stack[T]) Push()` is keyed `Stack::Push`. It
-reaches itself through `s`, or through `Stack` in the method expression `Stack.Push(s)`, and never
-through a bare `Push()`, since Go cannot call a method without its receiver.
+reaches itself through `s` or `(*s)`, or through its type in a method expression such as
+`(*Stack[T]).Push(s)`, and never through a bare `Push()`, since Go cannot call a method without
+its receiver.
 
 ### Generated files
 

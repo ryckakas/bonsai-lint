@@ -7,6 +7,8 @@ type Stack struct{ items []int }
 
 func (s *Stack) Push(v int) { s.items = append(s.items, v) }
 
+func generic[T any](x T) { generic[T](x) }
+
 func everything(a, b bool, c chan int, x interface{}) int {
 	if a {
 		f()
