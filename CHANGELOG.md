@@ -54,8 +54,9 @@ what a user reads on the GitHub release page.
 - A suppression marker above a declaration whose function is wrapped in a call, such as
   `const useCart = defineStore('cart', () => …)` or `$handler = wrap(function () { … })`, now
   suppresses that function. The unit was already named after the declaration, but the marker
-  search stopped at the call, so the marker was ignored. A call that binds nothing, such as
-  `Route::get('/x', function () { … })`, still leaves a marker above it to the file.
+  search stopped at the call, so the marker was ignored. A marker directly above the callback,
+  inside the argument list, keeps working, and now does in PHP too. A call that binds nothing,
+  such as `Route::get('/x', function () { … })`, still leaves a marker above it to the file.
 
 ## [0.2.1] - 2026-09-22
 

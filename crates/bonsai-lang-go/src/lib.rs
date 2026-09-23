@@ -98,8 +98,8 @@ impl Hooks for GoHooks {
         unit_scope(node, src)
     }
 
-    fn suppression_anchor<'t>(&self, node: Node<'t>, src: &[u8]) -> Node<'t> {
-        suppression_anchor(node, src)
+    fn suppression_anchors<'t>(&self, node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+        suppression_anchors(node, src, visit);
     }
 
     fn if_parts<'t>(&self, node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
@@ -343,17 +343,29 @@ fn type_name(written: Node<'_>) -> Option<Node<'_>> {
     }
 }
 
+/// The callback's own position first, then, when its call hands it a binding, the declaration
+/// of that binding. A call that binds nothing, such as `var _ = register(func() {})`, leaves a marker
+/// above it to the file.
+fn suppression_anchors<'t>(node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+    let own = anchor(node, false);
+    visit(own);
+    if bound_name(node, src).is_some() {
+        let declaration = anchor(node, true);
+        if declaration.id() != own.id() {
+            visit(declaration);
+        }
+    }
+}
+
 /// Climbs to the declaration a marker would sit above: `var handler = func() {}` is suppressed
 /// from the line before `var`, and a map entry from the line before its key.
-fn suppression_anchor<'t>(node: Node<'t>, src: &[u8]) -> Node<'t> {
-    // A call hands its binding on only where it has one, so the marker goes where the name does.
-    let bound = bound_name(node, src).is_some();
+fn anchor(node: Node<'_>, through_calls: bool) -> Node<'_> {
     let mut current = node;
     loop {
         let Some(parent) = current.parent() else {
             return current;
         };
-        if let Some(call) = binding_call(parent, current).filter(|_| bound) {
+        if let Some(call) = binding_call(parent, current).filter(|_| through_calls) {
             current = call;
             continue;
         }

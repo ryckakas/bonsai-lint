@@ -102,8 +102,8 @@ impl Hooks for PhpHooks {
         container_name(node, src)
     }
 
-    fn suppression_anchor<'t>(&self, node: Node<'t>, src: &[u8]) -> Node<'t> {
-        suppression_anchor(node, src)
+    fn suppression_anchors<'t>(&self, node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+        suppression_anchors(node, src, visit);
     }
 }
 
@@ -202,18 +202,29 @@ fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
         .map(ToString::to_string)
 }
 
+/// The callback's own position first, then, when its call hands it a binding, the declaration
+/// of that binding. A call that binds nothing, such as `Route::get('/x', function () {})`, leaves a marker
+/// above it to the file.
+fn suppression_anchors<'t>(node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+    let own = anchor(node, false);
+    visit(own);
+    if bound_name(node, src).is_some() {
+        let declaration = anchor(node, true);
+        if declaration.id() != own.id() {
+            visit(declaration);
+        }
+    }
+}
+
 /// Climbs to the statement a marker would sit above, so `$handler = function () {}` can be
 /// suppressed from the line before it.
-fn suppression_anchor<'t>(node: Node<'t>, src: &[u8]) -> Node<'t> {
-    // A call hands its binding on only where it has one: `Route::get('/x', function () {})`
-    // binds nothing, so a marker above it stays with the file.
-    let bound = bound_name(node, src).is_some();
+fn anchor(node: Node<'_>, through_calls: bool) -> Node<'_> {
     let mut current = node;
     loop {
         let Some(parent) = current.parent() else {
             return current;
         };
-        if let Some(call) = wrapping_call(parent).filter(|_| bound) {
+        if let Some(call) = wrapping_call(parent).filter(|_| through_calls) {
             current = call;
             continue;
         }
@@ -225,6 +236,8 @@ fn suppression_anchor<'t>(node: Node<'t>, src: &[u8]) -> Node<'t> {
         match parent.kind() {
             "assignment_expression" if is_value("right") => current = parent,
             "expression_statement" | "parenthesized_expression" => current = parent,
+            // A comment in an argument list is a sibling of the argument, not of the closure.
+            "argument" => return parent,
             _ => return current,
         }
     }

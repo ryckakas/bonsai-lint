@@ -163,6 +163,15 @@ fn a_marker_above_the_first_function_belongs_to_it_not_the_file() {
     );
 }
 
+#[test]
+fn a_marker_directly_above_a_wrapped_closure_is_honoured() {
+    let source = "<?php\n$handler = wrap(\n    'x',\n    // bonsai-lint-ignore: inline\n    function () { if ($a) { echo 1; } }\n);\n";
+    assert_eq!(
+        suppression_of(source, "handler"),
+        Suppression::Reasoned("inline".to_string())
+    );
+}
+
 /// A route registration binds its callback to nothing, so the callback is positional and the
 /// marker above the call stays with the file, as it would above any other statement.
 #[test]

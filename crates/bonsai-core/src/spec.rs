@@ -146,8 +146,15 @@ pub trait Hooks: Sync + Debug {
         None
     }
 
-    fn suppression_anchor<'t>(&self, node: Node<'t>, _src: &[u8]) -> Node<'t> {
-        node
+    /// Hands `visit` each node a unit's marker may lead or trail, innermost first; the first one
+    /// carrying a marker wins.
+    fn suppression_anchors<'t>(
+        &self,
+        node: Node<'t>,
+        _src: &[u8],
+        visit: &mut dyn FnMut(Node<'t>),
+    ) {
+        visit(node);
     }
 
     /// Hands `visit` the parts of an if or else-if node, for a grammar whose chains the field
