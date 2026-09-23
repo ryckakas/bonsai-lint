@@ -102,8 +102,8 @@ impl Hooks for PhpHooks {
         container_name(node, src)
     }
 
-    fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
-        suppression_anchor(node)
+    fn suppression_anchor<'t>(&self, node: Node<'t>, src: &[u8]) -> Node<'t> {
+        suppression_anchor(node, src)
     }
 }
 
@@ -204,13 +204,16 @@ fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
 
 /// Climbs to the statement a marker would sit above, so `$handler = function () {}` can be
 /// suppressed from the line before it.
-fn suppression_anchor(node: Node<'_>) -> Node<'_> {
+fn suppression_anchor<'t>(node: Node<'t>, src: &[u8]) -> Node<'t> {
+    // A call hands its binding on only where it has one: `Route::get('/x', function () {})`
+    // binds nothing, so a marker above it stays with the file.
+    let bound = bound_name(node, src).is_some();
     let mut current = node;
     loop {
         let Some(parent) = current.parent() else {
             return current;
         };
-        if let Some(call) = wrapping_call(parent) {
+        if let Some(call) = wrapping_call(parent).filter(|_| bound) {
             current = call;
             continue;
         }
@@ -269,8 +272,7 @@ fn array_key(element: Node<'_>, value: Node<'_>, src: &[u8]) -> Option<String> {
     text(key, src).map(|key| strip_quotes(&key))
 }
 
-/// The call whose lone callable argument `argument` is. The namer and the marker search both
-/// unwrap `wrap(function () {})` through it, so a unit is suppressed where it is named.
+/// The call whose lone callable argument `argument` is, and so whose binding it takes.
 fn wrapping_call(argument: Node<'_>) -> Option<Node<'_>> {
     let arguments = argument
         .parent()

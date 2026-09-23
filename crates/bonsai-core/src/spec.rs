@@ -146,7 +146,7 @@ pub trait Hooks: Sync + Debug {
         None
     }
 
-    fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
+    fn suppression_anchor<'t>(&self, node: Node<'t>, _src: &[u8]) -> Node<'t> {
         node
     }
 

@@ -174,6 +174,18 @@ fn a_marker_above_the_first_function_belongs_to_it_not_the_file() {
     assert_eq!(suppression_of(source, "<toplevel>"), Suppression::None);
 }
 
+/// A route registration binds its callback to nothing, so the callback is positional and the
+/// marker above the call stays with the file, as it would above any other statement.
+#[test]
+fn a_marker_above_a_leading_route_call_belongs_to_the_file() {
+    let source = "// bonsai-lint-ignore: route table\napp.get('/x', () => { if (a) { f(); } });\nif (b) { g(); }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("route table".to_string())
+    );
+    assert_eq!(suppression_of(source, "app.get#1"), Suppression::None);
+}
+
 #[test]
 fn a_bare_marker_at_the_top_of_the_file_is_refused() {
     let source = "// bonsai-lint-ignore\nif (a) { run(); }\n";

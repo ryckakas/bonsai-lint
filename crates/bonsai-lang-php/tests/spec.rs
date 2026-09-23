@@ -28,6 +28,8 @@ fn parentheses_do_not_break_an_operator_run() {
         ("if ($a && ($b || $c)) { echo 1; }", 3),
         // if +1, `&&` then `||` — the trailing `|| $d` continues the same `||` run
         ("if ($a && ($b || $c) || $d) { echo 1; }", 3),
+        // if +1, `&&`, `||`, `&&`: the group sits between two `&&` runs and cannot merge them
+        ("if ($a && ($b || $c) && $d) { echo 1; }", 4),
     ]);
 }
 
@@ -153,13 +155,13 @@ fn a_method_recurses_through_its_class_keywords() {
     }
 }
 
-/// Pinned so the seam refactor cannot move it; counting it differently is a scoring decision.
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
 #[test]
 fn a_bare_namesake_call_inside_a_method_counts() {
     assert_eq!(method_score("return target();"), 1);
 }
 
-/// Pinned so the seam refactor cannot move it; counting it differently is a scoring decision.
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
 #[test]
 fn this_counts_as_self_even_in_a_free_function() {
     assert_scores(&[

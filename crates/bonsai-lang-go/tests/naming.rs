@@ -92,6 +92,16 @@ fn a_lone_literal_argument_takes_the_binding_of_its_call() {
 }
 
 /// `_` discards the value, so two `var _ = …` lines would otherwise share one baseline key.
+/// `var cfg = func() T { … }()` runs package-level setup once; the literal takes the binding its
+/// result is stored under, rather than a position that moves when another is added above it.
+#[test]
+fn an_immediately_invoked_literal_takes_the_binding_of_its_result() {
+    let source =
+        "package p\nvar cfg = func() int { return 1 }()\nvar other = (func() int { return 2 })()\n";
+    assert_eq!(names(source), ["cfg", "other"]);
+    assert_eq!(origin_of(source, "cfg"), NameOrigin::Bound);
+}
+
 #[test]
 fn a_blank_binding_falls_through_to_a_positional_key() {
     let source = "package p\nvar _ = register(func() {})\nvar _ = register(func() {})\n";

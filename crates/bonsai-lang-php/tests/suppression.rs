@@ -163,6 +163,18 @@ fn a_marker_above_the_first_function_belongs_to_it_not_the_file() {
     );
 }
 
+/// A route registration binds its callback to nothing, so the callback is positional and the
+/// marker above the call stays with the file, as it would above any other statement.
+#[test]
+fn a_marker_above_a_leading_route_call_belongs_to_the_file() {
+    let source = "<?php\n// bonsai-lint-ignore: route table\nRoute::get('/x', function () { if ($a) { echo 1; } });\nif ($b) { echo 2; }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("route table".to_string())
+    );
+    assert_eq!(suppression_of(source, "Route::get#1"), Suppression::None);
+}
+
 #[test]
 fn a_marker_after_the_first_statement_does_not_suppress_the_file() {
     let source = "<?php\n$x = 1;\n// bonsai-lint-ignore: reason\nif ($a) { echo 1; }\n";

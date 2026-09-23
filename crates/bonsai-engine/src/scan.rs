@@ -377,19 +377,21 @@ fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
     };
 
     let mut scored = Scored::default();
+    let mut decoding = Vec::new();
     let source = match std::fs::read(&job.path) {
-        Ok(bytes) => decode(bytes, &job.shown, &mut scored.warnings),
+        Ok(bytes) => decode(bytes, &job.shown, &mut decoding),
         Err(error) => {
             scored.error = Some(format!("{}: {error}", job.shown.display()));
             return scored;
         }
     };
 
-    // Read before it can be recognised, but then uncounted, like an unscored name the plan never
-    // admits.
+    // Read before it can be recognised, but then dropped silently, like an unscored name the plan
+    // never admits.
     if job.descriptor.is_generated(&source) {
         return scored;
     }
+    scored.warnings = decoding;
 
     scored.domain = Some(job.domain);
     scored.located = parsers

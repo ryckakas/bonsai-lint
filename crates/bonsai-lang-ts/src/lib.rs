@@ -143,8 +143,8 @@ impl Hooks for TsHooks {
         container_name(node, src)
     }
 
-    fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
-        suppression_anchor(node)
+    fn suppression_anchor<'t>(&self, node: Node<'t>, src: &[u8]) -> Node<'t> {
+        suppression_anchor(node, src)
     }
 }
 
@@ -263,13 +263,16 @@ fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
 /// Climbs to the declaration a marker would sit above. For `const handler = () => {}` the
 /// comment precedes the whole declaration, not the arrow function; a class field or object pair
 /// is the declaration for the arrow it holds.
-fn suppression_anchor(node: Node<'_>) -> Node<'_> {
+fn suppression_anchor<'t>(node: Node<'t>, src: &[u8]) -> Node<'t> {
+    // A call hands its binding on only where it has one: `app.get('/x', () => {})` binds nothing,
+    // so a marker above it stays with the file.
+    let bound = bound_name(node, src).is_some();
     let mut current = node;
     loop {
         let Some(parent) = current.parent() else {
             return current;
         };
-        if let Some(call) = wrapping_call(parent, current) {
+        if let Some(call) = wrapping_call(parent, current).filter(|_| bound) {
             current = call;
             continue;
         }
@@ -326,8 +329,7 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
     }
 }
 
-/// The call whose lone callable argument `candidate` is. The namer and the marker search both
-/// unwrap `wrap(() => {})` through it, so a unit is suppressed where it is named.
+/// The call whose lone callable argument `candidate` is, and so whose binding it takes.
 fn wrapping_call<'t>(arguments: Node<'t>, candidate: Node<'t>) -> Option<Node<'t>> {
     if arguments.kind() != "arguments" || !is_sole_callable_argument(arguments, candidate) {
         return None;

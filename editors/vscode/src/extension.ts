@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { resolveBinary, type Binary } from "./binary";
-import { scan, type Finding } from "./run";
+import { scan, UnsupportedFileError, type Finding } from "./run";
 import { diagnosticSpan } from "./span";
 
 const MISSING_BINARY_DISMISSED = "bonsai-lint.missingBinaryDismissed";
@@ -158,6 +158,14 @@ async function refresh(document: vscode.TextDocument): Promise<void> {
     }
     // A broken scan should not leave stale diagnostics implying the file is clean.
     diagnostics.delete(document.uri);
+    if (error instanceof UnsupportedFileError) {
+      report(
+        error.message,
+        `this CLI cannot analyse ${error.extension} files; update it, or remove the language ` +
+          "from bonsai-lint.languages",
+      );
+      return;
+    }
     report(error instanceof Error ? error.message : String(error));
   }
 }
@@ -178,18 +186,18 @@ function toDiagnostic(lines: string[], finding: Finding): vscode.Diagnostic {
 }
 
 /**
- * Every problem lands in the output channel; the popup fires once per distinct message, or a
+ * Every problem lands in the output channel; the popup fires once per distinct `popup`, or a
  * broken `bonsai-lint.toml` would nag on every keystroke.
  */
-function report(message: string): void {
+function report(message: string, popup = message): void {
   output.appendLine(message);
-  if (reported.has(message)) {
+  if (reported.has(popup)) {
     return;
   }
-  reported.add(message);
+  reported.add(popup);
 
   const show = "Show output";
-  void vscode.window.showWarningMessage(`bonsai-lint: ${message}`, show).then((choice) => {
+  void vscode.window.showWarningMessage(`bonsai-lint: ${popup}`, show).then((choice) => {
     if (choice === show) {
       output.show(true);
     }

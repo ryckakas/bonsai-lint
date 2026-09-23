@@ -117,6 +117,20 @@ fn a_generated_go_buffer_reports_nothing_through_stdin() {
     assert_eq!(report(&output)["findings"], serde_json::json!([]));
 }
 
+/// A generated buffer is never scored, so a lossy decode of it has nothing worth a warning.
+#[test]
+fn a_generated_go_buffer_with_invalid_utf8_prints_no_warning() {
+    let project = Project::new();
+    let mut input = GENERATED_HEADER.as_bytes().to_vec();
+    input.extend_from_slice(b"package p\n\n// caf\xE9\n");
+
+    let output =
+        project.run_with_stdin_bytes(&["--stdin", "--stdin-path", "pkg/api.pb.go"], &input);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert_eq!(stderr(&output), "");
+}
+
 #[test]
 fn a_generated_go_file_is_skipped_beside_handwritten_ones() {
     let project = Project::new();

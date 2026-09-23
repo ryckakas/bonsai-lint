@@ -114,6 +114,7 @@ written:
 | `var handler = func() {}` | `handler` |
 | `var routes = map[string]func(){"list": func() {}}` | `list` |
 | `var handler = wrap(func() {})` | `handler` |
+| `var cfg = func() T { … }()` | `cfg` |
 | `var _ = register(func() {})` | `register#0` |
 | a second `func init()` in the same file | `init~2` |
 | anything else | `<anonymous>` |
@@ -171,6 +172,8 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
   such as `(*Stack).Push(s)` or `Stack[T].Push(s)`. A method cannot be called without its
   receiver, so a bare `Push()` inside it names a free function or a builtin and is not recursion,
   and neither is `strings.Split` inside `func Split`.
+- A call through any other value, even one of the same type such as `c.Walk()` over a node's
+  children, would need type information to recognise and is not counted.
 - A generic function calling itself counts whether its type arguments are inferred, `Walk(x)`, or
   written out, `Walk[T](x)`, even when they differ from its own: it is still a call to its own
   name.

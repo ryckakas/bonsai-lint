@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { scan, type ScanOptions } from "./run";
+import { scan, UnsupportedFileError, type ScanOptions } from "./run";
 import type { Binary } from "./binary";
 
 const scripts = mkdtempSync(join(tmpdir(), "bonsai-lint-fake-cli-"));
@@ -114,4 +114,20 @@ test("a tool that exits without reading its input rejects instead of crashing th
   `);
 
   await assert.rejects(run(binary, { text: "x".repeat(1 << 20) }), /no language handles/);
+});
+
+test("a file the tool has no language for rejects with its extension, not just its path", async () => {
+  const binary = fakeCli(`
+    process.stderr.write("pkg/a.go: no language handles this extension");
+    process.exit(1);
+  `);
+
+  await assert.rejects(run(binary, { file: "/repo/pkg/a.go" }), (error: unknown) => {
+    if (!(error instanceof UnsupportedFileError)) {
+      return false;
+    }
+    assert.equal(error.extension, ".go");
+    assert.match(error.message, /pkg\/a\.go: no language handles/);
+    return true;
+  });
 });

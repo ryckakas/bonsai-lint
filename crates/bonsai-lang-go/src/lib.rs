@@ -98,8 +98,8 @@ impl Hooks for GoHooks {
         unit_scope(node, src)
     }
 
-    fn suppression_anchor<'t>(&self, node: Node<'t>) -> Node<'t> {
-        suppression_anchor(node)
+    fn suppression_anchor<'t>(&self, node: Node<'t>, src: &[u8]) -> Node<'t> {
+        suppression_anchor(node, src)
     }
 
     fn if_parts<'t>(&self, node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
@@ -156,7 +156,7 @@ pub fn is_generated(source: &str) -> bool {
             continue;
         };
         in_block = false;
-        match header_line(rest.trim()) {
+        match header_line(rest.trim_start()) {
             Header::Marker => return true,
             Header::Comment => {}
             Header::OpenBlock => in_block = true,
@@ -185,7 +185,7 @@ fn header_line(line: &str) -> Header {
     }
     match line.strip_prefix("/*") {
         Some(block) => block.find("*/").map_or(Header::OpenBlock, |end| {
-            header_line(block[end + 2..].trim())
+            header_line(block[end + 2..].trim_start())
         }),
         None => Header::Code,
     }
@@ -326,7 +326,6 @@ fn receiver(node: Node<'_>, src: &[u8]) -> Option<Receiver> {
     })
 }
 
-/// Strips the pointer and any parentheses but keeps the type parameters.
 fn written_type(node: Node<'_>) -> Option<Node<'_>> {
     match node.kind() {
         "type_identifier" | "generic_type" => Some(node),
@@ -346,13 +345,15 @@ fn type_name(written: Node<'_>) -> Option<Node<'_>> {
 
 /// Climbs to the declaration a marker would sit above: `var handler = func() {}` is suppressed
 /// from the line before `var`, and a map entry from the line before its key.
-fn suppression_anchor(node: Node<'_>) -> Node<'_> {
+fn suppression_anchor<'t>(node: Node<'t>, src: &[u8]) -> Node<'t> {
+    // A call hands its binding on only where it has one, so the marker goes where the name does.
+    let bound = bound_name(node, src).is_some();
     let mut current = node;
     loop {
         let Some(parent) = current.parent() else {
             return current;
         };
-        if let Some(call) = wrapping_call(parent, current) {
+        if let Some(call) = binding_call(parent, current).filter(|_| bound) {
             current = call;
             continue;
         }
@@ -387,7 +388,7 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
         match parent.kind() {
             "expression_list" => return var_name(parent, current, src),
             "literal_element" => return map_key(parent, src),
-            "argument_list" => current = wrapping_call(parent, current)?,
+            "argument_list" | "call_expression" => current = binding_call(parent, current)?,
             "parenthesized_expression" => current = parent,
             _ => return None,
         }
@@ -432,15 +433,19 @@ fn unquote(key: &str) -> String {
         .map_or_else(|| strip_quotes(trimmed), ToString::to_string)
 }
 
-/// The call whose lone callable argument `candidate` is. The namer and the marker search both
-/// unwrap `wrap(func() {})` through it, so a unit is suppressed where it is named.
-fn wrapping_call<'t>(arguments: Node<'t>, candidate: Node<'t>) -> Option<Node<'t>> {
-    if arguments.kind() != "argument_list" || !is_sole_callable_argument(arguments, candidate) {
-        return None;
+/// The call that hands its own binding to `current`: the one it is the lone callable argument
+/// of, as in `wrap(func() {})`, or the one invoking it on the spot, as in `func() T {}()`.
+fn binding_call<'t>(parent: Node<'t>, current: Node<'t>) -> Option<Node<'t>> {
+    match parent.kind() {
+        "argument_list" if is_sole_callable_argument(parent, current) => parent
+            .parent()
+            .filter(|call| call.kind() == "call_expression"),
+        "call_expression" => parent
+            .child_by_field_name("function")
+            .is_some_and(|function| function.id() == current.id())
+            .then_some(parent),
+        _ => None,
     }
-    arguments
-        .parent()
-        .filter(|call| call.kind() == "call_expression")
 }
 
 fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {

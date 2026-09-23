@@ -290,10 +290,12 @@ fn scan_stdin(
         return Ok(outcome);
     }
 
-    let source = decode(bytes, &path, &mut outcome.warnings);
+    let mut decoding = Vec::new();
+    let source = decode(bytes, &path, &mut decoding);
     if descriptor.is_generated(&source) {
         return Ok(outcome);
     }
+    outcome.warnings.extend(decoding);
     let key_path = normalize_key(&absolute, &domain.root);
 
     let shown = display_path(&path);

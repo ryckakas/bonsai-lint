@@ -19,6 +19,7 @@ fn parentheses_do_not_break_an_operator_run() {
         ("if (a && (b && c)) { f(); }", 2),
         ("if (a && (b || c)) { f(); }", 3),
         ("if (a && (b || c) || d) { f(); }", 3),
+        ("if (a && (b || c) && d) { f(); }", 4),
     ]);
 }
 
@@ -174,7 +175,7 @@ fn a_quoted_key_with_a_separator_answers_to_its_last_segment() {
     );
 }
 
-/// Pinned so the seam refactor cannot move it; counting it differently is a scoring decision.
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
 #[test]
 fn a_bare_namesake_call_inside_a_method_counts() {
     assert_eq!(
@@ -183,10 +184,17 @@ fn a_bare_namesake_call_inside_a_method_counts() {
     );
 }
 
-/// Pinned so the seam refactor cannot move it; counting it differently is a scoring decision.
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
 #[test]
 fn this_counts_as_self_even_in_a_free_function() {
     assert_scores(&[("return this.target();", 1), ("return super.target();", 1)]);
+}
+
+/// A limit, not a choice: without scope analysis a closure that shadows its function's name
+/// reads as a self-call, one increment per call.
+#[test]
+fn a_local_closure_sharing_the_functions_name_counts_as_recursion() {
+    assert_scores(&[("const target = () => 1; target(); target();", 2)]);
 }
 
 #[test]

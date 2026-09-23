@@ -19,6 +19,7 @@ fn parentheses_do_not_break_an_operator_run() {
         ("if a && (b && c) { f() }", 2),
         ("if a && (b || c) { f() }", 3),
         ("if a && (b || c) || d { f() }", 3),
+        ("if a && (b || c) && d { f() }", 4),
     ]);
 }
 
@@ -236,9 +237,10 @@ fn an_explicitly_instantiated_self_call_is_recursion() {
 }
 
 /// A method cannot be called without its receiver, so a bare call of its own name is a free
-/// function, and a call through another value is another object's method.
+/// function. A call through any other value is not recognised even when it reaches the same
+/// method, as `o.Drop(s)` does: telling that apart from another type's `Drop` needs types.
 #[test]
-fn a_method_does_not_recurse_through_anything_else() {
+fn recursion_is_recognised_only_through_the_receiver() {
     let source = "package p\n\
         func (s *Stack) Pop() { Pop() }\n\
         func (s *Stack) Peek() { s.inner.Peek() }\n\
@@ -252,6 +254,13 @@ fn a_method_does_not_recurse_through_anything_else() {
 fn a_wrapper_around_another_packages_namesake_is_not_recursion() {
     let source = "package p\nfunc Split(s string) []string { return strings.Split(s, \",\") }\n";
     assert_eq!(score_of(source, "Split"), 0);
+}
+
+/// A limit, not a choice: without scope analysis a closure that shadows its function's name
+/// reads as a self-call, one increment per call.
+#[test]
+fn a_local_closure_sharing_the_functions_name_counts_as_recursion() {
+    assert_scores(&[("target := func() {}; target(); target()", 2)]);
 }
 
 #[test]

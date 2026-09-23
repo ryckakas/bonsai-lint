@@ -73,6 +73,12 @@ fn a_marker_above_a_wrapped_literal_is_honoured() {
 }
 
 #[test]
+fn a_marker_above_an_immediately_invoked_literal_is_honoured() {
+    let source = "package p\n\n// bonsai-lint-ignore: startup table\nvar cfg = func() int { if a { return 1 }; return 2 }()\n";
+    assert_eq!(suppression_of(source, "cfg"), reasoned("startup table"));
+}
+
+#[test]
 fn a_marker_inside_a_var_group_covers_only_its_own_spec() {
     let source = "package p\n\nvar (\n\t// bonsai-lint-ignore: vendored\n\thandler = func() { if a { f() } }\n\tother = func() { if b { f() } }\n)\n";
     assert_eq!(suppression_of(source, "handler"), reasoned("vendored"));

@@ -386,6 +386,14 @@ deliberate choice, and this is all of them, so you can judge which suits you:
 | JSX `{cond && <X/>}` | exempt | +1, the same as the equivalent ternary |
 | `const x = a \|\| []` | exempt | +1 |
 | Code outside any function | not scored | scored as `<toplevel>` |
+| An `if` inside a plain `else` block | no deeper than the `else` | one level deeper, like any branch body |
+| `a && (b \|\| c) && d` | 2, the group counted as its own run | 3, grouping is transparent |
+| A method calling itself through its receiver | not recursion | +1 |
+| A builtin sharing a method's name, `append()` inside `append` | +1, as recursion | free |
+| A local closure sharing its function's name | resolved to the local | +1 per call, matched by name |
+
+The last row is a limit rather than a preference: recursion is recognised by syntax alone, with no
+scope analysis.
 
 The first row moves numbers the most. Scoring every function from zero means a pyramid of
 callbacks costs almost nothing:
@@ -420,8 +428,9 @@ threshold unless you set one, so the editor shows exactly what CI would fail on,
 | 1.26 million lines of PHP, JavaScript and TypeScript | **0.77s** |
 | 2.85 million lines of Go, its own standard library | **0.79s** |
 
-Roughly **1.6 million lines per second**, across three languages, in one pass, on a ten-core
-M5. No warm-up, no daemon, no language server. One process, start to finish.
+That is roughly **1.6 million lines per second** on the monorepo, three languages in one pass,
+and **3.6 million** on the Go standard library, both on a ten-core M5. No warm-up, no daemon, no
+language server. One process, start to finish.
 
 Files are read, parsed and scored in parallel; `--jobs` bounds that, and `--jobs 1` is the same
 scan on one core, at 3.15s. The report is byte for byte identical either way — findings are

@@ -64,6 +64,11 @@ impl Project {
     }
 
     pub fn run_with_stdin(&self, args: &[&str], input: &str) -> Output {
+        self.run_with_stdin_bytes(args, input.as_bytes())
+    }
+
+    /// For input that is deliberately not valid UTF-8.
+    pub fn run_with_stdin_bytes(&self, args: &[&str], input: &[u8]) -> Output {
         let mut child = self
             .command(args)
             .stdin(Stdio::piped())
@@ -75,7 +80,7 @@ impl Project {
             .stdin
             .take()
             .expect("stdin is piped")
-            .write_all(input.as_bytes())
+            .write_all(input)
             .expect("stdin accepts input");
         child.wait_with_output().expect("binary exits")
     }
