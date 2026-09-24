@@ -283,7 +283,7 @@ fn anchor(node: Node<'_>, through_calls: bool) -> Node<'_> {
         let Some(parent) = current.parent() else {
             return current;
         };
-        if let Some(call) = wrapping_call(parent, current).filter(|_| through_calls) {
+        if let Some(call) = binding_call(parent, current).filter(|_| through_calls) {
             current = call;
             continue;
         }
@@ -333,21 +333,27 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             // `const useCart = defineStore('cart', () => {})` is `useCart`, not `defineStore#1`.
             // Only a lone callable argument is unwrapped, so `app.get('/x', fn)` — where the
             // call is nobody's value — still falls through to a positional key.
-            "arguments" => current = wrapping_call(parent, current)?,
+            "arguments" | "call_expression" => current = binding_call(parent, current)?,
             kind if TRANSPARENT.contains(&kind) => current = parent,
             _ => return None,
         }
     }
 }
 
-/// The call whose lone callable argument `candidate` is, and so whose binding it takes.
-fn wrapping_call<'t>(arguments: Node<'t>, candidate: Node<'t>) -> Option<Node<'t>> {
-    if arguments.kind() != "arguments" || !is_sole_callable_argument(arguments, candidate) {
-        return None;
+/// The call that hands its own binding to `current`: the one it is the lone callable argument
+/// of, as in `defineStore('x', () => {})`, or the one invoking it on the spot, as in
+/// `(() => {})()`.
+fn binding_call<'t>(parent: Node<'t>, current: Node<'t>) -> Option<Node<'t>> {
+    match parent.kind() {
+        "arguments" if is_sole_callable_argument(parent, current) => parent
+            .parent()
+            .filter(|call| call.kind() == "call_expression"),
+        "call_expression" => parent
+            .child_by_field_name("function")
+            .is_some_and(|function| function.id() == current.id())
+            .then_some(parent),
+        _ => None,
     }
-    arguments
-        .parent()
-        .filter(|call| call.kind() == "call_expression")
 }
 
 fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {

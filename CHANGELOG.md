@@ -48,6 +48,12 @@ what a user reads on the GitHub release page.
     descriptors.
 - `--help` no longer names languages in its description, and `--lang` lists the ids built into
   the binary, so a build with fewer language features no longer offers ones it cannot scan.
+- In PHP and TypeScript, an IIFE whose result is bound, such as `const config = (() => { … })()`
+  or `$config = (function () { … })()`, now takes that binding's name instead of `<anonymous>`,
+  and a marker above the binding suppresses it, as Go does. A bare IIFE still has nothing to be
+  named after and stays `<anonymous>`, numbered only among the units left anonymous, so adding a
+  bound one no longer shifts its key. Such a unit's baseline key changes: until
+  `--write-baseline` is rerun, its old entry reports as stale and the unit as new.
 - Two domains with the same name are now an error naming both, where they used to be merged
   under one label in silence: `--domain` and the report's `domain` field could not tell them
   apart. That includes a domain named `root`, which is the workspace root's own name.

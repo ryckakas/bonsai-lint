@@ -185,6 +185,26 @@ fn a_marker_directly_above_a_wrapped_callback_is_honoured() {
     );
 }
 
+#[test]
+fn a_marker_above_a_bound_iife_is_honoured() {
+    let source = "// bonsai-lint-ignore: startup\nconst config = (() => { if (a) { return 1; } return 2; })();\n";
+    assert_eq!(
+        suppression_of(source, "config"),
+        Suppression::Reasoned("startup".to_string())
+    );
+}
+
+/// A bare IIFE binds nothing, so a marker above it stays with the file.
+#[test]
+fn a_marker_above_a_leading_bare_iife_belongs_to_the_file() {
+    let source = "// bonsai-lint-ignore: legacy bundle\n(function ($) { if (a) { $.go(); } })(jQuery);\nif (b) { g(); }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("legacy bundle".to_string())
+    );
+    assert_eq!(suppression_of(source, "<anonymous>"), Suppression::None);
+}
+
 /// A route registration binds its callback to nothing, so the callback is positional and the
 /// marker above the call stays with the file, as it would above any other statement.
 #[test]

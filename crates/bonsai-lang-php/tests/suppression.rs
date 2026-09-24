@@ -172,6 +172,15 @@ fn a_marker_directly_above_a_wrapped_closure_is_honoured() {
     );
 }
 
+#[test]
+fn a_marker_above_a_bound_iife_is_honoured() {
+    let source = "<?php\n// bonsai-lint-ignore: startup\n$config = (function () { if ($a) { return 1; } return 2; })();\n";
+    assert_eq!(
+        suppression_of(source, "config"),
+        Suppression::Reasoned("startup".to_string())
+    );
+}
+
 /// A route registration binds its callback to nothing, so the callback is positional and the
 /// marker above the call stays with the file, as it would above any other statement.
 #[test]

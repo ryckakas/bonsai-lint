@@ -224,7 +224,7 @@ fn anchor(node: Node<'_>, through_calls: bool) -> Node<'_> {
         let Some(parent) = current.parent() else {
             return current;
         };
-        if let Some(call) = wrapping_call(parent).filter(|_| through_calls) {
+        if let Some(call) = binding_call(parent, current).filter(|_| through_calls) {
             current = call;
             continue;
         }
@@ -267,7 +267,7 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             "array_element_initializer" => return array_key(parent, current, src),
             // A factory call hands its own binding to a lone callable argument; a call that is
             // nobody's value falls through to a positional key.
-            "argument" => current = wrapping_call(parent)?,
+            "argument" | "function_call_expression" => current = binding_call(parent, current)?,
             "parenthesized_expression" => current = parent,
             _ => return None,
         }
@@ -285,17 +285,22 @@ fn array_key(element: Node<'_>, value: Node<'_>, src: &[u8]) -> Option<String> {
     text(key, src).map(|key| strip_quotes(&key))
 }
 
-/// The call whose lone callable argument `argument` is, and so whose binding it takes.
-fn wrapping_call(argument: Node<'_>) -> Option<Node<'_>> {
-    let arguments = argument
-        .parent()
-        .filter(|parent| argument.kind() == "argument" && parent.kind() == "arguments")?;
-    if !is_sole_callable_argument(arguments, argument) {
-        return None;
+/// The call that hands its own binding to `current`: the one whose lone callable argument it
+/// is, as in `wrap(function () {})`, or the one invoking it on the spot, as in
+/// `(function () {})()`.
+fn binding_call<'t>(parent: Node<'t>, current: Node<'t>) -> Option<Node<'t>> {
+    match parent.kind() {
+        "argument" => parent
+            .parent()
+            .filter(|list| list.kind() == "arguments" && is_sole_callable_argument(*list, parent))?
+            .parent()
+            .filter(|call| CALL.contains(&call.kind())),
+        "function_call_expression" => parent
+            .child_by_field_name("function")
+            .is_some_and(|function| function.id() == current.id())
+            .then_some(parent),
+        _ => None,
     }
-    arguments
-        .parent()
-        .filter(|call| CALL.contains(&call.kind()))
 }
 
 fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {

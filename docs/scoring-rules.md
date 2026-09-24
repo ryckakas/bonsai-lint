@@ -92,6 +92,7 @@ written:
 | `const api = { onClick() {} }` | `api::onClick` |
 | `export default function () {}` | `default` |
 | `const useCart = defineStore('cart', () => {})` | `useCart` |
+| `const config = (() => {})()` | `config` |
 | `app.get('/x', (req, res) => {})` | `app.get#1` |
 | anything else | `<anonymous>` |
 
@@ -103,6 +104,7 @@ written:
 | `class C { public function m() {} }` | `C::m` |
 | `$api = ['onClick' => function () {}]` | `onClick` |
 | `$handler = Closure::fromCallable(function () {})` | `handler` |
+| `$config = (function () {})()` | `config` |
 | `Route::get('/x', function () {})` | `Route::get#1` |
 | `array_map(fn ($x) => $x, $xs)` | `array_map#0` |
 | anything else | `<anonymous>` |
