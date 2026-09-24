@@ -245,9 +245,10 @@ package after the package, so the command users get matches the thing they insta
 **The VS Code extension versions independently** of the CLI, and the two numbers are not
 expected to match. Publishing is manual — `vsce` needs an Azure DevOps PAT.
 
-**The extension depends on the `bonsai-lint` npm package** on a caret range, so it picks up CLI
-releases without a bump of its own. It resolves the binary from `bonsai-lint.path` first, then
-from that package, then from `PATH`.
+**The extension depends on the `bonsai-lint` npm package** on a caret range. Under 0.x a caret
+stops at the minor version, so `^0.3.0` accepts 0.3.x but not 0.4.0, and a minor CLI release
+needs the range raised along with the relock below. It resolves the binary from
+`bonsai-lint.path` first, then from that package, then from `PATH`.
 
 **Release ordering.** `npm ci` installs the exact version pinned in
 `editors/vscode/package-lock.json`, and that can only name a version `dist` has already
