@@ -137,6 +137,81 @@ fn a_mistyped_top_level_key_is_rejected() {
     ));
 }
 
+fn error_of(root: &Path) -> String {
+    config::discover(root, KNOWN)
+        .expect_err("discovery refuses the config")
+        .to_string()
+}
+
+#[test]
+fn a_mistyped_top_level_key_is_named_with_a_suggestion() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "treshold = 10\n");
+
+    let error = error_of(&root);
+
+    assert!(error.contains("unknown key `treshold`"), "{error}");
+    assert!(error.contains("did you mean `threshold`?"), "{error}");
+}
+
+#[test]
+fn an_unknown_top_level_key_is_named_without_a_guess() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "colour = \"green\"\n");
+
+    let error = error_of(&root);
+
+    assert!(error.contains("unknown key `colour`"), "{error}");
+    assert!(!error.contains("did you mean"), "{error}");
+}
+
+#[test]
+fn a_misspelt_language_section_suggests_the_language() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "[typscript]\nthreshold = 3\n");
+
+    let workspace = discover(&root);
+
+    assert!(
+        workspace.warnings.iter().any(
+            |warning| warning.contains("`[typscript]`, ignoring; did you mean `[typescript]`?")
+        ),
+        "{:?}",
+        workspace.warnings
+    );
+}
+
+/// `--domain` and the report's `domain` field could not tell the two apart.
+#[test]
+fn two_domains_with_one_name_are_rejected() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "domains = [\"apps/*\"]\n");
+    write(&root, "apps/web/bonsai-lint.toml", "name = \"shop\"\n");
+    write(&root, "apps/admin/bonsai-lint.toml", "name = \"shop\"\n");
+
+    let error = error_of(&root);
+
+    assert!(error.contains("apps/web/bonsai-lint.toml"), "{error}");
+    assert!(
+        error.contains("`shop` is also the name of `apps/admin`"),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_domain_named_root_collides_with_the_workspace_root() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "domains = [\"apps/*\"]\n");
+    write(&root, "apps/web/bonsai-lint.toml", "name = \"root\"\n");
+
+    let error = error_of(&root);
+
+    assert!(
+        error.contains("`root` is also the name of the workspace root"),
+        "{error}"
+    );
+}
+
 #[test]
 fn a_negated_exclude_is_refused_rather_than_ignored() {
     let (_dir, root) = project();

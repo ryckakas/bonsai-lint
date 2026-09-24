@@ -259,10 +259,10 @@ threshold = 20
 | `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
 | `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |
 | `domains` | none | Root config only: globs naming directories that own their own config and baseline. |
-| `name` | the directory | A domain's name in output and for `--domain`. |
+| `name` | its path from the root, such as `packages/web` | A domain's name in output and for `--domain`. Two domains cannot share one. |
 
-A misspelt key is an error rather than a silent default, and so is a negated glob: `!pattern`
-is not supported.
+A misspelt key is an error rather than a silent default, named with a suggestion when one is
+close, and so is a negated glob: `!pattern` is not supported.
 
 </details>
 

@@ -48,6 +48,10 @@ what a user reads on the GitHub release page.
     descriptors.
 - `--help` no longer names languages in its description, and `--lang` lists the ids built into
   the binary, so a build with fewer language features no longer offers ones it cannot scan.
+- Two domains with the same name are now an error naming both, where they used to be merged
+  under one label in silence: `--domain` and the report's `domain` field could not tell them
+  apart. That includes a domain named `root`, which is the workspace root's own name.
+  Embedders see this as a new `ConfigError::Invalid` variant.
 
 ### Fixed
 
@@ -57,6 +61,10 @@ what a user reads on the GitHub release page.
   search stopped at the call, so the marker was ignored. A marker directly above the callback,
   inside the argument list, keeps working, and now does in PHP too. A call that binds nothing,
   such as `Route::get('/x', function () { … })`, still leaves a marker above it to the file.
+- A misspelt top-level key in `bonsai-lint.toml` is reported by name, as
+  ``unknown key `treshold`; did you mean `threshold`?``, instead of as "expected struct
+  LanguageSection". A misspelt language section, `[typscript]`, gets the same suggestion in its
+  warning.
 
 ## [0.2.1] - 2026-09-22
 

@@ -10,6 +10,16 @@ pub const CONFIG_FILE: &str = "bonsai-lint.toml";
 pub const BASELINE_FILE: &str = ".bonsai-lint-baseline.json";
 pub const DEFAULT_THRESHOLD: u32 = 15;
 
+/// Every other top-level key must be a `[language]` table.
+const KEYS: &[&str] = &[
+    "name",
+    "domains",
+    "threshold",
+    "exclude",
+    "toplevel",
+    "baseline",
+];
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ConfigFile {
     pub name: Option<String>,
@@ -117,13 +127,16 @@ impl Workspace {
 pub enum ConfigError {
     Read { path: PathBuf, error: String },
     Parse { path: PathBuf, error: String },
+    Invalid { path: PathBuf, error: String },
     Glob { pattern: String, error: String },
 }
 
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Read { path, error } | Self::Parse { path, error } => {
+            Self::Read { path, error }
+            | Self::Parse { path, error }
+            | Self::Invalid { path, error } => {
                 write!(f, "{}: {error}", path.display())
             }
             Self::Glob { pattern, error } => write!(f, "invalid glob `{pattern}`: {error}"),
@@ -168,6 +181,7 @@ pub fn discover(start: &Path, known_languages: &[&str]) -> Result<Workspace, Con
         let declared = declared_domains(&root, &config, patterns, known_languages, &mut warnings)?;
         domains.extend(declared);
     }
+    reject_shared_names(&root, &domains)?;
 
     Ok(Workspace {
         root,
@@ -215,6 +229,32 @@ fn declared_domains(
         ));
     }
     Ok(domains)
+}
+
+/// `--domain` and the report's `domain` field know a domain by its name alone, so two domains
+/// sharing one could not be told apart.
+fn reject_shared_names(root: &Path, domains: &[Domain]) -> Result<(), ConfigError> {
+    let clash = domains.iter().enumerate().find_map(|(index, domain)| {
+        let first = domains[..index]
+            .iter()
+            .find(|other| other.name == domain.name)?;
+        Some((first, domain))
+    });
+    let Some((first, domain)) = clash else {
+        return Ok(());
+    };
+    let owner = if first.root == root {
+        "the workspace root".to_string()
+    } else {
+        format!("`{}`", normalize_key(&first.root, root))
+    };
+    Err(ConfigError::Invalid {
+        path: domain.root.join(CONFIG_FILE),
+        error: format!(
+            "the domain name `{}` is also the name of {owner}",
+            domain.name
+        ),
+    })
 }
 
 fn config_directories_below(path: &Path) -> impl Iterator<Item = PathBuf> {
@@ -332,10 +372,51 @@ fn read_config(path: &Path) -> Result<ConfigFile, ConfigError> {
         path: path.to_path_buf(),
         error: error.to_string(),
     })?;
-    toml::from_str(&text).map_err(|error| ConfigError::Parse {
+    let parse_error = |error: String| ConfigError::Parse {
         path: path.to_path_buf(),
-        error: error.to_string(),
-    })
+        error,
+    };
+    // Any other key is read as a language section, so a misspelt one would be reported as a
+    // section of the wrong shape rather than by its name.
+    let table: toml::Table =
+        toml::from_str(&text).map_err(|error| parse_error(error.to_string()))?;
+    let unknown = table
+        .iter()
+        .find(|(key, value)| !KEYS.contains(&key.as_str()) && !value.is_table());
+    if let Some((key, _)) = unknown {
+        let hint = suggestion(key, KEYS, |near| format!("`{near}`"));
+        return Err(parse_error(format!("unknown key `{key}`{hint}")));
+    }
+    toml::from_str(&text).map_err(|error| parse_error(error.to_string()))
+}
+
+/// `; did you mean `threshold`?` for a near miss, and nothing for a word close to none of them.
+fn suggestion(word: &str, candidates: &[&str], quote: impl Fn(&str) -> String) -> String {
+    candidates
+        .iter()
+        .map(|candidate| (edit_distance(word, candidate), candidate))
+        .filter(|(distance, _)| *distance <= 2)
+        .min_by_key(|(distance, _)| *distance)
+        .map_or_else(String::new, |(_, near)| {
+            format!("; did you mean {}?", quote(near))
+        })
+}
+
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, left) in a.chars().enumerate() {
+        let mut diagonal = row[0];
+        row[0] = i + 1;
+        for (j, right) in b.iter().enumerate() {
+            let above = row[j + 1];
+            row[j + 1] = (diagonal + usize::from(left != *right))
+                .min(row[j] + 1)
+                .min(above + 1);
+            diagonal = above;
+        }
+    }
+    row[b.len()]
 }
 
 /// `*` stops at `/`, as in `.gitignore`, so `packages/*` names direct children only and
@@ -403,8 +484,9 @@ fn warn_unknown_languages(
 ) {
     for language in config.languages.keys() {
         if !known.contains(&language.as_str()) {
+            let hint = suggestion(language, known, |near| format!("`[{near}]`"));
             warnings.push(format!(
-                "{}: unknown language section `[{language}]`, ignoring",
+                "{}: unknown language section `[{language}]`, ignoring{hint}",
                 at.join(CONFIG_FILE).display()
             ));
         }
