@@ -191,7 +191,9 @@ fn two_domains_with_one_name_are_rejected() {
 
     let error = error_of(&root);
 
-    assert!(error.contains("apps/web/bonsai-lint.toml"), "{error}");
+    // The file is a host path; the domain name is spelled with `/` everywhere.
+    let file = Path::new("apps").join("web").join("bonsai-lint.toml");
+    assert!(error.contains(&file.display().to_string()), "{error}");
     assert!(
         error.contains("`shop` is also the name of `apps/admin`"),
         "{error}"
