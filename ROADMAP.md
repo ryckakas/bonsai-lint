@@ -5,28 +5,6 @@
 Nothing here is promised for a particular release. Items are listed in the order they are
 likely to be worth doing, and each one records the measurement that motivated it.
 
-## Installing through the Go toolchain
-
-Go is scored now, but every install route is still foreign to a Go project: npm,
-Homebrew, cargo or a shell script. A Go team expects `go install …@version`, or, since Go 1.24,
-a `tool` line in `go.mod` that `go get -tool` adds and `go tool bonsai-lint` runs, pinned and
-checksummed with the rest of the module's dependencies.
-
-`go install` builds Go source and bonsai-lint is Rust, so the Go side is a small launcher of the
-same shape as the npm package: a `cmd/bonsai-lint` package that downloads the release binary for
-its `GOOS`/`GOARCH`, checks it against the release's checksum, caches it and runs it. It reads its
-own module version from `debug.ReadBuildInfo`, so `@vX.Y.Z` always runs X.Y.Z.
-
-Two constraints decide the layout:
-
-- **The module belongs at the repository root.** Go resolves a module version to the tag of the
-  same name, so a root `go.mod` makes the existing `vX.Y.Z` release tags valid module versions. A
-  module in a subdirectory needs tags prefixed with its path, such as `cmd/bonsai-lint/vX.Y.Z`,
-  and `dist`'s tag pattern would match those too and try to cut a release for each.
-- **A published version is permanent.** The module proxy and checksum database keep every version
-  they have served, so a broken launcher cannot be re-tagged, only retracted from a later
-  `go.mod`. It should be proven against a pre-release tag before a real release carries it.
-
 ## Faster discovery
 
 Scoring is parallel as of the `--jobs` work; discovery is not, and it is now the whole of what
@@ -76,6 +54,17 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   npm wrapper costs 23 KB and makes it fetch its own on first use; one package per platform
   costs about 1.6 MB and fetches nothing. Analysed in
   [docs/features/extension-cli-bundling.md](docs/features/extension-cli-bundling.md).
+- **musl and Windows on ARM builds.** Alpine-based CI images and Windows on ARM have no prebuilt
+  binary. The Go launcher refuses them with a message pointing at `cargo install`, and the npm
+  wrapper runs the x64 Windows binary under emulation. dist can build
+  `x86_64-unknown-linux-musl` and `aarch64-pc-windows-msvc`, but the grammars are C, so those
+  cross-compiles need proving first.
+- **A lower glibc floor.** The Linux binaries are built on Ubuntu 22.04 and need glibc 2.35,
+  which leaves out Debian 11, Amazon Linux 2 and RHEL 8. Linking against an older glibc, for
+  example 2.17 through cargo-zigbuild, would cover them.
+- **Checksum verification in the npm wrapper.** The npm package downloads the release archive
+  without checking it, while the installer script, the Homebrew formula and the Go launcher all
+  check a sha256 recorded before the download. dist already publishes one per archive.
 - **Trusted publishing.** Both npm and crates.io now support OIDC from GitHub Actions, which
   would remove the stored tokens that have to be rotated when they expire.
 - **A long lived editor server.** The extension currently starts a process per analysis. A

@@ -186,7 +186,7 @@ compile; restructure instead.
 ## Releasing
 
 Releases go through [`cargo-dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag
-builds every target and publishes a GitHub Release, npm package, and Homebrew formula.
+builds every target and publishes a GitHub Release, npm package, Homebrew formula and Go module.
 `.github/workflows/release.yml` is generated from `dist-workspace.toml` — edit the latter and run
 `dist generate`, don't hand-edit the workflow. `dist plan` previews a release. The VS Code
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
@@ -197,9 +197,28 @@ publishes it as that release's notes, so a missing or misnamed section ships an 
 page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY-MM-DD`.
 
 A release bumps `version` in the root `Cargo.toml` **and** the seven internal path dependencies
-beside it, which must match or cargo refuses to build. The npm package and Homebrew formula take
-their version from that one field; neither is edited by hand. The extension is bumped afterwards,
-because its lockfile can only pin a CLI version that is already published.
+beside it, which must match or cargo refuses to build. The npm package, Homebrew formula and Go
+module take their version from that one field; none is edited by hand. The extension is bumped
+afterwards, because its lockfile can only pin a CLI version that is already published.
+
+The Go module `bonsai.kauneckas.dev/bonsai-lint` is a launcher that lives in
+[bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go). `.github/workflows/publish-go.yml`
+is a custom dist publish job, and it runs once the GitHub Release exists:
+- **What it does:** it writes that repository's `release.go` from the released `dist-manifest.json`,
+  tests the launcher, and pushes the tag `vX.Y.Z`. The release commit hangs off `main` and only
+  the tag reaches the remote, so `main` keeps its placeholder. `main` ships as it stands at that
+  moment, so land launcher changes there only when they are ready.
+- **What it needs:** a `GO_MODULE_TOKEN` secret with contents write access to bonsai-lint-go, and
+  the page behind `https://bonsai.kauneckas.dev/bonsai-lint?go-get=1`, served from
+  bonsai-lint-site. The Go proxy resolves the import path through that page, so it must be live
+  before tagging.
+- **A published Go version is permanent.** A failed publish is rerun with `workflow_dispatch`,
+  `rehearsal` unticked. That is a no-op when the tag already exists with the same `release.go`,
+  and it fails when the file differs, because a tag is never moved. A broken version is retracted
+  from the next patch release's `go.mod`.
+- **Rehearse a launcher change** with `workflow_dispatch` and `rehearsal` ticked. It runs every
+  step, but pushes to bonsai-lint-go's `rehearsal` branch instead of tagging, and never contacts
+  the proxy.
 
 ## Further reading
 

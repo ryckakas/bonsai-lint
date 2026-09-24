@@ -51,13 +51,19 @@ fine; three nested `if`s are the reverse.
 npx bonsai-lint --over 15 src/            # run it without installing anything
 npm install -D bonsai-lint                # or pin it in the project
 brew install ryckakas/tap/bonsai-lint     # macOS and Linux
+go install bonsai.kauneckas.dev/bonsai-lint@latest
 cargo install bonsai-lint                 # from source
 curl -LsSf https://github.com/ryckakas/bonsai-lint/releases/latest/download/bonsai-lint-installer.sh | sh
 ```
 
 The npm package fetches the prebuilt binary for your platform on install. Nothing is compiled,
-and Node only launches it. The analysis itself is pure Rust. A Go project needs nothing
-Go-specific: Homebrew or the installer script puts the same binary on the path.
+and Node only launches it. The analysis itself is pure Rust.
+
+In a Go module, `go get -tool bonsai.kauneckas.dev/bonsai-lint@latest` pins it in `go.mod`, and
+`go tool bonsai-lint` runs it (Go 1.24+). The Go module is a launcher with no dependencies, at the
+same version as the CLI. The first run of each version downloads that release's binary, checks it
+against a checksum recorded in the module, and caches it. Linux needs glibc 2.35 or newer; the
+platforms and settings are in [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go).
 
 ## Use it
 
