@@ -36,8 +36,9 @@ what a user reads on the GitHub release page.
   launcher with no dependencies, published from
   [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go) at every release under the same
   version. The first run of each version downloads that release's binary, checks it against the
-  sha256 recorded in the module's source, and caches it. musl Linux, Windows on ARM and glibc
-  older than 2.35 get a message pointing at `cargo install`.
+  sha256 recorded in the module's source, and caches it. Windows on ARM runs the x64 binary
+  under emulation, as the npm package does. musl Linux and glibc older than 2.35 get a message
+  pointing at `cargo install`.
 
 ### Changed
 
