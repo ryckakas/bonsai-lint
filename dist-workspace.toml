@@ -13,8 +13,12 @@ installers = ["shell", "powershell", "homebrew", "npm"]
 # homebrew-core rejects prebuilt binaries, so the formula goes to a personal tap.
 # Publishing needs a HOMEBREW_TAP_TOKEN secret with write access to that repo.
 tap = "ryckakas/homebrew-tap"
-# npm publishing needs an NPM_TOKEN secret.
-publish-jobs = ["homebrew", "npm"]
+# npm publishing needs an NPM_TOKEN secret. ./publish-go tags the Go module in
+# ryckakas/bonsai-lint-go, which needs a GO_MODULE_TOKEN secret with write access to that repo.
+publish-jobs = ["homebrew", "npm", "./publish-go"]
+github-custom-job-permissions = { "publish-go" = { contents = "read" } }
+# The Go launcher unpacks archives with Go's standard library, which has no xz decoder.
+unix-archive = ".tar.gz"
 # A published shrinkwrap makes npm materialise the generated package's whole dependency tree
 # for consumers, dev entries included. Without it, npm resolves the real dependency normally.
 npm-shrinkwrap = false

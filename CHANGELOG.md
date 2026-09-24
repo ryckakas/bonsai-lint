@@ -31,7 +31,20 @@ what a user reads on the GitHub release page.
   Upgrading a repository that contains `.go` files will report findings that were previously
   invisible. Run `bonsai-lint --write-baseline .` to adopt them.
 
+- **Installing through Go.** `go install bonsai.kauneckas.dev/bonsai-lint@latest` installs the
+  CLI, and `go get -tool` pins it in a Go module for `go tool bonsai-lint`. The module is a
+  launcher with no dependencies, published from
+  [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go) at every release under the same
+  version. The first run of each version downloads that release's binary, checks it against the
+  sha256 recorded in the module's source, and caches it. musl Linux, Windows on ARM and glibc
+  older than 2.35 get a message pointing at `cargo install`.
+
 ### Changed
+
+- The macOS and Linux release archives are `.tar.gz` instead of `.tar.xz`, because the Go
+  launcher unpacks them with Go's standard library, which has no xz decoder. The installer
+  scripts, npm package and Homebrew formula follow on their own; a script that downloads an
+  archive by name needs the new extension.
 
 - For embedders of `bonsai-core` and `bonsai-engine`, the language seam is now two traits with
   default methods, so a new hook no longer forces an edit into every language crate. No score
