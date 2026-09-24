@@ -1,6 +1,6 @@
 # bonsai-lint
 
-![bonsai-lint: cognitive complexity linter for PHP, JavaScript, TypeScript and Go](docs/images/cover-hero.jpg)
+![bonsai-lint: cognitive complexity linter for PHP, JavaScript, TypeScript, Vue and Go](docs/images/cover-hero.jpg)
 
 **Find the code that's hard to read, in seconds, in one project or a whole monorepo.**
 
@@ -28,8 +28,8 @@ guides, and a [playground](https://bonsai.kauneckas.dev/play/) that scores code 
   both and they score on one metric in one pass, and the same logic written in either language
   gets the same number. That is tested.
 - **No runtime, no plugins, no conflicts.** Nothing to wire into a PHPStan or ESLint setup, no
-  plugin versions to keep in step, no Composer entry. A 6.6 MB binary, 1 MB to download, or
-  `npx bonsai-lint` and install nothing at all.
+  plugin versions to keep in step, no Composer entry. A 7 MB binary, under 2 MB to download,
+  or `npx bonsai-lint` and install nothing at all.
 - **Never executes your code.** Syntax-only: no autoloader, no reflection, no module
   resolution. Safe to point at third-party or untrusted source.
 - **Complexity compounds through callbacks.** A closure inside a loop inside a condition is
@@ -342,15 +342,18 @@ function parse(string $input): Ast { /* ... */ }
 ```
 
 Works above the declaration, inside the docblock, or trailing the signature line, in every
-supported language, and for a `$handler = function () {}` or `const handler = () => {}` too. A
-marker after a closing brace on its own line belongs to nobody. **A marker without a reason is
-refused**, reported on stderr, and the finding stands. Suppression hides a finding but never
-changes a score, and `--all` always shows the real number.
+supported language. It works for a bound function too, such as `$handler = function () {}`,
+`const handler = () => {}` or Go's `var handler = func() {}`, even when a call wraps it, as in
+`const useCart = defineStore('cart', () => {})`. A marker after a closing brace on its own line
+belongs to nobody. **A marker without a reason is refused**, reported on stderr, and the finding
+stands. Suppression hides a finding but never changes a score, and `--all` always shows the real
+number.
 
 A `<toplevel>` finding is reported on line 1, so its marker goes in the comment block at the top
-of the file: trailing `<?php`, in the file's docblock, or on the first line of a script, behind a
-shebang if there is one. One comment silences one unit, so a marker directly above the first
-function is that function's; write it on the `<?php` line to address the file instead.
+of the file: trailing `<?php`, in the file's docblock, on the first line of a script behind a
+shebang if there is one, or just above or trailing Go's `package` clause. One comment silences
+one unit, so a marker directly above the first function is that function's; write it on the
+`<?php` or `package` line to address the file instead.
 
 </details>
 
@@ -443,8 +446,8 @@ scan on one core, at 3.15s. The report is byte for byte identical either way —
 collected and ranked after the scan, never printed as they arrive — so a diff of two runs is
 always a real change, not a scheduling artefact.
 
-One binary, 6.6 MB on disk and about 1 MB to download, with every language built in. There is
-no variant to choose and nothing to enable.
+One binary, about 7 MB on disk and under 2 MB to download, with every language built in. There
+is no variant to choose and nothing to enable.
 
 ## Documentation
 
