@@ -208,8 +208,9 @@ is a custom dist publish job, and it runs once the GitHub Release exists:
   tests the launcher, and pushes the tag `vX.Y.Z`. The release commit hangs off `main` and only
   the tag reaches the remote, so `main` keeps its placeholder. `main` ships as it stands at that
   moment, so land launcher changes there only when they are ready.
-- **What it needs:** a `GO_MODULE_TOKEN` secret with contents write access to bonsai-lint-go, and
-  the page behind `https://bonsai.kauneckas.dev/bonsai-lint?go-get=1`, served from
+- **What it needs:** a `GO_MODULE_TOKEN` secret with contents write access to bonsai-lint-go,
+  whose `main` takes pull requests only while its tags must stay unprotected for the job to push,
+  and the page behind `https://bonsai.kauneckas.dev/bonsai-lint?go-get=1`, served from
   bonsai-lint-site. The Go proxy resolves the import path through that page, so it must be live
   before tagging.
 - **A published Go version is permanent.** A failed publish is rerun with `workflow_dispatch`,
