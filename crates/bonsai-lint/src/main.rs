@@ -10,14 +10,10 @@ use bonsai_engine::finding::normalize_key;
 use bonsai_engine::report::{Report, ReportedFinding};
 use bonsai_engine::scan::{decode, display_path, rank, resolve};
 use bonsai_engine::{registry, Baseline, Located, ScanOutcome, ScanStats, Scanner, STACK_SIZE};
-use clap::{Parser as ClapParser, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser as ClapParser, ValueEnum};
 
 #[derive(ClapParser)]
-#[command(
-    name = "bonsai-lint",
-    version,
-    about = "Cognitive complexity linter for PHP, JS, TS and Vue"
-)]
+#[command(name = "bonsai-lint", version, about = "Cognitive complexity linter")]
 #[allow(clippy::struct_excessive_bools)]
 struct Args {
     /// Files or directories to scan
@@ -44,7 +40,7 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     baseline: Option<PathBuf>,
 
-    /// Restrict the scan to these languages (`php`, `typescript`, `vue`)
+    /// Restrict the scan to these languages
     #[arg(long, value_delimiter = ',', value_name = "ID")]
     lang: Vec<String>,
 
@@ -80,7 +76,7 @@ enum Format {
 }
 
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let args = parse_args();
 
     // The engine gives its own workers this stack; `--stdin` parses on this thread instead.
     let outcome = std::thread::Builder::new()
@@ -96,6 +92,25 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The `--lang` help names what the registry holds, so a build with fewer languages never offers
+/// one it cannot scan.
+fn parse_args() -> Args {
+    let ids = registry::language_ids();
+    let offered = if ids.is_empty() {
+        "none are built into this binary".to_string()
+    } else {
+        ids.iter()
+            .map(|id| format!("`{id}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut command = Args::command().mut_arg("lang", |arg| {
+        arg.help(format!("Restrict the scan to these languages ({offered})"))
+    });
+    let matches = command.get_matches_mut();
+    Args::from_arg_matches(&matches).unwrap_or_else(|error| error.format(&mut command).exit())
 }
 
 fn run(args: &Args) -> Result<ExitCode, String> {
@@ -275,7 +290,12 @@ fn scan_stdin(
         return Ok(outcome);
     }
 
-    let source = decode(bytes, &path, &mut outcome.warnings);
+    let mut decoding = Vec::new();
+    let source = decode(bytes, &path, &mut decoding);
+    if descriptor.is_generated(&source) {
+        return Ok(outcome);
+    }
+    outcome.warnings.extend(decoding);
     let key_path = normalize_key(&absolute, &domain.root);
 
     let shown = display_path(&path);

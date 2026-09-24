@@ -1,28 +1,50 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
+    UnitScope,
 };
 use tree_sitter::Node;
 
+#[derive(Debug)]
+pub struct TsDialect {
+    extensions: &'static [&'static str],
+    compiled: fn() -> &'static Language,
+    unscored: &'static [&'static str],
+}
+
 /// `.ts` must not be parsed with the TSX grammar: an angle-bracket type assertion collides with
 /// a JSX element.
-pub static TYPESCRIPT: LanguageDescriptor = LanguageDescriptor {
-    id: "typescript",
+pub static TYPESCRIPT: TsDialect = TsDialect {
     extensions: &["ts", "mts", "cts"],
-    spec: &SPEC,
     compiled: compiled_typescript,
-    extract: None,
+    unscored: &[".d.ts", ".d.mts", ".d.cts"],
 };
 
 /// TSX is a superset of JavaScript and JSX, so it serves `.js` and `.jsx` too and
 /// `tree-sitter-javascript` is not a dependency.
-pub static TSX: LanguageDescriptor = LanguageDescriptor {
-    id: "tsx",
+pub static TSX: TsDialect = TsDialect {
     extensions: &["tsx", "jsx", "js", "mjs", "cjs"],
-    spec: &SPEC,
     compiled: compiled_tsx,
-    extract: None,
+    unscored: &[".min.js", ".min.mjs", ".min.cjs"],
 };
+
+impl LanguageDescriptor for TsDialect {
+    fn spec(&self) -> &'static LanguageSpec {
+        &SPEC
+    }
+
+    fn extensions(&self) -> &'static [&'static str] {
+        self.extensions
+    }
+
+    fn compiled(&self) -> &'static Language {
+        (self.compiled)()
+    }
+
+    fn unscored_suffixes(&self) -> &'static [&'static str] {
+        self.unscored
+    }
+}
 
 /// The two dialects differ only by JSX nodes and `type_assertion`, none of which the scorer
 /// references, so one spec serves both. The id is a parameter because an embedded dialect reuses
@@ -45,8 +67,8 @@ pub const fn spec(id: &'static str) -> LanguageSpec {
             ],
             nesting_function: UNIT,
             if_statement: &["if_statement"],
-            // TypeScript has no else-if clause: `else if` is a nested `if_statement` inside the
-            // alternative, which `walk_else` already handles as the two-word form.
+            // TypeScript has no else-if clause: `else if` is an `if_statement` inside the else
+            // clause, which the default `if_parts` reads as the chain's next link.
             else_if_clause: &[],
             else_clause: &["else_clause"],
             nesting_control: &[
@@ -86,20 +108,45 @@ pub const fn spec(id: &'static str) -> LanguageSpec {
                 "right",
             ],
         },
-        hooks: Hooks {
-            normalize_logical_operator,
-            is_penalized_jump,
-            resolve_callee,
-            is_self_receiver,
-            unit_name,
-            container_name,
-            suppression_anchor,
-        },
+        hooks: &TsHooks,
         optional_kinds: &[],
     }
 }
 
 pub static SPEC: LanguageSpec = spec("typescript");
+
+#[derive(Debug)]
+struct TsHooks;
+
+impl Hooks for TsHooks {
+    fn normalize_logical_operator(&self, operator: &str) -> Option<&'static str> {
+        normalize_logical_operator(operator)
+    }
+
+    fn is_penalized_jump(&self, node: Node<'_>, src: &[u8]) -> bool {
+        is_penalized_jump(node, src)
+    }
+
+    fn resolve_callee<'t>(&self, node: Node<'t>) -> Option<Callee<'t>> {
+        resolve_callee(node)
+    }
+
+    fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
+        unit_name(node, src)
+    }
+
+    fn unit_scope(&self, _node: Node<'_>, _src: &[u8], container: Option<&str>) -> UnitScope {
+        unit_scope(container)
+    }
+
+    fn container_name(&self, node: Node<'_>, src: &[u8]) -> Option<String> {
+        container_name(node, src)
+    }
+
+    fn suppression_anchors<'t>(&self, node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+        suppression_anchors(node, src, visit);
+    }
+}
 
 /// Bodyless declarations are deliberately absent: `method_signature`,
 /// `abstract_method_signature`, `function_signature`, `call_signature`, `construct_signature`,
@@ -171,9 +218,20 @@ fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
     }
 }
 
-fn is_self_receiver(text: &str, container: Option<&str>) -> bool {
-    matches!(text, "this" | "super")
-        || container.is_some_and(|path| path.rsplit("::").next() == Some(text))
+/// A static method is reached through its class's name, which is the path's last segment even
+/// when a quoted key holding `::` makes the container's own name longer.
+fn unit_scope(container: Option<&str>) -> UnitScope {
+    let mut self_receivers = vec!["this".into(), "super".into()];
+    self_receivers.extend(
+        container
+            .and_then(|path| path.rsplit("::").next())
+            .map(|last| last.to_string().into()),
+    );
+    UnitScope {
+        container: None,
+        self_receivers,
+        bare_call_recurses: true,
+    }
 }
 
 fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
@@ -202,15 +260,33 @@ fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
     bound_name(node, src)
 }
 
+/// The callback's own position first, then, when its call hands it a binding, the declaration
+/// of that binding. A call that binds nothing, such as `app.get('/x', () => {})`, leaves a marker
+/// above it to the file.
+fn suppression_anchors<'t>(node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+    let own = anchor(node, false);
+    visit(own);
+    if bound_name(node, src).is_some() {
+        let declaration = anchor(node, true);
+        if declaration.id() != own.id() {
+            visit(declaration);
+        }
+    }
+}
+
 /// Climbs to the declaration a marker would sit above. For `const handler = () => {}` the
 /// comment precedes the whole declaration, not the arrow function; a class field or object pair
 /// is the declaration for the arrow it holds.
-fn suppression_anchor(node: Node<'_>) -> Node<'_> {
+fn anchor(node: Node<'_>, through_calls: bool) -> Node<'_> {
     let mut current = node;
     loop {
         let Some(parent) = current.parent() else {
             return current;
         };
+        if let Some(call) = binding_call(parent, current).filter(|_| through_calls) {
+            current = call;
+            continue;
+        }
         match parent.kind() {
             "variable_declarator"
             | "lexical_declaration"
@@ -257,14 +333,26 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             // `const useCart = defineStore('cart', () => {})` is `useCart`, not `defineStore#1`.
             // Only a lone callable argument is unwrapped, so `app.get('/x', fn)` — where the
             // call is nobody's value — still falls through to a positional key.
-            "arguments" if is_sole_callable_argument(parent, current) => {
-                current = parent
-                    .parent()
-                    .filter(|call| call.kind() == "call_expression")?;
-            }
+            "arguments" | "call_expression" => current = binding_call(parent, current)?,
             kind if TRANSPARENT.contains(&kind) => current = parent,
             _ => return None,
         }
+    }
+}
+
+/// The call that hands its own binding to `current`: the one it is the lone callable argument
+/// of, as in `defineStore('x', () => {})`, or the one invoking it on the spot, as in
+/// `(() => {})()`.
+fn binding_call<'t>(parent: Node<'t>, current: Node<'t>) -> Option<Node<'t>> {
+    match parent.kind() {
+        "arguments" if is_sole_callable_argument(parent, current) => parent
+            .parent()
+            .filter(|call| call.kind() == "call_expression"),
+        "call_expression" => parent
+            .child_by_field_name("function")
+            .is_some_and(|function| function.id() == current.id())
+            .then_some(parent),
+        _ => None,
     }
 }
 

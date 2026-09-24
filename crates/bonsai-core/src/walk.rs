@@ -1,12 +1,13 @@
 use tree_sitter::Node;
 
+use crate::finding::UnitScope;
 use crate::language::{field, Flags, Language, Role};
 
 pub struct WalkCx<'a> {
     pub lang: &'a Language,
     pub src: &'a [u8],
     pub unit: &'a str,
-    pub container: Option<&'a str>,
+    pub scope: &'a UnitScope,
     /// Set only for the top-level pass. Inside a unit body a nested function-like rolls up, but
     /// at file scope it is a unit in its own right and `collect` already reports it, so counting
     /// it here as well would double it.
@@ -51,8 +52,8 @@ fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
         }
     }
 
-    // Must be tested ahead of the role match: PHP's `function_definition` is both a unit kind
-    // and a nesting-function kind, and nesting has to win when it appears inside another unit.
+    // Must be tested ahead of the role match: a kind can be both a unit and a nesting function,
+    // and nesting has to win when it appears inside another unit.
     if info.flags.has(Flags::NESTING_FN) {
         walk_children(node, nesting + 1, cx, score);
         return;
@@ -69,7 +70,7 @@ fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
             return;
         }
         Role::Jump => {
-            if (cx.lang.spec.hooks.is_penalized_jump)(node, cx.src) {
+            if cx.lang.spec.hooks.is_penalized_jump(node, cx.src) {
                 *score += 1;
             }
             return;
@@ -93,65 +94,92 @@ fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
     walk_children(node, nesting, cx, score);
 }
 
+/// One piece of an `if`, as its language reads the tree. What each piece costs is decided here,
+/// in core, so every language scores a chain the same way however its grammar shapes it.
+#[derive(Debug, Clone, Copy)]
+pub enum IfPart<'t> {
+    /// Scored at the if's own depth.
+    Header(Node<'t>),
+    /// Scored one level deeper.
+    Then(Node<'t>),
+    /// The next link of the chain, read by `if_parts` in turn and scored a flat +1.
+    ElseIf(Node<'t>),
+    /// +1, with its body one level deeper.
+    Else(Option<Node<'t>>),
+    /// Walked at the if's depth. The grammar contract fails on it, naming the kind.
+    Unrecognised(Node<'t>),
+}
+
 /// `flat` marks an `if` that is really the tail of an `else if`, which the spec scores as a
 /// single flat +1 so that long chains aren't punished for depth.
 fn walk_if(node: Node<'_>, nesting: u32, flat: bool, cx: &WalkCx<'_>, score: &mut u32) {
     *score += if flat { 1 } else { 1 + nesting };
+    cx.lang.spec.hooks.if_parts(node, cx.lang, &mut |part| {
+        score_if_part(part, nesting, cx, score);
+    });
+}
 
-    let lang = cx.lang;
-    if let Some(condition) = field(node, lang.fields.condition) {
-        walk(condition, nesting, cx, score);
+fn score_if_part(part: IfPart<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
+    match part {
+        IfPart::Header(node) | IfPart::Unrecognised(node) => walk(node, nesting, cx, score),
+        IfPart::Then(node) => walk(node, nesting + 1, cx, score),
+        IfPart::ElseIf(node) => walk_if(node, nesting, true, cx, score),
+        IfPart::Else(None) => *score += 1,
+        IfPart::Else(Some(body)) => {
+            *score += 1;
+            walk(body, nesting + 1, cx, score);
+        }
     }
+}
+
+/// Reads an if-chain through the spec's field names and else/else-if kinds, which is how a
+/// language reads it unless its hooks override `if_parts`. Public so an override can defer to it.
+pub fn if_parts_by_fields<'t>(node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
+    if let Some(condition) = field(node, lang.fields.condition) {
+        visit(IfPart::Header(condition));
+    }
+    if lang.role(node) == Role::ElseIf {
+        if let Some(body) = field(node, lang.fields.body) {
+            visit(IfPart::Then(body));
+        }
+        return;
+    }
+
     if let Some(then) = field(node, lang.fields.if_then) {
-        walk(then, nesting + 1, cx, score);
+        visit(IfPart::Then(then));
     }
 
     let Some(alternative) = lang.fields.if_alternative else {
         return;
     };
-
     let mut cursor = node.walk();
     for alt in node.children_by_field_id(alternative, &mut cursor) {
-        match lang.role(alt) {
-            Role::ElseIf => walk_else_if(alt, nesting, cx, score),
-            Role::Else => walk_else(alt, nesting, cx, score),
-            _ => walk(alt, nesting, cx, score),
-        }
+        visit(alternative_part(alt, lang));
     }
 }
 
-fn walk_else_if(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
-    *score += 1;
-    if let Some(condition) = field(node, cx.lang.fields.condition) {
-        walk(condition, nesting, cx, score);
-    }
-    if let Some(body) = field(node, cx.lang.fields.body) {
-        walk(body, nesting + 1, cx, score);
+fn alternative_part<'t>(alt: Node<'t>, lang: &Language) -> IfPart<'t> {
+    match lang.role(alt) {
+        Role::ElseIf => IfPart::ElseIf(alt),
+        Role::Else => else_part(alt, lang),
+        _ => IfPart::Unrecognised(alt),
     }
 }
 
 /// `else if` written as two words parses as an else clause wrapping an `if`. It must score the
-/// same as `elseif`, so the inner `if` takes the flat increment and the `else` adds nothing.
-/// Languages without an else-if clause kind reach every chain link through here.
-fn walk_else(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
-    let body = field(node, cx.lang.fields.else_body)
-        .or_else(|| first_significant_named_child(node, cx.lang));
-
+/// same as `elseif`, so the inner `if` is the next link and the `else` adds nothing.
+fn else_part<'t>(node: Node<'t>, lang: &Language) -> IfPart<'t> {
+    let body =
+        field(node, lang.fields.else_body).or_else(|| first_significant_named_child(node, lang));
     match body {
-        Some(inner) if cx.lang.role(inner) == Role::If => {
-            walk_if(inner, nesting, true, cx, score);
-        }
-        Some(inner) => {
-            *score += 1;
-            walk(inner, nesting + 1, cx, score);
-        }
-        None => *score += 1,
+        Some(inner) if lang.role(inner) == Role::If => IfPart::ElseIf(inner),
+        body => IfPart::Else(body),
     }
 }
 
 /// Branch bodies nest; the controlling header does not. Anything before the body is header too,
-/// because PHP's `foreach` subject has no field name. Every header-field child is exempted, not
-/// just the first, since TypeScript's `for_statement.condition` is `multiple`.
+/// because a grammar can leave part of a header, such as a loop's subject, without a field name.
+/// Every header-field child is exempted, not just the first, since a header field can repeat.
 fn walk_control(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
     let body_start = field(node, cx.lang.fields.body).map(|body| body.start_byte());
 
@@ -268,27 +296,26 @@ fn logical_operator(node: Node<'_>, cx: &WalkCx<'_>) -> Option<&'static str> {
     let operator = field(node, cx.lang.fields.logical_operator)?
         .utf8_text(cx.src)
         .ok()?;
-    (cx.lang.spec.hooks.normalize_logical_operator)(operator)
+    cx.lang.spec.hooks.normalize_logical_operator(operator)
 }
 
 /// Only direct syntactic self-reference is detectable without symbol resolution; dynamic
 /// dispatch through a variable is out of reach and is documented as such rather than guessed at.
 fn is_recursive_call(node: Node<'_>, cx: &WalkCx<'_>) -> bool {
-    let Some(callee) = (cx.lang.spec.hooks.resolve_callee)(node) else {
+    let Some(callee) = cx.lang.spec.hooks.resolve_callee(node) else {
         return false;
     };
 
-    if let Some(receiver) = callee.receiver {
-        let Ok(text) = receiver.utf8_text(cx.src) else {
-            return false;
-        };
-        if !(cx.lang.spec.hooks.is_self_receiver)(text, cx.container) {
-            return false;
-        }
-    }
-
-    callee
+    let names_unit = callee
         .name
         .utf8_text(cx.src)
-        .is_ok_and(|text| text == cx.unit)
+        .is_ok_and(|text| text == cx.unit);
+
+    names_unit
+        && match callee.receiver {
+            Some(receiver) => receiver
+                .utf8_text(cx.src)
+                .is_ok_and(|text| cx.scope.self_receivers.iter().any(|name| name == text)),
+            None => cx.scope.bare_call_recurses,
+        }
 }

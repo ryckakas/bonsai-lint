@@ -103,6 +103,17 @@ fn a_marker_above_an_assigned_closure_is_honoured() {
     );
 }
 
+/// The namer hands a lone callback the binding of the call wrapping it, so the marker above that
+/// binding must cover it too.
+#[test]
+fn a_marker_above_a_wrapped_closure_is_honoured() {
+    let source = "<?php\n// bonsai-lint-ignore: route table\n$handler = wrap(function () { if ($a) { echo 1; } });\n";
+    assert_eq!(
+        suppression_of(source, "handler"),
+        Suppression::Reasoned("route table".to_string())
+    );
+}
+
 /// File-level code is reported on line 1, so its marker trails the open tag or sits in the
 /// comment block at the top of the file.
 #[test]
@@ -150,6 +161,36 @@ fn a_marker_above_the_first_function_belongs_to_it_not_the_file() {
         suppression_of(on_tag, "<toplevel>"),
         Suppression::Reasoned("reason".to_string())
     );
+}
+
+#[test]
+fn a_marker_directly_above_a_wrapped_closure_is_honoured() {
+    let source = "<?php\n$handler = wrap(\n    'x',\n    // bonsai-lint-ignore: inline\n    function () { if ($a) { echo 1; } }\n);\n";
+    assert_eq!(
+        suppression_of(source, "handler"),
+        Suppression::Reasoned("inline".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_a_bound_iife_is_honoured() {
+    let source = "<?php\n// bonsai-lint-ignore: startup\n$config = (function () { if ($a) { return 1; } return 2; })();\n";
+    assert_eq!(
+        suppression_of(source, "config"),
+        Suppression::Reasoned("startup".to_string())
+    );
+}
+
+/// A route registration binds its callback to nothing, so the callback is positional and the
+/// marker above the call stays with the file, as it would above any other statement.
+#[test]
+fn a_marker_above_a_leading_route_call_belongs_to_the_file() {
+    let source = "<?php\n// bonsai-lint-ignore: route table\nRoute::get('/x', function () { if ($a) { echo 1; } });\nif ($b) { echo 2; }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("route table".to_string())
+    );
+    assert_eq!(suppression_of(source, "Route::get#1"), Suppression::None);
 }
 
 #[test]

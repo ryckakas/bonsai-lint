@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use tree_sitter::{Node, Tree};
 
-use crate::finding::{Finding, NameOrigin, Suppression, TOPLEVEL_UNIT};
+use crate::finding::{Finding, NameOrigin, Suppression, UnitScope, TOPLEVEL_UNIT};
 use crate::language::{field, Flags, Language, Role};
 use crate::suppression::{toplevel_suppression, unit_marker};
 use crate::walk::{score_node, score_nodes, WalkCx};
@@ -61,10 +61,14 @@ fn container_path(
     lang: &Language,
     outer: Option<&str>,
 ) -> Option<String> {
-    match ((lang.spec.hooks.container_name)(node, src), outer) {
-        (Some(name), Some(outer)) => Some(format!("{outer}::{name}")),
-        (Some(name), None) => Some(name),
-        (None, outer) => outer.map(ToString::to_string),
+    joined(outer, lang.spec.hooks.container_name(node, src))
+}
+
+fn joined(outer: Option<&str>, segment: Option<String>) -> Option<String> {
+    match (outer, segment) {
+        (Some(outer), Some(segment)) => Some(format!("{outer}::{segment}")),
+        (None, segment) => segment,
+        (outer, None) => outer.map(ToString::to_string),
     }
 }
 
@@ -77,7 +81,9 @@ fn score_unit(
     claimed: &mut HashSet<usize>,
 ) -> Option<Finding> {
     field(node, lang.fields.body)?;
-    let name = (lang.spec.hooks.unit_name)(node, src);
+    let name = lang.spec.hooks.unit_name(node, src);
+    let mut unit_scope = lang.spec.hooks.unit_scope(node, src, container);
+    let container = joined(container, unit_scope.container.take());
     let marker = unit_marker(node, src, lang);
     if let Some((comment, _)) = &marker {
         claimed.insert(*comment);
@@ -88,14 +94,14 @@ fn score_unit(
             lang,
             src,
             unit: &name.text,
-            container,
+            scope: &unit_scope,
             skip_units: false,
         };
         field(node, lang.fields.body).map_or(0, |body| score_node(body, &cx))
     };
 
     Some(Finding {
-        container: container.map(ToString::to_string),
+        container,
         name: name.text,
         origin: name.origin,
         line: declaration_row(node, lang) + 1,
@@ -140,7 +146,7 @@ fn toplevel_finding(
         lang,
         src,
         unit: TOPLEVEL_UNIT,
-        container: None,
+        scope: &UnitScope::default(),
         skip_units: true,
     };
 

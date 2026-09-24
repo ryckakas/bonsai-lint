@@ -43,7 +43,7 @@ struct Job {
     shown: PathBuf,
     key_path: String,
     domain: usize,
-    descriptor: &'static LanguageDescriptor,
+    descriptor: &'static dyn LanguageDescriptor,
     toplevel: bool,
 }
 
@@ -113,7 +113,7 @@ impl Pass<'_> {
 
     fn job(&mut self, path: &Path, root: &ScanRoot<'_>) -> Option<Job> {
         let descriptor = registry::for_path(path)?;
-        let wanted = |ids: &[String]| ids.iter().any(|id| id == descriptor.spec.id);
+        let wanted = |ids: &[String]| ids.iter().any(|id| id == descriptor.spec().id);
         if self.languages.is_some_and(|ids| !wanted(ids)) {
             return None;
         }
@@ -168,7 +168,7 @@ impl std::fmt::Debug for Parsers {
 impl Parsers {
     fn analyze(
         &mut self,
-        descriptor: &'static LanguageDescriptor,
+        descriptor: &'static dyn LanguageDescriptor,
         source: &str,
         toplevel: bool,
         path: &Path,
@@ -269,16 +269,15 @@ fn merge_toplevel(findings: &mut Vec<bonsai_core::Finding>) {
 
 /// `None` when a host syntax was read but holds nothing scorable.
 fn region(
-    descriptor: &'static LanguageDescriptor,
+    descriptor: &'static dyn LanguageDescriptor,
     source: &str,
     path: &Path,
     warnings: &mut Vec<String>,
 ) -> Option<(&'static Language, Vec<Range>)> {
-    let Some(extract) = descriptor.extract else {
-        return Some(((descriptor.compiled)(), Vec::new()));
+    let Some(extraction) = descriptor.extract(source) else {
+        return Some((descriptor.compiled(), Vec::new()));
     };
 
-    let extraction = extract(source);
     if let Some(warning) = extraction.warning {
         warnings.push(format!("{}: {warning}", path.display()));
     }
@@ -306,7 +305,7 @@ impl Scanner {
 
     pub fn analyze_source(
         &mut self,
-        descriptor: &'static LanguageDescriptor,
+        descriptor: &'static dyn LanguageDescriptor,
         source: &str,
         toplevel: bool,
         path: &Path,
@@ -378,13 +377,21 @@ fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
     };
 
     let mut scored = Scored::default();
+    let mut decoding = Vec::new();
     let source = match std::fs::read(&job.path) {
-        Ok(bytes) => decode(bytes, &job.shown, &mut scored.warnings),
+        Ok(bytes) => decode(bytes, &job.shown, &mut decoding),
         Err(error) => {
             scored.error = Some(format!("{}: {error}", job.shown.display()));
             return scored;
         }
     };
+
+    // Read before it can be recognised, but then dropped silently, like an unscored name the plan
+    // never admits.
+    if job.descriptor.is_generated(&source) {
+        return scored;
+    }
+    scored.warnings = decoding;
 
     scored.domain = Some(job.domain);
     scored.located = parsers

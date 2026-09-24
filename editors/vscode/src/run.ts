@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { extname } from "node:path";
 import type { Binary } from "./binary";
 
 export interface Finding {
@@ -14,6 +15,19 @@ interface Report {
   thresholds: Record<string, number>;
   breaches: number;
   findings: Finding[];
+}
+
+/**
+ * A CLI older than the extension's language list refuses every file of a language it predates,
+ * naming each path, so the caller needs the extension to say it once.
+ */
+export class UnsupportedFileError extends Error {
+  readonly extension: string;
+
+  constructor(message: string, extension: string) {
+    super(message);
+    this.extension = extension;
+  }
 }
 
 export interface ScanOptions {
@@ -55,7 +69,12 @@ export function scan(options: ScanOptions): Promise<Finding[]> {
         return;
       }
 
-      reject(new Error(stderr.trim() !== "" ? stderr.trim() : (error?.message ?? "no output")));
+      const message = stderr.trim() !== "" ? stderr.trim() : (error?.message ?? "no output");
+      reject(
+        message.endsWith("no language handles this extension")
+          ? new UnsupportedFileError(message, extname(file))
+          : new Error(message),
+      );
     });
 
     // The CLI exits before reading when the path has no supported extension; the write then

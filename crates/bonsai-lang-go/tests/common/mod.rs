@@ -5,18 +5,22 @@ use tree_sitter::Parser;
 
 #[allow(dead_code)]
 pub fn findings(source: &str) -> Vec<Finding> {
-    let language = bonsai_lang_php::PHP.compiled();
+    let language = bonsai_lang_go::GO.compiled();
     let mut parser = Parser::new();
     parser
         .set_language(&language.ts)
-        .expect("PHP grammar should load");
+        .expect("Go grammar should load");
     let tree = parser.parse(source, None).expect("source should parse");
+    assert!(
+        !tree.root_node().has_error(),
+        "fixture does not parse cleanly:\n{source}"
+    );
     bonsai_core::analyze(&tree, source.as_bytes(), language, true)
 }
 
 #[allow(dead_code)]
 pub fn score(body: &str) -> u32 {
-    let source = format!("<?php\nfunction target() {{\n{body}\n}}\n");
+    let source = format!("package p\n\nfunc target() {{\n{body}\n}}\n");
     findings(&source)
         .into_iter()
         .find(|finding| finding.name == "target")

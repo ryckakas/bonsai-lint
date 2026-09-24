@@ -1,12 +1,13 @@
 #![allow(unreachable_pub)]
 
-use bonsai_core::{Extraction, Finding};
+use bonsai_core::{Extraction, Finding, LanguageDescriptor};
 use tree_sitter::Parser;
 
 #[allow(dead_code)]
 pub fn extract(source: &str) -> Extraction {
-    let extract = bonsai_lang_vue::VUE.extract.expect("vue extracts regions");
-    extract(source)
+    bonsai_lang_vue::VUE
+        .extract(source)
+        .expect("vue extracts regions")
 }
 
 /// Mirrors what the scan driver does: one parse per region over the whole component, so a

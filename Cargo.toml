@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/bonsai-core",
+    "crates/bonsai-lang-go",
     "crates/bonsai-lang-php",
     "crates/bonsai-lang-ts",
     "crates/bonsai-lang-vue",
@@ -20,12 +21,14 @@ homepage = "https://github.com/ryckakas/bonsai-lint"
 
 [workspace.dependencies]
 bonsai-core = { path = "crates/bonsai-core", version = "0.2.1" }
+bonsai-lang-go = { path = "crates/bonsai-lang-go", version = "0.2.1" }
 bonsai-lang-php = { path = "crates/bonsai-lang-php", version = "0.2.1" }
 bonsai-lang-ts = { path = "crates/bonsai-lang-ts", version = "0.2.1" }
 bonsai-lang-vue = { path = "crates/bonsai-lang-vue", version = "0.2.1" }
 bonsai-engine = { path = "crates/bonsai-engine", version = "0.2.1", default-features = false }
 bonsai-testkit = { path = "crates/bonsai-testkit", version = "0.2.1" }
 tree-sitter = "0.27"
+tree-sitter-go = "0.25"
 tree-sitter-php = "0.24"
 tree-sitter-typescript = "0.23"
 tree-sitter-html = "0.23"

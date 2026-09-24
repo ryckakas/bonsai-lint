@@ -26,6 +26,7 @@ thread_local! {
 const LANG_TYPESCRIPT: u32 = 0;
 const LANG_PHP: u32 = 1;
 const LANG_VUE: u32 = 2;
+const LANG_GO: u32 = 3;
 
 // A raw `Layout` rather than `Vec::with_capacity`, because freeing has to name the exact
 // layout that was allocated and `with_capacity` only promises *at least* the requested size.
@@ -88,11 +89,12 @@ pub extern "C" fn bl_result_ptr() -> *const u8 {
     RESULT.with(|cell| cell.borrow().as_ptr())
 }
 
-fn descriptor(language: u32) -> Option<&'static LanguageDescriptor> {
+fn descriptor(language: u32) -> Option<&'static dyn LanguageDescriptor> {
     match language {
         LANG_TYPESCRIPT => Some(&bonsai_lang_ts::TYPESCRIPT),
         LANG_PHP => Some(&bonsai_lang_php::PHP),
         LANG_VUE => Some(&bonsai_lang_vue::VUE),
+        LANG_GO => Some(&bonsai_lang_go::GO),
         _ => None,
     }
 }
@@ -102,22 +104,19 @@ fn descriptor(language: u32) -> Option<&'static LanguageDescriptor> {
 /// reporting nothing for it would be baffling.
 fn analyze(source: &str, language: u32) -> Option<Vec<Finding>> {
     let descriptor = descriptor(language)?;
+    if descriptor.is_generated(source) {
+        return Some(Vec::new());
+    }
 
     // A language embedded in a host syntax — Vue — resolves its own grammar and the ranges
     // worth parsing. Everything else parses the whole buffer with one grammar.
-    let (compiled, ranges) = match descriptor.extract {
-        Some(extract) => {
-            let extraction = extract(source);
-            (extraction.language, extraction.ranges)
-        }
-        None => ((descriptor.compiled)(), Vec::new()),
+    let (compiled, ranges) = match descriptor.extract(source) {
+        // No script blocks found. Parsing the whole document with the script grammar would score
+        // the template as if it were code, so report nothing instead.
+        Some(extraction) if extraction.ranges.is_empty() => return Some(Vec::new()),
+        Some(extraction) => (extraction.language, extraction.ranges),
+        None => (descriptor.compiled(), Vec::new()),
     };
-
-    // No script blocks found. Parsing the whole document with the script grammar would score
-    // the template as if it were code, so report nothing instead.
-    if descriptor.extract.is_some() && ranges.is_empty() {
-        return Some(Vec::new());
-    }
 
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&compiled.ts).ok()?;

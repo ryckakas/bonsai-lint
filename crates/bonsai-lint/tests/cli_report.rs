@@ -93,7 +93,18 @@ fn json_thresholds_are_keyed_by_language_id() {
         .keys()
         .cloned()
         .collect::<Vec<_>>();
-    assert_eq!(thresholds, vec!["php", "typescript", "vue"]);
+    assert_eq!(thresholds, vec!["go", "php", "typescript", "vue"]);
+}
+
+#[test]
+fn help_offers_every_language_built_in() {
+    let output = Project::new().run(&["--help"]);
+
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let help = stdout(&output);
+    for id in ["go", "php", "typescript", "vue"] {
+        assert!(help.contains(&format!("`{id}`")), "{help}");
+    }
 }
 
 #[test]
@@ -162,6 +173,34 @@ fn identical_logic_scores_the_same_in_php_and_javascript() {
 
     assert_eq!(scores(&php), vec![1, 3]);
     assert_eq!(scores(&php), scores(&js));
+}
+
+/// Go has no file-scope calls to hang a closure on, so the same claim is made with declared
+/// functions.
+#[test]
+fn identical_logic_scores_the_same_in_php_javascript_and_go() {
+    let project = Project::new();
+    project
+        .file(
+            "php/logic.php",
+            "<?php\nfunction a($a) { if ($a) { return 1; } return 0; }\nfunction b($xs) { foreach ($xs as $x) { if ($x) { echo 1; } } }\n",
+        )
+        .file(
+            "js/logic.js",
+            "function a(a) { if (a) { return 1; } return 0; }\nfunction b(xs) { for (const x of xs) { if (x) { f(); } } }\n",
+        )
+        .file(
+            "go/logic.go",
+            "package logic\n\nfunc a(a bool) int {\n\tif a {\n\t\treturn 1\n\t}\n\treturn 0\n}\n\nfunc b(xs []bool) {\n\tfor _, x := range xs {\n\t\tif x {\n\t\t\tf()\n\t\t}\n\t}\n}\n",
+        );
+
+    let php = project.run(&["--all", "--format", "json", "php"]);
+    let js = project.run(&["--all", "--format", "json", "js"]);
+    let go = project.run(&["--all", "--format", "json", "go"]);
+
+    assert_eq!(scores(&php), vec![1, 3]);
+    assert_eq!(scores(&php), scores(&js));
+    assert_eq!(scores(&php), scores(&go));
 }
 
 #[test]

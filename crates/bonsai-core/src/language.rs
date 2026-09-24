@@ -23,9 +23,8 @@ pub enum Role {
     Trivia,
 }
 
-/// Properties that are not mutually exclusive with a role, nor with each other. PHP's
-/// `function_definition` is both a unit and a nesting function, which is why these cannot be
-/// folded into `Role`.
+/// Properties that are not mutually exclusive with a role, nor with each other. One kind can be
+/// both a unit and a nesting function, which is why these cannot be folded into `Role`.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct Flags(u8);
 

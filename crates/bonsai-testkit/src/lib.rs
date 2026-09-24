@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use bonsai_core::{LanguageSpec, Role};
+use bonsai_core::{IfPart, LanguageSpec, Role};
 use tree_sitter::{Language as TsLanguage, Node, Parser};
 
 /// The contract a language crate must keep with the grammar it is compiled against. The
@@ -31,7 +31,7 @@ impl GrammarFixture {
         self.assert_declared_kinds_are_observed(&tree);
         self.assert_either_of_groups_are_live(&tree);
         self.assert_no_alias_drift(&tree);
-        self.assert_if_alternatives_are_else_kinds(&tree);
+        self.assert_if_parts_are_recognised(&tree);
     }
 
     fn parse(&self) -> tree_sitter::Tree {
@@ -114,27 +114,25 @@ impl GrammarFixture {
         );
     }
 
-    /// The walker assumes every child under an `if`'s alternative field is an else or else-if
-    /// clause. A grammar can break that without renaming anything.
-    fn assert_if_alternatives_are_else_kinds(&self, tree: &tree_sitter::Tree) {
+    /// Every part of every if-chain in the fixture must be one the language's `if_parts`
+    /// recognises. A grammar can reshape a chain without renaming anything, and an unrecognised
+    /// part would otherwise be scored as plain code in silence.
+    fn assert_if_parts_are_recognised(&self, tree: &tree_sitter::Tree) {
         let language = self
             .spec
             .compile(self.language.clone())
             .expect("spec compiles");
-        let Some(alternative) = language.fields.if_alternative else {
-            return;
-        };
 
         let mut offenders = Vec::new();
         visit(tree.root_node(), &mut |node| {
-            collect_odd_alternatives(node, &language, alternative, &mut offenders);
+            collect_unrecognised_parts(node, &language, &mut offenders);
         });
         offenders.sort_unstable();
         offenders.dedup();
 
         assert!(
             offenders.is_empty(),
-            "[{}] unexpected kinds under an if alternative: {offenders:?}",
+            "[{}] if_parts does not recognise these parts of an if-chain: {offenders:?}",
             self.spec.id
         );
     }
@@ -174,19 +172,17 @@ fn visit(node: Node<'_>, f: &mut impl FnMut(Node<'_>)) {
     }
 }
 
-fn collect_odd_alternatives(
-    node: tree_sitter::Node<'_>,
+fn collect_unrecognised_parts(
+    node: Node<'_>,
     language: &bonsai_core::Language,
-    alternative: std::num::NonZeroU16,
     offenders: &mut Vec<String>,
 ) {
-    if language.role(node) != Role::If {
+    if !matches!(language.role(node), Role::If | Role::ElseIf) {
         return;
     }
-    let mut cursor = node.walk();
-    let odd = node
-        .children_by_field_id(alternative, &mut cursor)
-        .filter(|alt| !matches!(language.role(*alt), Role::Else | Role::ElseIf))
-        .map(|alt| alt.kind().to_string());
-    offenders.extend(odd);
+    language.spec.hooks.if_parts(node, language, &mut |part| {
+        if let IfPart::Unrecognised(odd) = part {
+            offenders.push(odd.kind().to_string());
+        }
+    });
 }

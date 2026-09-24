@@ -66,6 +66,17 @@ fn a_marker_above_a_bound_arrow_is_honoured() {
     );
 }
 
+/// The namer hands a lone callback the binding of the call wrapping it, so the marker above that
+/// binding must cover it too.
+#[test]
+fn a_marker_above_a_wrapped_arrow_is_honoured() {
+    let source = "// bonsai-lint-ignore: store factory\nexport const useCart = defineStore('cart', () => { if (a) { f(); } });\n";
+    assert_eq!(
+        suppression_of(source, "useCart"),
+        Suppression::Reasoned("store factory".to_string())
+    );
+}
+
 #[test]
 fn a_marker_above_a_class_field_arrow_is_honoured() {
     let source = "class F {\n  // bonsai-lint-ignore: framework contract\n  field = () => { if (a) { f(); } };\n}\n";
@@ -161,6 +172,49 @@ fn a_marker_above_the_first_function_belongs_to_it_not_the_file() {
         Suppression::Reasoned("reason".to_string())
     );
     assert_eq!(suppression_of(source, "<toplevel>"), Suppression::None);
+}
+
+/// The callback's own position still counts once its call is bound: the marker may sit inside
+/// the argument list, directly above the callback, as well as above the declaration.
+#[test]
+fn a_marker_directly_above_a_wrapped_callback_is_honoured() {
+    let source = "export const useCart = defineStore(\n    'cart',\n    // bonsai-lint-ignore: inline\n    () => { if (a) { f(); } },\n);\n";
+    assert_eq!(
+        suppression_of(source, "useCart"),
+        Suppression::Reasoned("inline".to_string())
+    );
+}
+
+#[test]
+fn a_marker_above_a_bound_iife_is_honoured() {
+    let source = "// bonsai-lint-ignore: startup\nconst config = (() => { if (a) { return 1; } return 2; })();\n";
+    assert_eq!(
+        suppression_of(source, "config"),
+        Suppression::Reasoned("startup".to_string())
+    );
+}
+
+/// A bare IIFE binds nothing, so a marker above it stays with the file.
+#[test]
+fn a_marker_above_a_leading_bare_iife_belongs_to_the_file() {
+    let source = "// bonsai-lint-ignore: legacy bundle\n(function ($) { if (a) { $.go(); } })(jQuery);\nif (b) { g(); }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("legacy bundle".to_string())
+    );
+    assert_eq!(suppression_of(source, "<anonymous>"), Suppression::None);
+}
+
+/// A route registration binds its callback to nothing, so the callback is positional and the
+/// marker above the call stays with the file, as it would above any other statement.
+#[test]
+fn a_marker_above_a_leading_route_call_belongs_to_the_file() {
+    let source = "// bonsai-lint-ignore: route table\napp.get('/x', () => { if (a) { f(); } });\nif (b) { g(); }\n";
+    assert_eq!(
+        suppression_of(source, "<toplevel>"),
+        Suppression::Reasoned("route table".to_string())
+    );
+    assert_eq!(suppression_of(source, "app.get#1"), Suppression::None);
 }
 
 #[test]

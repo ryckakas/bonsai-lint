@@ -19,6 +19,7 @@ fn parentheses_do_not_break_an_operator_run() {
         ("if (a && (b && c)) { f(); }", 2),
         ("if (a && (b || c)) { f(); }", 3),
         ("if (a && (b || c) || d) { f(); }", 3),
+        ("if (a && (b || c) && d) { f(); }", 4),
     ]);
 }
 
@@ -126,6 +127,74 @@ fn direct_recursion_costs_one() {
         ("return other.target();", 0),
         ("return unrelated();", 0),
     ]);
+}
+
+fn score_of_target(source: &str) -> u32 {
+    common::findings(source)
+        .into_iter()
+        .find(|finding| finding.name == "target")
+        .unwrap_or_else(|| panic!("no finding produced for:\n{source}"))
+        .score
+}
+
+#[test]
+fn a_method_recurses_through_this_super_or_its_container() {
+    for (source, expected) in [
+        ("class C { target() { return this.target(); } }", 1),
+        ("class C { target() { return super.target(); } }", 1),
+        ("class C { static target() { return C.target(); } }", 1),
+        ("class C { target() { return D.target(); } }", 0),
+        (
+            "namespace N { class C { target() { return C.target(); } } }",
+            1,
+        ),
+        (
+            "namespace N { class C { target() { return N.target(); } } }",
+            0,
+        ),
+        (
+            "const api = { users: { target() { return users.target(); } } };",
+            1,
+        ),
+        (
+            "const api = { users: { target() { return api.target(); } } };",
+            0,
+        ),
+    ] {
+        assert_eq!(score_of_target(source), expected, "scoring:\n{source}");
+    }
+}
+
+/// The receiver is matched against the last `::` segment of the container path, so a quoted
+/// key that itself contains `::` answers to its tail.
+#[test]
+fn a_quoted_key_with_a_separator_answers_to_its_last_segment() {
+    assert_eq!(
+        score_of_target(r#"const o = { "a::b": { target() { return b.target(); } } };"#),
+        1
+    );
+}
+
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
+#[test]
+fn a_bare_namesake_call_inside_a_method_counts() {
+    assert_eq!(
+        score_of_target("class C { target() { return target(); } }"),
+        1
+    );
+}
+
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
+#[test]
+fn this_counts_as_self_even_in_a_free_function() {
+    assert_scores(&[("return this.target();", 1), ("return super.target();", 1)]);
+}
+
+/// A limit, not a choice: without scope analysis a closure that shadows its function's name
+/// reads as a self-call, one increment per call.
+#[test]
+fn a_local_closure_sharing_the_functions_name_counts_as_recursion() {
+    assert_scores(&[("const target = () => 1; target(); target();", 2)]);
 }
 
 #[test]

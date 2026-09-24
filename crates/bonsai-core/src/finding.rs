@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use tree_sitter::Node;
 
 pub const SUPPRESSION_MARKER: &str = "bonsai-lint-ignore";
@@ -64,6 +66,17 @@ impl UnitName {
             origin: NameOrigin::Anonymous,
         }
     }
+}
+
+/// How a call reaches the unit it is in, read once from the unit's declaration. A call is
+/// recursion when it names the unit and goes through one of `self_receivers`, or through no
+/// receiver at all where `bare_call_recurses` allows it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnitScope {
+    /// A path segment the declaration names itself, for a method written outside its type's body.
+    pub container: Option<String>,
+    pub self_receivers: Vec<Cow<'static, str>>,
+    pub bare_call_recurses: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

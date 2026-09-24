@@ -122,6 +122,72 @@ fn positional_names_stay_short() {
 
 /// A store or component factory should take the name the call is bound to, not a positional key
 /// invented from the callee.
+/// A bound IIFE's binding holds what the function returns, so the function takes that name, as a
+/// callback handed to a factory call does. A bare one has nothing to borrow and stays anonymous.
+#[test]
+fn a_bound_iife_takes_the_name_of_its_result() {
+    let source = "const config = (() => { if (a) { return 1; } return 2; })();\n\
+        window.Login = (function () { if (a) { return 1; } return 2; })();\n\
+        const table = { load: (() => { if (a) { return 1; } return 2; })() };\n\
+        export const ready = (async () => { if (a) { await f(); } })();\n\
+        (function ($) { if (a) { $.go(); } })(jQuery);\n";
+    assert_eq!(
+        names(source),
+        [
+            "config",
+            "window.Login",
+            "table::load",
+            "ready",
+            "<anonymous>"
+        ]
+    );
+    assert_eq!(origin_of(source, "config"), NameOrigin::Bound);
+}
+
+/// Every IIFE shape in one file. The bare one is the only unit left anonymous, so it carries no
+/// `~2`: naming the bound ones is what stops them shifting its key.
+#[test]
+fn every_kind_of_iife_in_one_file() {
+    let source = "const config = (() => { if (a) { return 1; } return 2; })();\n\
+        (function ($) { if (a) { $.go(); } })(jQuery);\n\
+        (function init() { if (a) { run(); } })();\n\
+        window.Login = (function () { if (a) { return 1; } return 2; })();\n\
+        const table = { load: (() => { if (a) { return 1; } return 2; })() };\n";
+    assert_eq!(
+        names(source),
+        [
+            "config",
+            "<anonymous>",
+            "init",
+            "window.Login",
+            "table::load"
+        ]
+    );
+}
+
+/// Bare IIFEs are numbered among themselves, so a bound one added between them moves no key.
+#[test]
+fn a_bound_iife_does_not_renumber_the_bare_ones() {
+    let bare = "(function () { if (a) { f(); } })();\n";
+    let bound = "const config = (() => { if (a) { return 1; } return 2; })();\n";
+    assert_eq!(
+        names(&format!("{bare}{bare}")),
+        ["<anonymous>", "<anonymous>~2"]
+    );
+    assert_eq!(
+        names(&format!("{bare}{bound}{bare}")),
+        ["<anonymous>", "config", "<anonymous>~2"]
+    );
+}
+
+#[test]
+fn an_iife_with_a_name_of_its_own_keeps_it() {
+    assert_eq!(
+        names("const x = (function init() { if (a) { f(); } })();"),
+        ["init"]
+    );
+}
+
 #[test]
 fn a_factory_call_passes_its_binding_to_the_callback() {
     let source = "export const useCartStore = defineStore('cart', () => { if (a) { f(); } });";

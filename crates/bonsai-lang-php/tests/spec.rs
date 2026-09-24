@@ -28,6 +28,8 @@ fn parentheses_do_not_break_an_operator_run() {
         ("if ($a && ($b || $c)) { echo 1; }", 3),
         // if +1, `&&` then `||` — the trailing `|| $d` continues the same `||` run
         ("if ($a && ($b || $c) || $d) { echo 1; }", 3),
+        // if +1, `&&`, `||`, `&&`: the group sits between two `&&` runs and cannot merge them
+        ("if ($a && ($b || $c) && $d) { echo 1; }", 4),
     ]);
 }
 
@@ -123,6 +125,49 @@ fn direct_recursion_costs_one() {
         ("return $this->target();", 1),
         ("return $other->target();", 0),
         ("return unrelated();", 0),
+    ]);
+}
+
+fn score_of_target(source: &str) -> u32 {
+    common::findings(source)
+        .into_iter()
+        .find(|finding| finding.name == "target")
+        .unwrap_or_else(|| panic!("no finding produced for:\n{source}"))
+        .score
+}
+
+fn method_score(body: &str) -> u32 {
+    score_of_target(&format!(
+        "<?php\nclass C {{\npublic function target() {{\n{body}\n}}\n}}\n"
+    ))
+}
+
+#[test]
+fn a_method_recurses_through_its_class_keywords() {
+    for (body, expected) in [
+        ("return $this->target();", 1),
+        ("return self::target();", 1),
+        ("return static::target();", 1),
+        ("return parent::target();", 0),
+        ("return C::target();", 0),
+    ] {
+        assert_eq!(method_score(body), expected, "scoring:\n{body}");
+    }
+}
+
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
+#[test]
+fn a_bare_namesake_call_inside_a_method_counts() {
+    assert_eq!(method_score("return target();"), 1);
+}
+
+/// Arguably wrong, and pinned so that changing it is a deliberate scoring decision.
+#[test]
+fn this_counts_as_self_even_in_a_free_function() {
+    assert_scores(&[
+        ("return $this->target();", 1),
+        ("return self::target();", 1),
+        ("return static::target();", 1),
     ]);
 }
 

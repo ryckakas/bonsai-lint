@@ -16,8 +16,15 @@ pub fn suppression(node: Node<'_>, src: &[u8], lang: &Language) -> Suppression {
 }
 
 pub(crate) fn unit_marker(node: Node<'_>, src: &[u8], lang: &Language) -> Option<Marker> {
-    let anchor = (lang.spec.hooks.suppression_anchor)(node);
-    leading(anchor, src, lang).or_else(|| trailing(anchor, src, lang))
+    let mut found = None;
+    lang.spec
+        .hooks
+        .suppression_anchors(node, src, &mut |anchor| {
+            if found.is_none() {
+                found = leading(anchor, src, lang).or_else(|| trailing(anchor, src, lang));
+            }
+        });
+    found
 }
 
 /// File-level code has no declaration line, so its marker lives in the comment block at the top

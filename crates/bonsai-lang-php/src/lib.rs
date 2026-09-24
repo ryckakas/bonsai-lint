@@ -1,16 +1,28 @@
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
+    UnitScope,
 };
 use tree_sitter::Node;
 
-pub static PHP: LanguageDescriptor = LanguageDescriptor {
-    id: "php",
-    extensions: &["php", "phtml"],
-    spec: &SPEC,
-    compiled,
-    extract: None,
-};
+#[derive(Debug)]
+pub struct Php;
+
+pub static PHP: Php = Php;
+
+impl LanguageDescriptor for Php {
+    fn spec(&self) -> &'static LanguageSpec {
+        &SPEC
+    }
+
+    fn extensions(&self) -> &'static [&'static str] {
+        &["php", "phtml"]
+    }
+
+    fn compiled(&self) -> &'static Language {
+        compiled()
+    }
+}
 
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "php",
@@ -57,17 +69,43 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         logical_operator: "operator",
         control_header: &["condition", "initialize", "update"],
     },
-    hooks: Hooks {
-        normalize_logical_operator,
-        is_penalized_jump,
-        resolve_callee,
-        is_self_receiver,
-        unit_name,
-        container_name,
-        suppression_anchor,
-    },
+    hooks: &PhpHooks,
+    // An earlier grammar release's name for `anonymous_function`.
     optional_kinds: &["anonymous_function_creation_expression"],
 };
+
+#[derive(Debug)]
+struct PhpHooks;
+
+impl Hooks for PhpHooks {
+    fn normalize_logical_operator(&self, operator: &str) -> Option<&'static str> {
+        normalize_logical_operator(operator)
+    }
+
+    fn is_penalized_jump(&self, node: Node<'_>, src: &[u8]) -> bool {
+        is_penalized_jump(node, src)
+    }
+
+    fn resolve_callee<'t>(&self, node: Node<'t>) -> Option<Callee<'t>> {
+        resolve_callee(node)
+    }
+
+    fn unit_name(&self, node: Node<'_>, src: &[u8]) -> UnitName {
+        unit_name(node, src)
+    }
+
+    fn unit_scope(&self, _node: Node<'_>, _src: &[u8], _container: Option<&str>) -> UnitScope {
+        unit_scope()
+    }
+
+    fn container_name(&self, node: Node<'_>, src: &[u8]) -> Option<String> {
+        container_name(node, src)
+    }
+
+    fn suppression_anchors<'t>(&self, node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+        suppression_anchors(node, src, visit);
+    }
+}
 
 /// A closure at file scope is a unit like a `function`, so a routes file scores per route
 /// exactly as its JavaScript equivalent does.
@@ -132,8 +170,13 @@ fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
     }
 }
 
-fn is_self_receiver(text: &str, _container: Option<&str>) -> bool {
-    matches!(text, "$this" | "self" | "static")
+/// `parent::` reaches the method this one overrides, not this one.
+fn unit_scope() -> UnitScope {
+    UnitScope {
+        container: None,
+        self_receivers: vec!["$this".into(), "self".into(), "static".into()],
+        bare_call_recurses: true,
+    }
 }
 
 fn unit_name(node: Node<'_>, src: &[u8]) -> UnitName {
@@ -159,14 +202,32 @@ fn container_name(node: Node<'_>, src: &[u8]) -> Option<String> {
         .map(ToString::to_string)
 }
 
+/// The callback's own position first, then, when its call hands it a binding, the declaration
+/// of that binding. A call that binds nothing, such as `Route::get('/x', function () {})`, leaves a marker
+/// above it to the file.
+fn suppression_anchors<'t>(node: Node<'t>, src: &[u8], visit: &mut dyn FnMut(Node<'t>)) {
+    let own = anchor(node, false);
+    visit(own);
+    if bound_name(node, src).is_some() {
+        let declaration = anchor(node, true);
+        if declaration.id() != own.id() {
+            visit(declaration);
+        }
+    }
+}
+
 /// Climbs to the statement a marker would sit above, so `$handler = function () {}` can be
 /// suppressed from the line before it.
-fn suppression_anchor(node: Node<'_>) -> Node<'_> {
+fn anchor(node: Node<'_>, through_calls: bool) -> Node<'_> {
     let mut current = node;
     loop {
         let Some(parent) = current.parent() else {
             return current;
         };
+        if let Some(call) = binding_call(parent, current).filter(|_| through_calls) {
+            current = call;
+            continue;
+        }
         let is_value = |field: &str| {
             parent
                 .child_by_field_name(field)
@@ -175,6 +236,8 @@ fn suppression_anchor(node: Node<'_>) -> Node<'_> {
         match parent.kind() {
             "assignment_expression" if is_value("right") => current = parent,
             "expression_statement" | "parenthesized_expression" => current = parent,
+            // A comment in an argument list is a sibling of the argument, not of the closure.
+            "argument" => return parent,
             _ => return current,
         }
     }
@@ -204,10 +267,8 @@ fn bound_name(node: Node<'_>, src: &[u8]) -> Option<String> {
             "array_element_initializer" => return array_key(parent, current, src),
             // A factory call hands its own binding to a lone callable argument; a call that is
             // nobody's value falls through to a positional key.
-            "arguments" if is_sole_callable_argument(parent, current) => {
-                current = parent.parent().filter(|call| CALL.contains(&call.kind()))?;
-            }
-            "argument" | "parenthesized_expression" => current = parent,
+            "argument" | "function_call_expression" => current = binding_call(parent, current)?,
+            "parenthesized_expression" => current = parent,
             _ => return None,
         }
     }
@@ -222,6 +283,24 @@ fn array_key(element: Node<'_>, value: Node<'_>, src: &[u8]) -> Option<String> {
         return None;
     }
     text(key, src).map(|key| strip_quotes(&key))
+}
+
+/// The call that hands its own binding to `current`: the one whose lone callable argument it
+/// is, as in `wrap(function () {})`, or the one invoking it on the spot, as in
+/// `(function () {})()`.
+fn binding_call<'t>(parent: Node<'t>, current: Node<'t>) -> Option<Node<'t>> {
+    match parent.kind() {
+        "argument" => parent
+            .parent()
+            .filter(|list| list.kind() == "arguments" && is_sole_callable_argument(*list, parent))?
+            .parent()
+            .filter(|call| CALL.contains(&call.kind())),
+        "function_call_expression" => parent
+            .child_by_field_name("function")
+            .is_some_and(|function| function.id() == current.id())
+            .then_some(parent),
+        _ => None,
+    }
 }
 
 fn is_sole_callable_argument(arguments: Node<'_>, candidate: Node<'_>) -> bool {

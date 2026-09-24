@@ -11,6 +11,67 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- **Go.** `.go` files are scanned under a new `go` language id, so `--lang go`, `--over go=N` and
+  a `[go]` section in the config all work. A method is keyed by its receiver type, so
+  `func (s *Stack[T]) Push()` reports as `Stack::Push` and its baseline entry survives switching
+  between a pointer and a value receiver. A call through the receiver, `s.Push()`, counts as
+  recursion; a bare `Push()` inside the method names a free function or builtin and does not. An
+  `if` or `switch` initializer is scored as part of the header, `select` costs one increment like
+  a `switch`, and `defer`, `go` and `fallthrough` are free. Package-level function literals are
+  units named by their binding, and a file's repeated `init` functions are told apart as `init`,
+  `init~2`. Built behind a `go` cargo feature, on by default.
+
+  A file with a `// Code generated … DO NOT EDIT.` line before its `package` clause is skipped,
+  neither scored nor counted, on disk and through `--stdin`: it is how the Go toolchain itself
+  recognises generated code. `vendor/` and `testdata/` are not special-cased; exclude them if a
+  repository commits them.
+
+  Upgrading a repository that contains `.go` files will report findings that were previously
+  invisible. Run `bonsai-lint --write-baseline .` to adopt them.
+
+### Changed
+
+- For embedders of `bonsai-core` and `bonsai-engine`, the language seam is now two traits with
+  default methods, so a new hook no longer forces an edit into every language crate. No score
+  moves.
+  - `Hooks` is a trait, reached through `LanguageSpec.hooks: &'static dyn Hooks`.
+    `unit_scope`, returning a `UnitScope`, replaces `is_self_receiver`: it names the receiver
+    spellings through which a call reaches the unit, and whether a bare call does. The new
+    `if_parts` lets a language read its own if-chains as `IfPart`s, defaulting to
+    `walk::if_parts_by_fields`; the walker keeps the arithmetic.
+  - `LanguageDescriptor` is a trait, taken as `&'static dyn LanguageDescriptor` by
+    `registry::descriptors`, `registry::for_path` and `Scanner::analyze_source`. Its `id` field
+    is gone, and `extract`, `is_generated` and `unscored_suffixes` are defaulted methods.
+  - The `.d.ts` and `.min.js` suffix lists moved from the engine to the TypeScript and TSX
+    descriptors.
+- `--help` no longer names languages in its description, and `--lang` lists the ids built into
+  the binary, so a build with fewer language features no longer offers ones it cannot scan.
+- In PHP and TypeScript, an IIFE whose result is bound, such as `const config = (() => { … })()`
+  or `$config = (function () { … })()`, now takes that binding's name instead of `<anonymous>`,
+  and a marker above the binding suppresses it, as Go does. A bare IIFE still has nothing to be
+  named after and stays `<anonymous>`, numbered only among the units left anonymous, so adding a
+  bound one no longer shifts its key. Such a unit's baseline key changes: until
+  `--write-baseline` is rerun, its old entry reports as stale and the unit as new.
+- Two domains with the same name are now an error naming both, where they used to be merged
+  under one label in silence: `--domain` and the report's `domain` field could not tell them
+  apart. That includes a domain named `root`, which is the workspace root's own name.
+  Embedders see this as a new `ConfigError::Invalid` variant.
+
+### Fixed
+
+- A suppression marker above a declaration whose function is wrapped in a call, such as
+  `const useCart = defineStore('cart', () => …)` or `$handler = wrap(function () { … })`, now
+  suppresses that function. The unit was already named after the declaration, but the marker
+  search stopped at the call, so the marker was ignored. A marker directly above the callback,
+  inside the argument list, keeps working, and now does in PHP too. A call that binds nothing,
+  such as `Route::get('/x', function () { … })`, still leaves a marker above it to the file.
+- A misspelt top-level key in `bonsai-lint.toml` is reported by name, as
+  ``unknown key `treshold`; did you mean `threshold`?``, instead of as "expected struct
+  LanguageSection". A misspelt language section, `[typscript]`, gets the same suggestion in its
+  warning.
+
 ## [0.2.1] - 2026-09-22
 
 ### Changed

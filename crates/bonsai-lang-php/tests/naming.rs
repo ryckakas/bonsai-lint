@@ -115,6 +115,29 @@ fn colliding_positional_names_get_a_suffix() {
 
 /// The callee of an immediately-invoked closure is the closure itself, so stringifying it would
 /// turn the whole body into a key.
+/// A bound IIFE's binding holds what the closure returns, so the closure takes that name.
+#[test]
+fn a_bound_iife_takes_the_name_of_its_result() {
+    let source = "<?php\n$config = (function () { if ($a) { return 1; } return 2; })();\n$this->ready = (fn () => $a ? 1 : 2)();\n";
+    assert_eq!(names(source), ["config", "$this->ready"]);
+    assert_eq!(origin_of(source, "config"), NameOrigin::Bound);
+}
+
+/// The same shapes in PHP, which has no named closures. The bare IIFE is the only anonymous unit
+/// left, so it carries no `~2`.
+#[test]
+fn every_kind_of_iife_in_one_file() {
+    let source = "<?php\n\
+        $config = (function () { if (getenv('CI')) { return ci(); } return local(); })();\n\
+        (function () { if ($a) { echo 1; } })();\n\
+        $this->ready = (fn () => $a ? 1 : 2)();\n\
+        $table = ['load' => (function () { if ($a) { return 1; } return 2; })()];\n";
+    assert_eq!(
+        names(source),
+        ["config", "<anonymous>", "$this->ready", "load"]
+    );
+}
+
 #[test]
 fn an_iife_stays_anonymous() {
     let source = "<?php\n(function () { if ($a) { echo 1; } })();\n";
