@@ -54,9 +54,9 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   npm wrapper costs 23 KB and makes it fetch its own on first use; one package per platform
   costs about 1.6 MB and fetches nothing. Analysed in
   [docs/features/extension-cli-bundling.md](docs/features/extension-cli-bundling.md).
-- **musl and Windows on ARM builds.** Alpine-based CI images and Windows on ARM have no prebuilt
-  binary. The Go launcher refuses them with a message pointing at `cargo install`, and the npm
-  wrapper runs the x64 Windows binary under emulation. dist can build
+- **musl and Windows on ARM builds.** Alpine-based CI images have no prebuilt binary, and the Go
+  launcher refuses them with a message pointing at `cargo install`. Windows on ARM has no native
+  one: the npm wrapper and the Go launcher both run the x64 binary under emulation. dist can build
   `x86_64-unknown-linux-musl` and `aarch64-pc-windows-msvc`, but the grammars are C, so those
   cross-compiles need proving first.
 - **A lower glibc floor.** The Linux binaries are built on Ubuntu 22.04 and need glibc 2.35,
