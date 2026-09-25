@@ -59,11 +59,15 @@ curl -LsSf https://github.com/ryckakas/bonsai-lint/releases/latest/download/bons
 The npm package fetches the prebuilt binary for your platform on install. Nothing is compiled,
 and Node only launches it. The analysis itself is pure Rust.
 
+Linux has two builds. One links glibc 2.35 or newer. The other is static and runs on any Linux,
+which covers Alpine and other musl systems as well as older glibc. The installer script, the npm
+package and the Go module each pick the right one for you.
+
 In a Go module, `go get -tool bonsai.kauneckas.dev/bonsai-lint@latest` pins it in `go.mod`, and
 `go tool bonsai-lint` runs it (Go 1.24+). The Go module is a launcher with no dependencies, at the
 same version as the CLI. The first run of each version downloads that release's binary, checks it
-against a checksum recorded in the module, and caches it. Linux needs glibc 2.35 or newer; the
-platforms and settings are in [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go).
+against a checksum recorded in the module, and caches it. The platforms and settings are in
+[bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go).
 
 ## Use it
 

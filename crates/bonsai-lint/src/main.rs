@@ -12,6 +12,12 @@ use bonsai_engine::scan::{decode, display_path, rank, resolve};
 use bonsai_engine::{registry, Baseline, Located, ScanOutcome, ScanStats, Scanner, STACK_SIZE};
 use clap::{CommandFactory, FromArgMatches, Parser as ClapParser, ValueEnum};
 
+// musl's malloc serialises threads on one lock, which made a parallel scan over 15 times slower
+// than glibc's. The `override` feature is the half that matters: tree-sitter's C calls malloc.
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[derive(ClapParser)]
 #[command(name = "bonsai-lint", version, about = "Cognitive complexity linter")]
 #[allow(clippy::struct_excessive_bools)]

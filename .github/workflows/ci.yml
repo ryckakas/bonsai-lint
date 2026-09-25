@@ -80,6 +80,26 @@ jobs:
       - name: Test
         run: cargo test --all-features
 
+  musl:
+    # The musl release build swaps in mimalloc, which nothing else here compiles, so without this
+    # job a break in it would first surface as a failed release. It builds as dist's runner does.
+    name: Test on musl
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Test
+        run: cargo test --all-features --target x86_64-unknown-linux-musl
+
   features:
     # Every language is feature-gated, so the registry has to keep compiling with any subset —
     # including none, which must still produce a binary rather than a type error.
