@@ -1,16 +1,15 @@
 # bonsai-lint
 
-![bonsai-lint: cognitive complexity linter for JavaScript, TypeScript, Vue, Java, PHP and Go](docs/images/cover-hero.jpg)
+![bonsai-lint: a multi-language cognitive complexity linter](docs/images/cover-hero.jpg)
 
 **Find the code that's hard to read, in seconds, in one project or a whole monorepo.**
 
 *Bonsai: the art of keeping a tree small enough to take in at a glance. Same idea, applied to
 your syntax trees.*
 
-A cognitive complexity linter written in Rust. One static binary that reads JavaScript,
-TypeScript, Vue single-file components, Java, PHP and Go. Use it for any one of them, or all at
-once. No Node runtime, no JVM, no PHP runtime, no Go toolchain, no Composer entry, nothing added to
-your project.
+A multi-language cognitive complexity linter written in Rust. One static binary that currently
+reads JavaScript, TypeScript, Vue single-file components, Java, PHP and Go. Use it for any one of
+them, or all at once. No runtime or toolchain for any of them, nothing added to your project.
 Scans **1.26 million lines in 0.8 seconds**.
 
 The official site is **[bonsai.kauneckas.dev](https://bonsai.kauneckas.dev)**: install and editor
@@ -81,7 +80,7 @@ bonsai-lint --over 10 src/           # stricter; `--over php=10,typescript=20` p
 bonsai-lint --all src/               # every unit, ranked
 bonsai-lint --format json src/       # for editors and CI
 bonsai-lint --write-baseline src/    # record today's findings, exit 0
-bonsai-lint --lang php src/          # one language only: `typescript`, `vue`, `java`, `php` or `go`
+bonsai-lint --lang php src/          # one language only; `--help` lists the ids
 ```
 
 <details>
@@ -279,7 +278,7 @@ threshold = 20
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `threshold` | `15` | Fail above this score. A `[typescript]`, `[vue]`, `[java]`, `[php]` or `[go]` section overrides it per language. |
+| `threshold` | `15` | Fail above this score. A section named after a language id, such as `[typescript]`, overrides it per language. |
 | `exclude` | `[]` | Globs, relative to the config's own directory. `*` stops at `/` and `**` crosses it, as in `.gitignore`. |
 | `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
 | `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |

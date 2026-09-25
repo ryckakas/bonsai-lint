@@ -1,7 +1,7 @@
 {
   "name": "bonsai-lint",
-  "displayName": "bonsai-lint: cognitive complexity for JS, TS, Vue, Java, PHP and Go",
-  "description": "Flags functions that are hard to read, across JavaScript, TypeScript, Vue, Java, PHP and Go. Rust-powered, no runtime required.",
+  "displayName": "bonsai-lint: multi-language cognitive complexity",
+  "description": "Flags functions that are hard to read, in every language bonsai-lint supports. Rust-powered, no runtime required.",
   "version": "0.3.0",
   "publisher": "RicardasKauneckas",
   "license": "MIT",
