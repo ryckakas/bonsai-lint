@@ -263,6 +263,16 @@ from `ldd --version`. The musl build replaces musl's allocator with mimalloc, th
 serialises threads: on the HERO corpus on arm64, a parallel scan took 16.3 s against glibc's
 0.94 s, and 0.84 s with mimalloc. Nothing but the release and CI's musl job compiles that target.
 
+**The version moves when compatibility does.** The library crates are published, and a CLI
+release depends on them by a caret range that `cargo install` resolves without the lockfile. A
+breaking 0.3.x of `bonsai-core` would therefore stop `cargo install bonsai-lint@0.3.0` from
+compiling, whether or not anyone else embeds it. CI's required Public API job runs
+`cargo-semver-checks` against the latest release on crates.io. A pull request that breaks the
+API bumps the workspace to 0.4.0 in the same change, and after that further breaks pass until
+0.4.0 ships. The job checks only library crates crates.io already has: a new language crate has
+no baseline until its first publish. It fetches the newest cargo-semver-checks on each run,
+because the tool reads rustdoc's JSON output, which changes with Rust releases.
+
 **Every user-facing name is `bonsai-lint`** — the crate, the binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker and the extension's
 `bonsai-lint.*` settings. The bare `bonsai` namespace belongs to unrelated projects on
