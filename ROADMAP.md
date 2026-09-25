@@ -74,8 +74,10 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
 - **Checksum verification in the npm wrapper.** The npm package downloads the release archive
   without checking it, while the installer script, the Homebrew formula and the Go launcher all
   check a sha256 recorded before the download. dist already publishes one per archive.
-- **Trusted publishing.** Both npm and crates.io now support OIDC from GitHub Actions, which
-  would remove the stored tokens that have to be rotated when they expire.
+- **Trusted publishing for npm.** crates.io already publishes this way (see `publish-crates.yml`),
+  but npm still takes the stored `NPM_TOKEN`. dist's generated npm job has no `id-token: write`,
+  and it runs Node 20, whose npm is older than the 11.5.1 that OIDC needs. Replacing dist's npm
+  job with a custom publish job, as `publish-go.yml` does for Go, would remove the token.
 - **A long lived editor server.** The extension currently starts a process per analysis. A
   `--server` mode reusing the `--stdin` input shape would cut the per keystroke cost.
 - **Type aware linting for the extension.** The TypeScript source has no linter beyond `tsc`.

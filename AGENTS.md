@@ -248,6 +248,19 @@ CI's required **Public API** job (`cargo-semver-checks` against the latest relea
 fails until it does. A release that follows only compatible changes bumps the patch version in
 the release PR. A crate that has never been published is left out until its first release.
 
+crates.io is published separately, by dispatching `.github/workflows/publish-crates.yml` by hand
+after the release, because a published version can never be taken back:
+- **Normally it uses trusted publishing.** GitHub vouches for the run, and crates.io issues a token
+  that lasts 30 minutes, then revokes it when the job ends. Each crate's crates.io settings name
+  that workflow as a trusted publisher (owner `ryckakas`, repository `bonsai-lint`, workflow
+  `publish-crates.yml`).
+- **A release that adds a new crate, such as a language, sets `first_publish`.** crates.io trusts a
+  workflow only for a crate that already exists there, so that one run uses the
+  `CARGO_REGISTRY_TOKEN` secret. Create a short-lived token for it, add the new crate's trusted
+  publisher once it is up, then delete the secret.
+- **Run with `dry_run` first.** It packages and verifies every crate, uploads nothing, and needs no
+  token.
+
 The Go module `bonsai.kauneckas.dev/bonsai-lint` is a launcher that lives in
 [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go). `.github/workflows/publish-go.yml`
 is a custom dist publish job, and it runs once the GitHub Release exists:
