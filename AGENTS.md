@@ -217,10 +217,16 @@ Azure DevOps PAT).
 publishes it as that release's notes, so a missing or misnamed section ships an empty release
 page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY-MM-DD`.
 
-A release bumps `version` in the root `Cargo.toml` **and** the seven internal path dependencies
-beside it, which must match or cargo refuses to build. The npm package, Homebrew formula and Go
-module take their version from that one field; none is edited by hand. The extension is bumped
+The version is `version` in the root `Cargo.toml` **and** the internal path dependencies beside
+it, which must match or cargo refuses to build. The npm package, Homebrew formula and Go module
+take their version from that one field; none is edited by hand. The extension is bumped
 afterwards, because its lockfile can only pin a CLI version that is already published.
+
+**The version moves when compatibility does.** A pull request that breaks a library crate's
+public API bumps the workspace to the next breaking version (0.3.x → 0.4.0) in the same change.
+CI's required **Public API** job (`cargo-semver-checks` against the latest release on crates.io)
+fails until it does. A release that follows only compatible changes bumps the patch version in
+the release PR. A crate that has never been published is left out until its first release.
 
 The Go module `bonsai.kauneckas.dev/bonsai-lint` is a launcher that lives in
 [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go). `.github/workflows/publish-go.yml`
