@@ -8,6 +8,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 readme = "../../README.md"
+keywords = ["complexity", "cognitive-complexity", "tree-sitter", "static-analysis", "metrics"]
+categories = ["development-tools"]
 
 [dependencies]
 tree-sitter = { workspace = true }

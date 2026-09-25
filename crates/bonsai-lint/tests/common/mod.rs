@@ -1,7 +1,8 @@
 //! The harness every CLI suite shares: a throwaway project, the binary under test, and the
 //! source snippets whose scores the assertions are written against.
 // Each suite compiles this module on its own, so a helper it does not use is not dead.
-#![allow(dead_code, unreachable_pub)]
+#![allow(dead_code, reason = "each test binary uses a different subset")]
+#![allow(unreachable_pub, reason = "pub marks the helpers the test files call")]
 
 use std::fmt::Write as _;
 use std::fs;

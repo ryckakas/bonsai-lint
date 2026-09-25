@@ -176,14 +176,18 @@ cargo test --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --all-features
 cargo deny check
 cargo shear
+typos
+taplo fmt --check
 ```
 
 CI runs exactly these on every pull request, plus the feature subsets below, a build on the
 minimum supported Rust version, and the tests again on `x86_64-unknown-linux-musl`.
 `cargo build --release` produces the binary users get. `cargo deny` applies `deny.toml` to the
 dependency tree: no known advisory, a license from its list, one version of each crate and
-crates.io as the only source. `cargo shear` fails on a dependency that nothing uses. Both, and
-`cargo hack` below, are plugins: `cargo install --locked cargo-deny cargo-shear cargo-hack`.
+crates.io as the only source. `cargo shear` fails on a dependency that nothing uses. `typos`
+checks spelling, with the deliberate misspellings the tests feed in listed in `_typos.toml`, and
+`taplo` checks TOML formatting against `.taplo.toml`. They, and `cargo hack` below, are separate
+tools: `cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli`.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
 subset — including none. CI builds every combination with `cargo-hack`, which reads the features

@@ -22,9 +22,12 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --all-features
 cargo deny check                                      # advisories, licenses, duplicates: deny.toml
 cargo shear                                           # dependencies nothing uses
 cargo hack build -p bonsai-lint --feature-powerset    # every language subset, including none
+typos                                                 # spelling; deliberate misspellings: _typos.toml
+taplo fmt --check                                     # TOML formatting: .taplo.toml
 ```
 
-The last three are cargo plugins: `cargo install --locked cargo-deny cargo-shear cargo-hack`.
+The last five are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli`.
 
 CI (`.github/workflows/ci.yml`) runs exactly the commands above, plus a test matrix across
 Linux/macOS/Windows, a build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and
@@ -188,9 +191,11 @@ dogfooding stance — the tool measures complexity/nesting in the languages it l
 a version of the same discipline on its own Rust via clippy. Don't loosen these to get code to
 compile; restructure instead.
 
-A set of allow-by-default `rustc` lints and hand-picked clippy `restriction` lints are warn too.
-Each was clean when it was added, so a hit is new code to fix, not a lint to switch off.
-`restriction` is not a group to enable wholesale: its lints contradict each other.
+A set of allow-by-default `rustc` lints, clippy's `cargo` group, and hand-picked clippy
+`restriction` and `nursery` lints are warn too. Each was clean when it was added, so a hit is new
+code to fix, not a lint to switch off. Neither `restriction` nor `nursery` is a group to enable
+wholesale: `restriction`'s lints contradict each other, and `nursery`'s are unsettled. An
+`#[allow]` needs a `reason = "…"`, the same "why" a comment would give.
 
 ## Releasing
 

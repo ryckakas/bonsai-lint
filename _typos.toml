@@ -1,0 +1,17 @@
+# Spell check with `typos`, run by CI's lint job.
+
+[default]
+extend-ignore-re = [
+    # The invalid UTF-8 bytes of "café" that the lenient-decoding tests read.
+    'caf\\x[Ee]9',
+    # Immediately invoked function expressions, which the TypeScript naming tests number.
+    '\bIIFEs?\b',
+]
+
+[default.extend-words]
+# Misspelt config keys, there on purpose: the tests check the "did you mean" suggestion.
+thresold = "thresold"
+treshold = "treshold"
+typscript = "typscript"
+# Both spellings are English.
+unparseable = "unparseable"

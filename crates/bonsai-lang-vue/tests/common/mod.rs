@@ -1,9 +1,9 @@
-#![allow(unreachable_pub)]
+#![allow(unreachable_pub, reason = "pub marks the helpers the test files call")]
 
 use bonsai_core::{Extraction, Finding, LanguageDescriptor};
 use tree_sitter::Parser;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn extract(source: &str) -> Extraction {
     bonsai_lang_vue::VUE
         .extract(source)
@@ -13,7 +13,7 @@ pub fn extract(source: &str) -> Extraction {
 /// Mirrors what the scan driver does: one parse per region over the whole component, so a
 /// reported line is a line in the `.vue` file and a comment cannot run from one block into the
 /// next. The driver then merges the regions' top-level findings; these tests assert on that too.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn findings(source: &str) -> Vec<Finding> {
     let extraction = extract(source);
     let mut parser = Parser::new();
@@ -39,7 +39,7 @@ pub fn findings(source: &str) -> Vec<Finding> {
     found
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 fn merge_toplevel(findings: &mut Vec<Finding>) {
     let is_toplevel = |finding: &Finding| finding.name == bonsai_core::TOPLEVEL_UNIT;
     let Some(first) = findings.iter().position(is_toplevel) else {
@@ -61,7 +61,7 @@ fn merge_toplevel(findings: &mut Vec<Finding>) {
     });
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn find<'a>(findings: &'a [Finding], name: &str) -> &'a Finding {
     findings
         .iter()
@@ -74,7 +74,7 @@ pub fn find<'a>(findings: &'a [Finding], name: &str) -> &'a Finding {
 
 /// The chosen dialect is observable through what parses: `<string>x` is a type assertion to the
 /// TypeScript grammar and an unclosed JSX element to TSX.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn parses_cleanly(source: &str) -> bool {
     let extraction = extract(source);
     let mut parser = Parser::new();

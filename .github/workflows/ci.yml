@@ -38,6 +38,17 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+      # An exact release, since each one adds corrections; Dependabot proposes the next one.
+      - name: Spelling
+        uses: crate-ci/typos@v1.50.2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: taplo
+
+      - name: TOML formatting
+        run: taplo fmt --check
+
   dependencies:
     # deny.toml holds the policy: advisories, licenses, duplicate crates and allowed sources.
     # A new RustSec advisory fails this on any pull request until the crate is upgraded.

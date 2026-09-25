@@ -8,6 +8,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 readme = "../../README.md"
+keywords = ["tree-sitter", "grammar", "testing", "linter"]
+categories = ["development-tools::testing"]
 
 [dependencies]
 bonsai-core = { workspace = true }
