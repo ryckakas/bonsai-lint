@@ -12,6 +12,16 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Fixed
+
+- Two Java anonymous classes passed to one constructor, as in
+  `new Dispatcher(new Runnable() { … }, new Runnable() { … })`, no longer share a key. Both
+  methods were `C::run()`, so the baseline kept one score and an unchanged rerun failed on the
+  other. A callback passed to a constructor now takes the constructor's type and its argument
+  position, as a method call's arguments already did: `C::new Dispatcher#0::run()` and
+  `C::new Dispatcher#1::run()`. Lambdas in the same place move from `<anonymous>` to the same
+  form, so a baseline holding either needs `--write-baseline` once.
+
 ## [0.4.0] - 2026-09-25
 
 ### Added

@@ -180,3 +180,30 @@ fn a_worsened_overload_breaks_its_baseline_alone() {
     );
     assert!(!listing.contains("Orders::process(boolean)"), "{listing}");
 }
+
+/// Two anonymous classes in one constructor call once shared `C::run()`, so the baseline kept one
+/// score and the unchanged rerun failed on the other.
+#[test]
+fn anonymous_classes_in_one_constructor_are_baselined_apart_and_then_quiet() {
+    let project = Project::new();
+    project.file("bonsai-lint.toml", "threshold = 0\n");
+    project.file(
+        "src/C.java",
+        "class C {\n  static final Dispatcher D = new Dispatcher(\n    new Runnable() {\n      public void run() { if (a) { if (b) f(); } }\n    },\n    new Runnable() {\n      public void run() { if (c) g(); }\n    }\n  );\n}\n",
+    );
+
+    let written = project.run(&["--write-baseline", "."]);
+    assert_eq!(code(&written), 0, "{}", stderr(&written));
+    let baseline = project.read(".bonsai-lint-baseline.json");
+    assert!(
+        baseline.contains("C::new Dispatcher#0::run()"),
+        "{baseline}"
+    );
+    assert!(
+        baseline.contains("C::new Dispatcher#1::run()"),
+        "{baseline}"
+    );
+
+    let rerun = project.run(&["."]);
+    assert_eq!(code(&rerun), 0, "{}", stdout(&rerun));
+}

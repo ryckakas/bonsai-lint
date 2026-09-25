@@ -525,20 +525,12 @@ fn is_callable(argument: Node<'_>) -> bool {
 }
 
 /// A callback that is nobody's value takes the call it belongs to plus its argument position:
-/// `executor.submit#0`. The callee is sliced from the source, so a chain keeps its qualifier.
+/// `executor.submit#0`, `new Dispatcher#1`.
 fn positional_name(node: Node<'_>, src: &[u8]) -> Option<String> {
     let arguments = node
         .parent()
         .filter(|parent| parent.kind() == "argument_list")?;
-    let call = arguments
-        .parent()
-        .filter(|parent| parent.kind() == "method_invocation")?;
-
-    let callee = std::str::from_utf8(&src[call.start_byte()..arguments.start_byte()]).ok()?;
-    let callee = compact(callee);
-    if callee.is_empty() || callee.contains(['(', '{']) {
-        return None;
-    }
+    let callee = callee_name(arguments.parent()?, arguments, src)?;
 
     let mut cursor = arguments.walk();
     let index = arguments
@@ -546,6 +538,23 @@ fn positional_name(node: Node<'_>, src: &[u8]) -> Option<String> {
         .position(|argument| argument.id() == node.id())?;
 
     Some(format!("{callee}#{index}"))
+}
+
+/// A method's callee is sliced from the source, so a chain keeps its qualifier. A constructor
+/// names its type the way a parameter does, so `new a.Foo<>(…)` and `new Foo(…)` key alike.
+fn callee_name(call: Node<'_>, arguments: Node<'_>, src: &[u8]) -> Option<String> {
+    match call.kind() {
+        "method_invocation" => {
+            let callee =
+                compact(std::str::from_utf8(&src[call.start_byte()..arguments.start_byte()]).ok()?);
+            (!callee.is_empty() && !callee.contains(['(', '{'])).then_some(callee)
+        }
+        "object_creation_expression" => Some(format!(
+            "new {}",
+            simple_type(call.child_by_field_name("type")?, src)?
+        )),
+        _ => None,
+    }
 }
 
 fn is_comment(node: Node<'_>) -> bool {
