@@ -4,7 +4,7 @@
 mod common;
 
 use bonsai_core::NameOrigin;
-use common::findings;
+use common::{findings, findings_in_a_grammar_gap};
 
 fn names(source: &str) -> Vec<String> {
     findings(source)
@@ -190,4 +190,25 @@ fn a_top_level_method_of_an_implicit_class_has_no_container() {
 fn lambdas_and_nested_classes_inside_a_method_roll_up() {
     let source = "class C {\n  void outer() {\n    Runnable r = () -> {};\n    class Local { void m() {} }\n    new Thread(new Runnable() { public void run() {} });\n  }\n}\n";
     assert_eq!(names(source), ["C::outer()"]);
+}
+
+/// The grammar rejects `String @Nullable ... hosts`, the way nullness-annotated code marks every
+/// nullable varargs. The key keeps the parameter, so it neither collides with a real no-argument
+/// overload nor re-keys once the grammar learns the syntax.
+#[test]
+fn an_annotated_varargs_parameter_keeps_its_type_despite_the_grammar_gap() {
+    let source = "class C {\n  void set(String @Nullable ... hosts) {}\n  void set() {}\n  void log(@Nullable String t, @Nullable Object @Nullable ... args) {}\n  void all(Class<?> @Nullable ... types) {}\n}\n";
+    let names: Vec<String> = findings_in_a_grammar_gap(source)
+        .into_iter()
+        .map(|finding| finding.qualified_name())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "C::set(String...)",
+            "C::set()",
+            "C::log(String, Object...)",
+            "C::all(Class...)"
+        ]
+    );
 }

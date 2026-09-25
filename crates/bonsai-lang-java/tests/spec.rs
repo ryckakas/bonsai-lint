@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{assert_scores, score_of};
+use common::{assert_scores, findings_in_a_grammar_gap, score_of};
 
 #[test]
 fn operator_sequences_cost_per_run_not_per_operator() {
@@ -11,6 +11,16 @@ fn operator_sequences_cost_per_run_not_per_operator() {
         ("if (a && b || c) { f(); }", 3),
         ("if (a && b && c || d || e && g) { f(); }", 4),
         ("x = a && b;", 1),
+    ]);
+}
+
+/// A run that returns to an operator after switching away costs again. Other implementations
+/// count each operator once per group, which is a documented divergence.
+#[test]
+fn returning_to_an_operator_starts_a_new_run() {
+    assert_scores(&[
+        ("x = a && b || c && d;", 3),
+        ("x = (a && b) || (c && d);", 3),
     ]);
 }
 
@@ -75,6 +85,8 @@ fn loop_headers_do_not_nest() {
             "for (var x : xs.stream().filter(y -> y > 0 ? true : false).toList()) { f(); }",
             3,
         ),
+        ("while (a ? b : c) { f(); }", 2),
+        ("switch (a ? 1 : 2) { default -> f(); }", 2),
     ]);
 }
 
@@ -99,6 +111,26 @@ fn unbraced_branches_score_like_braced_ones() {
     assert_scores(&[
         ("if (a) f(); else if (b) g(); else h();", 3),
         ("if (a) f(); else for (;;) { g(); }", 4),
+    ]);
+}
+
+/// Every body of a chain sits one level below its `if`, however many links precede it. Other
+/// implementations nest each further link deeper, which is a documented divergence.
+#[test]
+fn a_long_chain_does_not_nest_its_later_links() {
+    assert_scores(&[
+        (
+            "if (a) { f(); } else if (b) { g(); } else { x = c ? 1 : 2; }",
+            5,
+        ),
+        (
+            "if (a) { f(); } else if (b) { g(); } else if (c) { h(); } else { x = d ? 1 : 2; }",
+            6,
+        ),
+        (
+            "if (a) { f(); } else if (b) { g(); } else if (c) { x = d ? 1 : 2; }",
+            5,
+        ),
     ]);
 }
 
@@ -279,6 +311,17 @@ fn a_varargs_method_reaches_itself_with_enough_arguments() {
     assert_eq!(score_of(source, "C::target(String...)"), 1);
     assert_eq!(score_of(source, "C::other(String, Object...)"), 0);
     assert_eq!(score_of(source, "C::more(String, Object...)"), 1);
+}
+
+/// The grammar cannot parse `String @Nullable ...`, but the parameter is still varargs.
+#[test]
+fn an_annotated_varargs_method_still_reaches_itself() {
+    let source = "class C {\n  void target(String @Nullable ... a) { if (a == null) { target(\"x\", \"y\"); } }\n}\n";
+    let finding = findings_in_a_grammar_gap(source)
+        .into_iter()
+        .find(|finding| finding.qualified_name() == "C::target(String...)")
+        .expect("the method is still a unit");
+    assert_eq!(finding.score, 2);
 }
 
 #[test]

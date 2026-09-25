@@ -137,8 +137,8 @@ impl Hooks for JavaHooks {
         unit_body(node, lang)
     }
 
-    fn call_reaches_unit(&self, call: Node<'_>, unit: Node<'_>, _src: &[u8]) -> bool {
-        call_reaches_unit(call, unit)
+    fn call_reaches_unit(&self, call: Node<'_>, unit: Node<'_>, src: &[u8]) -> bool {
+        call_reaches_unit(call, unit, src)
     }
 }
 
@@ -244,7 +244,7 @@ fn unit_body<'t>(node: Node<'t>, lang: &Language) -> Option<Node<'t>> {
 
 /// Overloads share a name, so a call recurses only when its argument count fits the method's
 /// own parameters. A constructor, a static block or a lambda is never invoked by a name.
-fn call_reaches_unit(call: Node<'_>, unit: Node<'_>) -> bool {
+fn call_reaches_unit(call: Node<'_>, unit: Node<'_>, src: &[u8]) -> bool {
     if unit.kind() != "method_declaration" {
         return false;
     }
@@ -265,10 +265,10 @@ fn call_reaches_unit(call: Node<'_>, unit: Node<'_>) -> bool {
     let mut required = 0;
     let mut variadic = false;
     for parameter in parameters.named_children(&mut cursor) {
-        match parameter.kind() {
-            "formal_parameter" => required += 1,
-            "spread_parameter" => variadic = true,
-            _ => {}
+        match parameter_type(parameter, src) {
+            Some(written) if written.ends_with("...") => variadic = true,
+            Some(_) => required += 1,
+            None => {}
         }
     }
     if variadic {
@@ -329,15 +329,30 @@ fn parameter_type(parameter: Node<'_>, src: &[u8]) -> Option<String> {
                 .map_or(0, |dimensions| bracket_pairs(dimensions, src));
             Some(base + &"[]".repeat(dimensions))
         }
-        "spread_parameter" => {
-            let mut cursor = parameter.walk();
-            let written = parameter.named_children(&mut cursor).find(|child| {
-                !matches!(child.kind(), "modifiers" | "variable_declarator") && !is_comment(*child)
-            })?;
-            Some(simple_type(written, src)? + "...")
-        }
+        "spread_parameter" => Some(simple_type(written_type(parameter)?, src)? + "..."),
+        "ERROR" => annotated_varargs(parameter, src),
         _ => None,
     }
+}
+
+/// The grammar rejects a type annotation before `...`, as nullness-annotated code writes
+/// `String @Nullable ... args`. The type still leads the error, and dropping it would collide
+/// with a real overload and re-key once the grammar learns the syntax.
+fn annotated_varargs(error: Node<'_>, src: &[u8]) -> Option<String> {
+    let variadic = text(error, src)?.contains("...");
+    let base = simple_type(written_type(error)?, src)?;
+    Some(if variadic { base + "..." } else { base })
+}
+
+fn written_type(parameter: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = parameter.walk();
+    let written = parameter.named_children(&mut cursor).find(|child| {
+        !matches!(
+            child.kind(),
+            "modifiers" | "variable_declarator" | "marker_annotation" | "annotation"
+        ) && !is_comment(*child)
+    });
+    written
 }
 
 /// The type as its simple name, so `java.util.List<String>` and an imported `List<String>` key

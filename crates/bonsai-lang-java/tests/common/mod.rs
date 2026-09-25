@@ -5,15 +5,27 @@ use tree_sitter::Parser;
 
 #[allow(dead_code)]
 pub fn findings(source: &str) -> Vec<Finding> {
+    parse(source, false)
+}
+
+/// For Java the grammar cannot parse yet. It insists on the error, so a grammar upgrade that
+/// learns the syntax fails the test and the workaround it pins can be retired.
+#[allow(dead_code)]
+pub fn findings_in_a_grammar_gap(source: &str) -> Vec<Finding> {
+    parse(source, true)
+}
+
+fn parse(source: &str, gap: bool) -> Vec<Finding> {
     let language = bonsai_lang_java::JAVA.compiled();
     let mut parser = Parser::new();
     parser
         .set_language(&language.ts)
         .expect("Java grammar should load");
     let tree = parser.parse(source, None).expect("source should parse");
-    assert!(
-        !tree.root_node().has_error(),
-        "fixture does not parse cleanly:\n{source}"
+    assert_eq!(
+        tree.root_node().has_error(),
+        gap,
+        "unexpected parse for:\n{source}"
     );
     bonsai_core::analyze(&tree, source.as_bytes(), language, true)
 }
