@@ -1,16 +1,16 @@
-#![allow(unreachable_pub)]
+#![allow(unreachable_pub, reason = "pub marks the helpers the test files call")]
 
 use bonsai_core::{Finding, LanguageDescriptor};
 use tree_sitter::Parser;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn findings(source: &str) -> Vec<Finding> {
     parse(source, false)
 }
 
 /// For Java the grammar cannot parse yet. It insists on the error, so a grammar upgrade that
 /// learns the syntax fails the test and the workaround it pins can be retired.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn findings_in_a_grammar_gap(source: &str) -> Vec<Finding> {
     parse(source, true)
 }
@@ -30,7 +30,7 @@ fn parse(source: &str, gap: bool) -> Vec<Finding> {
     bonsai_core::analyze(&tree, source.as_bytes(), language, true)
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn score(body: &str) -> u32 {
     let source = format!("class T {{\n    void target() {{\n{body}\n    }}\n}}\n");
     findings(&source)
@@ -40,7 +40,7 @@ pub fn score(body: &str) -> u32 {
         .score
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn assert_scores(cases: &[(&str, u32)]) {
     for (body, expected) in cases {
         assert_eq!(score(body), *expected, "scoring:\n{body}");
@@ -49,7 +49,7 @@ pub fn assert_scores(cases: &[(&str, u32)]) {
 
 /// The score of the unit whose qualified key is `qualified`, for cases that need a signature or
 /// a class of their own.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn score_of(source: &str, qualified: &str) -> u32 {
     findings(source)
         .into_iter()

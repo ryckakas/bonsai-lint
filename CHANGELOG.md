@@ -48,7 +48,8 @@ what a user reads on the GitHub release page.
 
 ### Changed
 
-- **For embedders of `bonsai-core`:**
+- **For embedders of `bonsai-core`**, and breaking for code that builds `UnitName` or `WalkCx`
+  with a struct literal, which is why this is 0.4.0 rather than 0.3.1:
   - `UnitName` gains a `signature` field. It is joined onto the reported name but never matched
     against a call. `UnitName::with_signature` sets it.
   - `Hooks` gains two methods with defaults:
