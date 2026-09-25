@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`bonsai-lint` is a cognitive complexity linter written in Rust that reads PHP, JavaScript,
-TypeScript, Vue single-file components, Go and Java via tree-sitter grammars, without executing any
-of it. One static binary, no PHP, Node, Go or Java toolchain required to run the analysis. It ships
-as a Cargo workspace plus an independent VS Code extension.
+`bonsai-lint` is a multi-language cognitive complexity linter written in Rust. It reads source
+through tree-sitter grammars without executing any of it; the README lists the supported
+languages. One static binary, no language runtime or toolchain required to run the analysis. It
+ships as a Cargo workspace plus an independent VS Code extension.
 
 ## Commands
 
@@ -153,12 +153,21 @@ them when touching scan/domain/path code:
 - A closed stdout ends output quietly and leaves the exit code to the findings, not to the write
   error.
 
-**Language order:** user-facing text lists languages by usage, not by when support landed:
-JavaScript, TypeScript, Vue, Java, PHP, Go (the Stack Overflow developer survey, with Vue beside
-TypeScript because it is scored as TypeScript). That covers the READMEs, `docs/scoring-rules.md`,
-the extension's `displayName` and `description`, and crate descriptions. A new language is slotted
-in by the same ranking. Developer docs such as this file and `docs/architecture.md`, and the
-registry's order, are left as they are.
+**Naming the language set:** taglines and descriptions call the tool *multi-language* and never
+enumerate languages. That covers the GitHub About text, the crate description (which npm and
+Homebrew reuse), the extension's `displayName` and `description`, and the cover's alt text.
+
+The supported languages are enumerated in exactly two places, the README intro and its
+supported-languages table. Both are ordered by usage rather than by when support landed:
+JavaScript, TypeScript, Vue, Java, PHP, Go. That is the Stack Overflow developer survey order,
+with Vue beside TypeScript because it is scored as TypeScript. A new language is slotted in by
+the same ranking, and `docs/scoring-rules.md` orders its per-language tables and sections the
+same way.
+
+Everything else that names languages is functional and follows the registry:
+- the cargo features, and the CI matrix;
+- the extension's activation events and its default `bonsai-lint.languages`;
+- the search tags: GitHub topics and the extension's `keywords`.
 
 **Naming convention:** every user-facing name is `bonsai-lint` — crate, binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker, the extension's `bonsai-lint.*`
@@ -188,7 +197,7 @@ projects on crates.io/npm/VS Code Marketplace).
   `cli_go.rs`, `cli_java.rs`) over a
   shared `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in
   a fifth of a second while `cli_parallel` is the slow one.
-- Cross-language parity (same logic in PHP, TypeScript, Go and Java scoring identically) is a tested
+- Cross-language parity (the same logic scoring identically in every language) is a tested
   property, not an assumption — see the README's "same code scores the same" example when
   changing shared scoring logic in `bonsai-core`.
 

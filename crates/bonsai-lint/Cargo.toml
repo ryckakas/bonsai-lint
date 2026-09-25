@@ -1,6 +1,6 @@
 [package]
 name = "bonsai-lint"
-description = "Cognitive complexity linter for JavaScript, TypeScript, Vue, Java, PHP and Go, as a single static binary"
+description = "Multi-language cognitive complexity linter, as a single static binary"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 readme = "../../README.md"
-keywords = ["linter", "complexity", "php", "typescript", "go"]
+keywords = ["linter", "complexity", "cognitive-complexity", "static-analysis", "multi-language"]
 categories = ["development-tools"]
 
 [[bin]]

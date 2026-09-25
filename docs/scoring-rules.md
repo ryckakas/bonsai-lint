@@ -283,9 +283,8 @@ as the counting rule states: `a && b || c && d` switches operator twice, so it i
 
 ## How these rules are pinned
 
-Every worked example above is also a fixture, under `crates/bonsai-lang-ts/tests/`,
-`crates/bonsai-lang-java/tests/`, `crates/bonsai-lang-php/tests/` and
-`crates/bonsai-lang-go/tests/`, asserted against a stated total — so a scoring change that
+Every worked example above is also a fixture, under the language crate's `tests/` directory
+(`crates/bonsai-lang-*/tests/`), asserted against a stated total — so a scoring change that
 contradicts this document fails the build rather than quietly rewriting it. The two cases that
 tell competing readings of a boolean run apart each carry their own test:
 
