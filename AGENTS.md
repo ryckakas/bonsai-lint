@@ -153,6 +153,13 @@ them when touching scan/domain/path code:
 - A closed stdout ends output quietly and leaves the exit code to the findings, not to the write
   error.
 
+**Language order:** user-facing text lists languages by usage, not by when support landed:
+JavaScript, TypeScript, Vue, Java, PHP, Go (the Stack Overflow developer survey, with Vue beside
+TypeScript because it is scored as TypeScript). That covers the READMEs, `docs/scoring-rules.md`,
+the extension's `displayName` and `description`, and crate descriptions. A new language is slotted
+in by the same ranking. Developer docs such as this file and `docs/architecture.md`, and the
+registry's order, are left as they are.
+
 **Naming convention:** every user-facing name is `bonsai-lint` — crate, binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker, the extension's `bonsai-lint.*`
 settings. The bare `bonsai` namespace deliberately isn't claimed anywhere (it belongs to unrelated
