@@ -159,6 +159,23 @@ fn several_callbacks_in_one_call_take_their_positions() {
 }
 
 #[test]
+fn anonymous_classes_passed_to_one_constructor_take_its_positions() {
+    let source = "class C {\n  static final Dispatcher D = new Dispatcher(\n    new Runnable() { public void run() {} },\n    new Runnable() { public void run() {} }\n  );\n}\n";
+    assert_eq!(
+        names(source),
+        ["C::new Dispatcher#0::run()", "C::new Dispatcher#1::run()"]
+    );
+}
+
+#[test]
+fn several_callbacks_in_one_constructor_take_its_type_and_their_positions() {
+    let source =
+        "class C {\n  static final Pair P = new java.util.Pair<>(() -> {}, () -> {});\n}\n";
+    assert_eq!(names(source), ["C::new Pair#0", "C::new Pair#1"]);
+    assert_eq!(origin_of(source, "C::new Pair#0"), NameOrigin::Positional);
+}
+
+#[test]
 fn an_initializer_block_callback_takes_its_call_and_position() {
     let source = "class Outer { { register(() -> {}); } }\n";
     assert_eq!(names(source), ["Outer::register#0"]);

@@ -107,6 +107,7 @@ written:
 | `static final Comparator<S> CMP = new Comparator<>() { public int compare(S a, S b) {} };` | `C::CMP::compare(S, S)` |
 | `private final Runnable handler = () -> {};` | `C::handler` |
 | `static final Supplier<X> S = memoize(() -> {});` | `C::S` |
+| `new Dispatcher(new Runnable() { public void run() {} }, new Runnable() { … })` | `C::new Dispatcher#0::run()`, `C::new Dispatcher#1::run()` |
 | `static { … }`, and a second one | `C::<static>`, `C::<static>~2` |
 | `void main() {}` in a compact source file | `main()` |
 | anything else | `<anonymous>` |
