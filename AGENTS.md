@@ -18,16 +18,19 @@ cargo test --all-features                            # whole workspace
 cargo test -p bonsai-lang-php                         # one crate
 cargo test -p bonsai-lang-php --test grammar          # one integration test file
 cargo build --release                                 # produces target/release/bonsai-lint
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --all-features
+cargo deny check                                      # advisories, licenses, duplicates: deny.toml
+cargo shear                                           # dependencies nothing uses
+cargo hack build -p bonsai-lint --feature-powerset    # every language subset, including none
 ```
 
-CI (`.github/workflows/ci.yml`) runs exactly the fmt/clippy/test commands above, plus a build
-matrix across Linux/macOS/Windows, a feature-combination build (`php`, `ts`, `php,ts`, `vue`,
-`ts,vue`, `php,ts,vue`, `go`, `php,ts,vue,go`, none — each
-`cargo build -p bonsai-lint --no-default-features --features "<set>"`), a
-build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and the tests on
-`x86_64-unknown-linux-musl`, the only build that swaps in mimalloc (it needs `musl-tools`, so on
-macOS run it in an `ubuntu` container). Match these locally before pushing rather than relying on
-CI to catch it.
+The last three are cargo plugins: `cargo install --locked cargo-deny cargo-shear cargo-hack`.
+
+CI (`.github/workflows/ci.yml`) runs exactly the commands above, plus a test matrix across
+Linux/macOS/Windows, a build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and
+the tests on `x86_64-unknown-linux-musl`, the only build that swaps in mimalloc (it needs
+`musl-tools`, so on macOS run it in an `ubuntu` container). Match these locally before pushing
+rather than relying on CI to catch it.
 
 Every language is behind a cargo feature; `vue` implies `ts` because it reuses that spec. The
 registry must keep compiling with any feature subset, including none — this is exercised, not
@@ -184,6 +187,10 @@ asserting the absence, since a comment alone cannot fail.
 dogfooding stance — the tool measures complexity/nesting in the languages it lints, and enforces
 a version of the same discipline on its own Rust via clippy. Don't loosen these to get code to
 compile; restructure instead.
+
+A set of allow-by-default `rustc` lints and hand-picked clippy `restriction` lints are warn too.
+Each was clean when it was added, so a hit is new code to fix, not a lint to switch off.
+`restriction` is not a group to enable wholesale: its lints contradict each other.
 
 ## Releasing
 

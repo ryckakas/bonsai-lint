@@ -173,17 +173,25 @@ honest.
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --all-features
+cargo deny check
+cargo shear
 ```
 
 CI runs exactly these on every pull request, plus the feature subsets below, a build on the
 minimum supported Rust version, and the tests again on `x86_64-unknown-linux-musl`.
-`cargo build --release` produces the binary users get.
+`cargo build --release` produces the binary users get. `cargo deny` applies `deny.toml` to the
+dependency tree: no known advisory, a license from its list, one version of each crate and
+crates.io as the only source. `cargo shear` fails on a dependency that nothing uses. Both, and
+`cargo hack` below, are plugins: `cargo install --locked cargo-deny cargo-shear cargo-hack`.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
-subset — including none. CI builds all nine combinations.
+subset — including none. CI builds every combination with `cargo-hack`, which reads the features
+from the manifest, so a new language needs no CI edit.
 
 ```bash
-cargo build -p bonsai-lint --no-default-features --features php
+cargo hack build -p bonsai-lint --feature-powerset
+cargo build -p bonsai-lint --no-default-features --features php      # one subset
 ```
 
 Feature subsets exist so that adding or removing a language stays a clean operation and the

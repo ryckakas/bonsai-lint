@@ -46,6 +46,17 @@ unsafe_code = "forbid"
 missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
+let_underscore_drop = "warn"
+meta_variable_misuse = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+single_use_lifetimes = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unit_bindings = "warn"
+unnameable_types = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
@@ -55,6 +66,27 @@ too_many_lines = "deny"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 module_name_repetitions = "allow"
+# From `restriction`, which is a menu rather than a group to enable. `print_stdout` guards the
+# closed-stdout rule, since `println!` panics on a closed pipe; `exit` would skip destructors.
+clone_on_ref_ptr = "warn"
+dbg_macro = "warn"
+exit = "warn"
+format_push_string = "warn"
+get_unwrap = "warn"
+infinite_loop = "warn"
+let_underscore_must_use = "warn"
+let_underscore_untyped = "warn"
+mem_forget = "warn"
+mixed_read_write_in_expression = "warn"
+panic_in_result_fn = "warn"
+print_stdout = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+todo = "warn"
+try_err = "warn"
+unimplemented = "warn"
+unwrap_in_result = "warn"
+unwrap_used = "warn"
+verbose_file_reads = "warn"
 
 [profile.release]
 lto = true

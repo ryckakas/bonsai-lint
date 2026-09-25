@@ -32,6 +32,32 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+      # A broken intra-doc link only shows when the docs are built, which nothing else here does.
+      - name: Docs
+        run: cargo doc --no-deps --workspace --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  dependencies:
+    # deny.toml holds the policy: advisories, licenses, duplicate crates and allowed sources.
+    # A new RustSec advisory fails this on any pull request until the crate is upgraded.
+    name: Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-shear
+
+      - name: cargo deny
+        run: cargo deny check
+
+      - name: Unused dependencies
+        run: cargo shear
+
   extension:
     # Runs unconditionally rather than behind a paths filter: a required check that gets
     # skipped blocks merges rather than passing them.
@@ -102,13 +128,10 @@ jobs:
 
   features:
     # Every language is feature-gated, so the registry has to keep compiling with any subset —
-    # including none, which must still produce a binary rather than a type error.
+    # including none, which must still produce a binary rather than a type error. cargo-hack
+    # derives the set from the manifest, so a new language joins it without an edit here.
     name: Feature combinations
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        features: ["php", "ts", "php,ts", "vue", "ts,vue", "php,ts,vue", "go", "php,ts,vue,go", ""]
     steps:
       - uses: actions/checkout@v7
 
@@ -116,8 +139,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build with features "${{ matrix.features }}"
-        run: cargo build -p bonsai-lint --no-default-features --features "${{ matrix.features }}"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      - name: Build every feature combination
+        run: cargo hack build -p bonsai-lint --feature-powerset
 
   wasm:
     # The wasm32 arm of `compiled_once!` is compiled by nothing else here, so without this job

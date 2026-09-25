@@ -1,0 +1,20 @@
+# Policy for `cargo deny check`, which CI runs on every pull request.
+
+[graph]
+all-features = true
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+# What the dependency tree uses today. A dependency under anything else fails until it is added.
+allow = ["Apache-2.0", "MIT", "Unicode-3.0"]
+
+[bans]
+# None today. A second copy of a crate costs compile time and binary size, so it has to be chosen.
+multiple-versions = "deny"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
