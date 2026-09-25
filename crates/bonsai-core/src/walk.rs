@@ -7,6 +7,8 @@ pub struct WalkCx<'a> {
     pub lang: &'a Language,
     pub src: &'a [u8],
     pub unit: &'a str,
+    /// `None` in the top-level pass, which has no declaration for a call to reach.
+    pub unit_node: Option<Node<'a>>,
     pub scope: &'a UnitScope,
     /// Set only for the top-level pass. Inside a unit body a nested function-like rolls up, but
     /// at file scope it is a unit in its own right and `collect` already reports it, so counting
@@ -311,11 +313,16 @@ fn is_recursive_call(node: Node<'_>, cx: &WalkCx<'_>) -> bool {
         .utf8_text(cx.src)
         .is_ok_and(|text| text == cx.unit);
 
+    let through_self = match callee.receiver {
+        Some(receiver) => receiver
+            .utf8_text(cx.src)
+            .is_ok_and(|text| cx.scope.self_receivers.iter().any(|name| name == text)),
+        None => cx.scope.bare_call_recurses,
+    };
+
     names_unit
-        && match callee.receiver {
-            Some(receiver) => receiver
-                .utf8_text(cx.src)
-                .is_ok_and(|text| cx.scope.self_receivers.iter().any(|name| name == text)),
-            None => cx.scope.bare_call_recurses,
-        }
+        && through_self
+        && cx
+            .unit_node
+            .is_some_and(|unit| cx.lang.spec.hooks.call_reaches_unit(node, unit, cx.src))
 }

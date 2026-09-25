@@ -32,6 +32,9 @@ pub enum NameOrigin {
 pub struct UnitName {
     pub text: String,
     pub origin: NameOrigin,
+    /// Joined onto `text` in the key, but never matched against a call: overloads share one
+    /// callable name and differ only here.
+    pub signature: Option<String>,
 }
 
 impl UnitName {
@@ -40,6 +43,7 @@ impl UnitName {
         Self {
             text: text.into(),
             origin: NameOrigin::Declared,
+            signature: None,
         }
     }
 
@@ -48,6 +52,7 @@ impl UnitName {
         Self {
             text: text.into(),
             origin: NameOrigin::Bound,
+            signature: None,
         }
     }
 
@@ -56,6 +61,7 @@ impl UnitName {
         Self {
             text: text.into(),
             origin: NameOrigin::Positional,
+            signature: None,
         }
     }
 
@@ -64,6 +70,15 @@ impl UnitName {
         Self {
             text: ANONYMOUS_UNIT.to_string(),
             origin: NameOrigin::Anonymous,
+            signature: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_signature(self, signature: impl Into<String>) -> Self {
+        Self {
+            signature: Some(signature.into()),
+            ..self
         }
     }
 }
