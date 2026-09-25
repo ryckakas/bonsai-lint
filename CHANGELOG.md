@@ -11,6 +11,16 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- **musl Linux builds.** Static `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`
+  archives ship beside the glibc ones, so Alpine and other musl systems get a prebuilt binary.
+  They need no libc at all, so they also serve hosts whose glibc is older than 2.35, such as
+  Debian 11, Amazon Linux 2 and RHEL 8. The installer script and the npm package pick them there
+  on their own, and the Go launcher now does too instead of pointing at `cargo install`. musl's
+  allocator serialises threads, which made a parallel scan over 15 times slower than the glibc
+  build, so these builds use mimalloc, which on arm64 brings them level with the glibc build.
+
 ## [0.3.0] - 2026-09-24
 
 ### Added

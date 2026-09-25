@@ -23,9 +23,11 @@ cargo build --release                                 # produces target/release/
 CI (`.github/workflows/ci.yml`) runs exactly the fmt/clippy/test commands above, plus a build
 matrix across Linux/macOS/Windows, a feature-combination build (`php`, `ts`, `php,ts`, `vue`,
 `ts,vue`, `php,ts,vue`, `go`, `php,ts,vue,go`, none — each
-`cargo build -p bonsai-lint --no-default-features --features "<set>"`), and a
-build-only check on the MSRV read from `Cargo.toml` (`rust-version`). Match these locally before
-pushing rather than relying on CI to catch it.
+`cargo build -p bonsai-lint --no-default-features --features "<set>"`), a
+build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and the tests on
+`x86_64-unknown-linux-musl`, the only build that swaps in mimalloc (it needs `musl-tools`, so on
+macOS run it in an `ubuntu` container). Match these locally before pushing rather than relying on
+CI to catch it.
 
 Every language is behind a cargo feature; `vue` implies `ts` because it reuses that spec. The
 registry must keep compiling with any feature subset, including none — this is exercised, not

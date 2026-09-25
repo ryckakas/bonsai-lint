@@ -175,8 +175,9 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
 ```
 
-CI runs exactly these on every pull request, plus the feature subsets below and a build on the
-minimum supported Rust version. `cargo build --release` produces the binary users get.
+CI runs exactly these on every pull request, plus the feature subsets below, a build on the
+minimum supported Rust version, and the tests again on `x86_64-unknown-linux-musl`.
+`cargo build --release` produces the binary users get.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
 subset — including none. CI builds all nine combinations.
@@ -234,6 +235,14 @@ Releasing is [`dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` t
 target, generates the installers and publishes a GitHub Release. Preview with `dist plan`.
 `.github/workflows/release.yml` is generated — edit `dist-workspace.toml` and re-run
 `dist generate` rather than hand-editing it.
+
+**Linux ships twice per architecture.** The glibc build needs the builder's glibc, 2.35. The
+static musl build runs on any Linux, so it serves Alpine and older glibc alike. dist's installer
+script and npm wrapper choose between them from the host's libc, and the Go launcher does the same
+from `ldd --version`. The musl build replaces musl's allocator with mimalloc, through its
+`override` feature, because tree-sitter's C code calls `malloc` directly. musl's allocator
+serialises threads: on the HERO corpus on arm64, a parallel scan took 16.3 s against glibc's
+0.94 s, and 0.84 s with mimalloc. Nothing but the release and CI's musl job compiles that target.
 
 **Every user-facing name is `bonsai-lint`** — the crate, the binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker and the extension's
