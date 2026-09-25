@@ -1,9 +1,9 @@
-#![allow(unreachable_pub)]
+#![allow(unreachable_pub, reason = "pub marks the helpers the test files call")]
 
 use bonsai_core::{Finding, LanguageDescriptor};
 use tree_sitter::Parser;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn findings(source: &str) -> Vec<Finding> {
     let language = bonsai_lang_go::GO.compiled();
     let mut parser = Parser::new();
@@ -18,7 +18,7 @@ pub fn findings(source: &str) -> Vec<Finding> {
     bonsai_core::analyze(&tree, source.as_bytes(), language, true)
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn score(body: &str) -> u32 {
     let source = format!("package p\n\nfunc target() {{\n{body}\n}}\n");
     findings(&source)
@@ -28,7 +28,7 @@ pub fn score(body: &str) -> u32 {
         .score
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "not every test binary calls it")]
 pub fn assert_scores(cases: &[(&str, u32)]) {
     for (body, expected) in cases {
         assert_eq!(score(body), *expected, "scoring:\n{body}");

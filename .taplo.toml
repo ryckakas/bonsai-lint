@@ -1,0 +1,7 @@
+# TOML formatting with `taplo fmt`, checked by CI's lint job. Matches rustfmt.toml's width.
+# taplo does not read .gitignore, so generated and local-only trees are excluded here.
+exclude = ["**/target/**", "crates/bonsai-wasm/vendor/**", "fixtures/**", "**/node_modules/**"]
+
+[formatting]
+indent_string = "    "
+column_width = 100

@@ -480,7 +480,7 @@ pub fn resolve(path: &Path) -> PathBuf {
     match (absolute.parent(), absolute.file_name()) {
         (Some(parent), Some(name)) => parent
             .canonicalize()
-            .map_or(absolute.clone(), |parent| parent.join(name)),
+            .map_or_else(|_| absolute.clone(), |parent| parent.join(name)),
         _ => absolute,
     }
 }

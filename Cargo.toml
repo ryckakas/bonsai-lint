@@ -57,10 +57,12 @@ unit_bindings = "warn"
 unnameable_types = "warn"
 unused_import_braces = "warn"
 unused_lifetimes = "warn"
+unused_qualifications = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
 excessive_nesting = "deny"
 too_many_lines = "deny"
 missing_errors_doc = "allow"
@@ -68,6 +70,7 @@ missing_panics_doc = "allow"
 module_name_repetitions = "allow"
 # From `restriction`, which is a menu rather than a group to enable. `print_stdout` guards the
 # closed-stdout rule, since `println!` panics on a closed pipe; `exit` would skip destructors.
+allow_attributes_without_reason = "warn"
 clone_on_ref_ptr = "warn"
 dbg_macro = "warn"
 exit = "warn"
@@ -87,6 +90,9 @@ unimplemented = "warn"
 unwrap_in_result = "warn"
 unwrap_used = "warn"
 verbose_file_reads = "warn"
+# From `nursery`, whose lints are too unsettled to take as a group.
+needless_collect = "warn"
+or_fun_call = "warn"
 
 [profile.release]
 lto = true
