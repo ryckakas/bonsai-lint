@@ -222,11 +222,16 @@ wholesale: `restriction`'s lints contradict each other, and `nursery`'s are unse
 Releases go through [`cargo-dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag
 builds every target and publishes a GitHub Release, npm package, Homebrew formula and Go module.
 `.github/workflows/release.yml` is generated from `dist-workspace.toml` — edit the latter and run
-`dist generate`, don't hand-edit the workflow. Its actions are pinned in
-`[dist.github-action-commits]`, so upgrading dist means re-pinning them to the commits behind
-the tags the new version uses. `dist plan` previews a release. The VS Code
+`dist generate`, don't hand-edit the workflow. `dist plan` previews a release. The VS Code
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
 Azure DevOps PAT).
+
+Upgrading dist takes two more steps:
+- **Re-pin its actions.** They are pinned in `[dist.github-action-commits]`, so point them at the
+  commits behind the tags the new version uses.
+- **Review `.github/zizmor.yml` again.** Its exceptions name `release.yml`'s findings by line and
+  column, so the Workflow security job fails until they match the regenerated file.
+  `zizmor --no-config .github/workflows/release.yml` lists the findings with their new positions.
 
 `CHANGELOG.md` is not decoration: `dist` reads the section whose heading matches the tag and
 publishes it as that release's notes, so a missing or misnamed section ships an empty release

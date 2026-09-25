@@ -38,7 +38,9 @@ jobs:
       # --workspace resolves the publish order from the dependency graph and verifies every
       # crate against the others as if they were already on the registry. --locked makes a
       # lockfile that disagrees with Cargo.toml a hard failure rather than a silent rewrite.
-      - name: Publish
+      # A token until crates.io trusts this workflow over OIDC; see "Trusted publishing" in
+      # ROADMAP.md.
+      - name: Publish # zizmor: ignore[use-trusted-publishing]
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --workspace --locked ${{ inputs.dry_run && '--dry-run' || '' }}
