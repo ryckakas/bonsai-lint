@@ -1,8 +1,8 @@
 # bonsai-lint for VS Code
 
-Flags functions that are hard to read, across PHP, JavaScript, TypeScript, Vue, Go and Java.
+Flags functions that are hard to read, across JavaScript, TypeScript, Vue, Java, PHP and Go.
 Powered by [bonsai-lint](https://github.com/ryckakas/bonsai-lint), a single Rust binary, with no
-PHP runtime, no Node runtime and no JVM involved in the analysis.
+Node runtime, no JVM and no PHP runtime involved in the analysis.
 
 ![A cognitive complexity warning underlining a TypeScript function name, with the Problems panel showing one diagnostic](https://github.com/ryckakas/bonsai-lint/raw/HEAD/editors/vscode/images/diagnostic.png)
 

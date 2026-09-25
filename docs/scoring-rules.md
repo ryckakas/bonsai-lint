@@ -96,6 +96,27 @@ written:
 | `app.get('/x', (req, res) => {})` | `app.get#1` |
 | anything else | `<anonymous>` |
 
+| Java | Unit key |
+| --- | --- |
+| `class OrderService { void process(Order o, User u) {} }` | `OrderService::process(Order, User)` |
+| `<T> void put(@NonNull java.util.Map<K, V> m, T[] xs, String... rest)` | `C::put(Map, T[], String...)` |
+| `class Point { Point(int x, int y) {} }` | `Point::Point(int, int)` |
+| a compact constructor in `record Point(int x, int y)` | `Point::Point(int, int)` |
+| `class Outer { class Inner { void m() {} } }` | `Outer::Inner::m()` |
+| `enum Op { PLUS { int apply(int a, int b) {} } }` | `Op::PLUS::apply(int, int)` |
+| `static final Comparator<S> CMP = new Comparator<>() { public int compare(S a, S b) {} };` | `C::CMP::compare(S, S)` |
+| `private final Runnable handler = () -> {};` | `C::handler` |
+| `static final Supplier<X> S = memoize(() -> {});` | `C::S` |
+| `static { … }`, and a second one | `C::<static>`, `C::<static>~2` |
+| `void main() {}` in a compact source file | `main()` |
+| anything else | `<anonymous>` |
+
+Java overloads freely, so a method or constructor key carries its parameter types. Each is the
+type's simple name, with type arguments and annotations dropped. `java.util.List<String>` and an
+imported `List<String>` therefore key alike, and a key survives reordering and adding overloads,
+changing only when a parameter type does. Two overloads whose types differ only by package, such
+as `java.util.Date` and `java.sql.Date`, share a key.
+
 | PHP | Unit key |
 | --- | --- |
 | `function parse() {}` | `parse` |
@@ -126,27 +147,6 @@ container: pointer and type parameters are dropped, and the key does not change 
 switches between pointer and value. `init` and `_` may be declared any number of times, so they
 are told apart like positional keys, and a `_` binding names nothing.
 
-| Java | Unit key |
-| --- | --- |
-| `class OrderService { void process(Order o, User u) {} }` | `OrderService::process(Order, User)` |
-| `<T> void put(@NonNull java.util.Map<K, V> m, T[] xs, String... rest)` | `C::put(Map, T[], String...)` |
-| `class Point { Point(int x, int y) {} }` | `Point::Point(int, int)` |
-| a compact constructor in `record Point(int x, int y)` | `Point::Point(int, int)` |
-| `class Outer { class Inner { void m() {} } }` | `Outer::Inner::m()` |
-| `enum Op { PLUS { int apply(int a, int b) {} } }` | `Op::PLUS::apply(int, int)` |
-| `static final Comparator<S> CMP = new Comparator<>() { public int compare(S a, S b) {} };` | `C::CMP::compare(S, S)` |
-| `private final Runnable handler = () -> {};` | `C::handler` |
-| `static final Supplier<X> S = memoize(() -> {});` | `C::S` |
-| `static { … }`, and a second one | `C::<static>`, `C::<static>~2` |
-| `void main() {}` in a compact source file | `main()` |
-| anything else | `<anonymous>` |
-
-Java overloads freely, so a method or constructor key carries its parameter types. Each is the
-type's simple name, with type arguments and annotations dropped. `java.util.List<String>` and an
-imported `List<String>` therefore key alike, and a key survives reordering and adding overloads,
-changing only when a parameter type does. Two overloads whose types differ only by package, such
-as `java.util.Date` and `java.sql.Date`, share a key.
-
 A factory or wrapper call hands its own binding to the callback, so a Pinia store or a
 `React.memo(...)` component is named after the thing it is assigned to. Only a lone callable
 argument is unwrapped — a call that is nobody's value, such as `app.get('/x', fn)` or
@@ -156,16 +156,6 @@ Keys never contain line numbers, so editing above a function does not invalidate
 entry. Where two positional or anonymous keys collide, the later one gains a `~2` suffix.
 
 ## Language specifics
-
-**PHP**
-
-- `match` (8.0) is treated as `switch`: one increment for the whole expression.
-- `and` / `or` normalise onto `&&` / `||` for run-counting; `xor` is its own operator.
-- `elseif` and `else if` score identically, despite different parse shapes.
-- `break N` / `continue N` are PHP's analogue of the labelled break.
-- Recursion is detected through direct syntactic self-reference (`f()`, `$this->f()`,
-  `self::f()`, `static::f()`). Dispatch through a variable needs symbol resolution and is not
-  guessed at.
 
 **JavaScript and TypeScript**
 
@@ -177,31 +167,6 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
   and the various type-level signatures — are not units.
 - `.js` is parsed with the TypeScript grammar. Flow-annotated `.js` will misparse.
 - `super.f()` and `ClassName.f()` count as self-reference for recursion, as `this.f()` does.
-
-**Go**
-
-- `for` is the only loop, and its three-clause, condition-only, infinite and `range` forms are one
-  node kind that scores the same.
-- An expression switch, a type switch and `select` each cost one increment for the whole
-  statement. `fallthrough` is free.
-- A labelled `break` or `continue`, and `goto`, cost +1; an unlabelled jump is free.
-- The initializer in `if err := f(); err != nil` is header, scored at the statement's own depth
-  like the condition beside it. The same holds for a `switch` initializer.
-- There is no `else` node in the grammar, but an `else if` still scores flat and a plain `else`
-  block still nests, as in PHP and TypeScript.
-- `defer`, `go` and `recover` are free; a function literal they launch raises nesting like any
-  closure.
-- Recursion is a call through the receiver, `s.Push()` or `(*s).Push()`, or a method expression
-  such as `(*Stack).Push(s)` or `Stack[T].Push(s)`. A method cannot be called without its
-  receiver, so a bare `Push()` inside it names a free function or a builtin and is not recursion,
-  and neither is `strings.Split` inside `func Split`.
-- A call through any other value, even one of the same type such as `c.Walk()` over a node's
-  children, would need type information to recognise and is not counted.
-- A generic function calling itself counts whether its type arguments are inferred, `Walk(x)`, or
-  written out, `Walk[T](x)`, even when they differ from its own: it is still a call to its own
-  name.
-- A file with a `// Code generated … DO NOT EDIT.` line before its `package` clause is neither
-  scored nor counted.
 
 **Java**
 
@@ -241,6 +206,41 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
   The code around the error still scores, but the construct itself may not. A type annotation
   before varargs, `String @Nullable ... args`, parses with an error too, but its method keeps
   both its score and its key, `setHosts(String...)`.
+
+**PHP**
+
+- `match` (8.0) is treated as `switch`: one increment for the whole expression.
+- `and` / `or` normalise onto `&&` / `||` for run-counting; `xor` is its own operator.
+- `elseif` and `else if` score identically, despite different parse shapes.
+- `break N` / `continue N` are PHP's analogue of the labelled break.
+- Recursion is detected through direct syntactic self-reference (`f()`, `$this->f()`,
+  `self::f()`, `static::f()`). Dispatch through a variable needs symbol resolution and is not
+  guessed at.
+
+**Go**
+
+- `for` is the only loop, and its three-clause, condition-only, infinite and `range` forms are one
+  node kind that scores the same.
+- An expression switch, a type switch and `select` each cost one increment for the whole
+  statement. `fallthrough` is free.
+- A labelled `break` or `continue`, and `goto`, cost +1; an unlabelled jump is free.
+- The initializer in `if err := f(); err != nil` is header, scored at the statement's own depth
+  like the condition beside it. The same holds for a `switch` initializer.
+- There is no `else` node in the grammar, but an `else if` still scores flat and a plain `else`
+  block still nests, as in TypeScript and PHP.
+- `defer`, `go` and `recover` are free; a function literal they launch raises nesting like any
+  closure.
+- Recursion is a call through the receiver, `s.Push()` or `(*s).Push()`, or a method expression
+  such as `(*Stack).Push(s)` or `Stack[T].Push(s)`. A method cannot be called without its
+  receiver, so a bare `Push()` inside it names a free function or a builtin and is not recursion,
+  and neither is `strings.Split` inside `func Split`.
+- A call through any other value, even one of the same type such as `c.Walk()` over a node's
+  children, would need type information to recognise and is not counted.
+- A generic function calling itself counts whether its type arguments are inferred, `Walk(x)`, or
+  written out, `Walk[T](x)`, even when they differ from its own: it is still a call to its own
+  name.
+- A file with a `// Code generated … DO NOT EDIT.` line before its `package` clause is neither
+  scored nor counted.
 
 ## Choices that move the numbers
 
@@ -283,9 +283,9 @@ as the counting rule states: `a && b || c && d` switches operator twice, so it i
 
 ## How these rules are pinned
 
-Every worked example above is also a fixture, under `crates/bonsai-lang-php/tests/`,
-`crates/bonsai-lang-ts/tests/`, `crates/bonsai-lang-go/tests/` and
-`crates/bonsai-lang-java/tests/`, asserted against a stated total — so a scoring change that
+Every worked example above is also a fixture, under `crates/bonsai-lang-ts/tests/`,
+`crates/bonsai-lang-java/tests/`, `crates/bonsai-lang-php/tests/` and
+`crates/bonsai-lang-go/tests/`, asserted against a stated total — so a scoring change that
 contradicts this document fails the build rather than quietly rewriting it. The two cases that
 tell competing readings of a boolean run apart each carry their own test:
 

@@ -1,16 +1,16 @@
 # bonsai-lint
 
-![bonsai-lint: cognitive complexity linter for PHP, JavaScript, TypeScript, Vue, Go and Java](docs/images/cover-hero.jpg)
+![bonsai-lint: cognitive complexity linter for JavaScript, TypeScript, Vue, Java, PHP and Go](docs/images/cover-hero.jpg)
 
 **Find the code that's hard to read, in seconds, in one project or a whole monorepo.**
 
 *Bonsai: the art of keeping a tree small enough to take in at a glance. Same idea, applied to
 your syntax trees.*
 
-A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript,
-TypeScript, Vue single-file components, Go and Java. Use it for any one of them, or all at once.
-No PHP runtime, no Node runtime, no Go toolchain, no JVM, no Composer entry, nothing added to your
-project.
+A cognitive complexity linter written in Rust. One static binary that reads JavaScript,
+TypeScript, Vue single-file components, Java, PHP and Go. Use it for any one of them, or all at
+once. No Node runtime, no JVM, no PHP runtime, no Go toolchain, no Composer entry, nothing added to
+your project.
 Scans **1.26 million lines in 0.8 seconds**.
 
 The official site is **[bonsai.kauneckas.dev](https://bonsai.kauneckas.dev)**: install and editor
@@ -24,11 +24,11 @@ guides, and a [playground](https://bonsai.kauneckas.dev/play/) that scores code 
 
 ## Why this one
 
-- **One language, or all of them.** Point it at a PHP project and it is a PHP linter; point it
-  at a TypeScript one and it is a TypeScript linter. Nothing to configure either way. Point it at
+- **One language, or all of them.** Point it at a TypeScript project and it is a TypeScript
+  linter; point it at a PHP one and it is a PHP linter. Nothing to configure either way. Point it at
   both and they score on one metric in one pass, and the same logic written in either language
   gets the same number. That is tested.
-- **No runtime, no plugins, no conflicts.** Nothing to wire into a PHPStan or ESLint setup, no
+- **No runtime, no plugins, no conflicts.** Nothing to wire into an ESLint or PHPStan setup, no
   plugin versions to keep in step, no Composer entry. A 7 MB binary, under 2 MB to download,
   or `npx bonsai-lint` and install nothing at all.
 - **Never executes your code.** Syntax-only: no autoloader, no reflection, no module
@@ -81,7 +81,7 @@ bonsai-lint --over 10 src/           # stricter; `--over php=10,typescript=20` p
 bonsai-lint --all src/               # every unit, ranked
 bonsai-lint --format json src/       # for editors and CI
 bonsai-lint --write-baseline src/    # record today's findings, exit 0
-bonsai-lint --lang php src/          # one language only: `php`, `typescript`, `vue`, `go` or `java`
+bonsai-lint --lang php src/          # one language only: `typescript`, `vue`, `java`, `php` or `go`
 ```
 
 <details>
@@ -171,46 +171,29 @@ cannot read what it was pointed at must not report success.
 
 | Extensions | Parsed as | Language id |
 | --- | --- | --- |
-| `.php`, `.phtml` | PHP | `php` |
+| `.js`, `.mjs`, `.cjs`, `.jsx`, `.tsx` | TypeScript with JSX | `typescript` |
 | `.ts`, `.mts`, `.cts` | TypeScript | `typescript` |
-| `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
 | `.vue` | the `<script>` blocks only | `vue` |
-| `.go` | Go | `go` |
 | `.java` | Java | `java` |
-| `*.d.ts`, `*.d.mts`, `*.d.cts` | skipped, signatures only | |
+| `.php`, `.phtml` | PHP | `php` |
+| `.go` | Go | `go` |
 | `*.min.js`, `*.min.mjs`, `*.min.cjs` | skipped, generated output | |
-| `.go` headed `// Code generated … DO NOT EDIT.` | skipped, generated output | |
+| `*.d.ts`, `*.d.mts`, `*.d.cts` | skipped, signatures only | |
 | `.java` whose header says "generated" and "do not edit" | skipped, generated output | |
+| `.go` headed `// Code generated … DO NOT EDIT.` | skipped, generated output | |
 
 The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
 `typescript` covers every JavaScript and TypeScript file however it is parsed. An id that is not
 one of these is an error, not a silent no-op.
+
+`.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
+annotations are the one thing this misparses.
 
 A declaration file and a minified one are both skipped outright, for opposite reasons: the first
 holds only signatures so every unit scores zero, and the second is generated output whose whole
 body rolls up into one unit nobody will refactor. The skipped names are whole suffixes, listed by
 the TypeScript and TSX descriptors' `unscored_suffixes`, so `app.mini.js`, `jasmine.js` and a
 file simply called `min.js` are all still scanned.
-
-Go marks generated code in the file rather than its name, so a `.go` file is read first and then
-turned away if a `// Code generated … DO NOT EDIT.` line comes before its `package` clause, which
-is the convention the Go toolchain itself follows. Such a file is neither scored nor counted, on
-disk and through `--stdin` alike. `vendor/` and `testdata/` get no special treatment: if a
-repository commits them, `exclude = ["vendor/**", "**/testdata/**"]` keeps them out.
-
-A Go method is keyed by its receiver type, so `func (s *Stack[T]) Push()` reports as
-`Stack::Push` and keeps its baseline entry when the receiver switches between pointer and value.
-
-Java overloads freely, so a Java method or constructor is keyed by its parameter types as well as
-its name: `OrderService::process(Order, User)`. Each type is its simple name, without type
-arguments or annotations, so two overloads are baselined apart and switching between an import
-and a qualified name never re-keys one. Java has no single generated-code convention, so a `.java`
-file is skipped when the comments before its first line of code say both "generated" and "do not
-edit". That covers protobuf, Thrift, Avro and JavaCC output. Most generated sources sit in a
-gitignored `target/` or `build/` directory and are never scanned in the first place.
-
-`.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
-annotations are the one thing this misparses.
 
 A `.vue` file scores its `<script>` and `<script setup>` blocks, with `lang="ts"` choosing the
 TypeScript grammar and anything else (including no `lang`) choosing the JSX-capable one, which
@@ -236,6 +219,23 @@ Two consequences are worth knowing:
   makes it visible, and a component that never had a template was never hidden.
 - **A `src=` block belongs to the file it points at.** That file is scored as `typescript`, so a
   `[vue]` threshold does not reach it.
+
+Java overloads freely, so a Java method or constructor is keyed by its parameter types as well as
+its name: `OrderService::process(Order, User)`. Each type is its simple name, without type
+arguments or annotations, so two overloads are baselined apart and switching between an import
+and a qualified name never re-keys one. Java has no single generated-code convention, so a `.java`
+file is skipped when the comments before its first line of code say both "generated" and "do not
+edit". That covers protobuf, Thrift, Avro and JavaCC output. Most generated sources sit in a
+gitignored `target/` or `build/` directory and are never scanned in the first place.
+
+Go marks generated code in the file rather than its name, so a `.go` file is read first and then
+turned away if a `// Code generated … DO NOT EDIT.` line comes before its `package` clause, which
+is the convention the Go toolchain itself follows. Such a file is neither scored nor counted, on
+disk and through `--stdin` alike. `vendor/` and `testdata/` get no special treatment: if a
+repository commits them, `exclude = ["vendor/**", "**/testdata/**"]` keeps them out.
+
+A Go method is keyed by its receiver type, so `func (s *Stack[T]) Push()` reports as
+`Stack::Push` and keeps its baseline entry when the receiver switches between pointer and value.
 
 </details>
 
@@ -279,7 +279,7 @@ threshold = 20
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `threshold` | `15` | Fail above this score. A `[php]`, `[typescript]`, `[vue]`, `[go]` or `[java]` section overrides it per language. |
+| `threshold` | `15` | Fail above this score. A `[typescript]`, `[vue]`, `[java]`, `[php]` or `[go]` section overrides it per language. |
 | `exclude` | `[]` | Globs, relative to the config's own directory. `*` stops at `/` and `**` crosses it, as in `.gitignore`. |
 | `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
 | `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |
@@ -361,18 +361,19 @@ function parse(string $input): Ast { /* ... */ }
 ```
 
 Works above the declaration, inside the docblock, or trailing the signature line, in every
-supported language. It works for a bound function too, such as `$handler = function () {}`,
-`const handler = () => {}` or Go's `var handler = func() {}`, even when a call wraps it, as in
+supported language. It works for a bound function too, such as `const handler = () => {}`, a
+Java field `Runnable handler = () -> {}`, `$handler = function () {}` or Go's
+`var handler = func() {}`, even when a call wraps it, as in
 `const useCart = defineStore('cart', () => {})`. A marker after a closing brace on its own line
 belongs to nobody. **A marker without a reason is refused**, reported on stderr, and the finding
 stands. Suppression hides a finding but never changes a score, and `--all` always shows the real
 number.
 
 A `<toplevel>` finding is reported on line 1, so its marker goes in the comment block at the top of
-the file: trailing `<?php`, in the file's docblock, on the first line of a script behind a shebang
-if there is one, or just above or trailing the `package` line in Go or Java. One comment silences
-one unit, so a marker directly above the first function is that function's; write it on the `<?php`
-or `package` line to address the file instead.
+the file: on the first line of a script, behind a shebang if there is one; just above or trailing
+the `package` line in Java or Go; or trailing `<?php`, or in the file's docblock, in PHP. One
+comment silences one unit, so a marker directly above the first function is that function's; write
+it on the `package` or `<?php` line to address the file instead.
 
 </details>
 
@@ -458,12 +459,12 @@ threshold unless you set one, so the editor shows exactly what CI would fail on,
 
 | Corpus | Time |
 | --- | --- |
-| 1.26 million lines of PHP, JavaScript and TypeScript | **0.77s** |
-| 2.85 million lines of Go, its own standard library | **0.79s** |
+| 1.26 million lines of JavaScript, TypeScript and PHP | **0.77s** |
 | 2.29 million lines of Java, Spring Framework and Guava | **1.08s** |
+| 2.85 million lines of Go, its own standard library | **0.79s** |
 
 That is roughly **1.6 million lines per second** on the monorepo, three languages in one pass,
-**3.6 million** on the Go standard library and **2.1 million** on Java, all on a ten-core M5. No
+**2.1 million** on Java and **3.6 million** on the Go standard library, all on a ten-core M5. No
 warm-up, no daemon, no language server. One process, start to finish.
 
 Files are read, parsed and scored in parallel; `--jobs` bounds that, and `--jobs 1` is the same
