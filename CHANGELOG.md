@@ -12,6 +12,8 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-25
+
 ### Added
 
 - **Java.** `.java` files are scanned under a new `java` language id, so `--lang java`,
@@ -37,6 +39,9 @@ what a user reads on the GitHub release page.
 
   Upgrading a repository that contains `.java` files will report findings that were previously
   invisible. Run `bonsai-lint --write-baseline .` to adopt them.
+
+  There is no Maven or Gradle plugin yet. On a Java project, install through Homebrew, the
+  installer script or `npx bonsai-lint`.
 
 - **musl Linux builds.** Static `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`
   archives ship beside the glibc ones, so Alpine and other musl systems get a prebuilt binary.
@@ -208,7 +213,8 @@ Initial release.
 - Published as a GitHub release, an npm package, and a Homebrew formula, alongside a VS Code
   extension versioned independently.
 
-[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ryckakas/bonsai-lint/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ryckakas/bonsai-lint/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/ryckakas/bonsai-lint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ryckakas/bonsai-lint/compare/v0.1.1...v0.2.0
