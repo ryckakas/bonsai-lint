@@ -16,6 +16,11 @@ on:
         required: true
         type: boolean
         default: true
+      first_publish:
+        description: "The release adds a crate crates.io has never seen: use CARGO_REGISTRY_TOKEN"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,6 +29,9 @@ jobs:
   publish:
     name: cargo publish --workspace
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,12 +43,21 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
+      # Trusted publishing: GitHub's identity token for this run buys a crates.io token that lasts
+      # 30 minutes and is revoked when the job ends. It covers only the crates whose settings name
+      # this workflow, and crates.io allows that only once a crate exists there. A dry run
+      # uploads nothing, so it needs no token.
+      - name: Authenticate with crates.io
+        id: auth
+        if: ${{ !inputs.dry_run && !inputs.first_publish }}
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
       # --workspace resolves the publish order from the dependency graph and verifies every
       # crate against the others as if they were already on the registry. --locked makes a
       # lockfile that disagrees with Cargo.toml a hard failure rather than a silent rewrite.
-      # A token until crates.io trusts this workflow over OIDC; see "Trusted publishing" in
-      # ROADMAP.md.
-      - name: Publish # zizmor: ignore[use-trusted-publishing]
+      # A first publish takes the one API token instead, since a single run publishes every crate.
+      - name: Publish
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: >-
+            ${{ inputs.first_publish && secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
         run: cargo publish --workspace --locked ${{ inputs.dry_run && '--dry-run' || '' }}

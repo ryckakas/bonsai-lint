@@ -29,7 +29,8 @@ rules:
   cache-poisoning:
     ignore:
       - release.yml:343:9
-  # npm's token until it trusts this workflow over OIDC; see "Trusted publishing" in ROADMAP.md.
+  # npm's token until it trusts this workflow over OIDC; see "Trusted publishing for npm" in
+  # ROADMAP.md.
   use-trusted-publishing:
     ignore:
       - release.yml:350:13
