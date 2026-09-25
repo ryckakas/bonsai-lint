@@ -12,12 +12,12 @@ linear flow of the code; **+nesting** for a flow-breaker that sits inside other 
 | `switch`, `match`, `select` | +1 +nesting (not per arm) | yes |
 | `for`, `foreach`, `for…of`, `for…in`, `while`, `do` | +1 +nesting | yes |
 | `catch` | +1 +nesting | yes |
-| `try`, `finally` | — | no |
+| `try`, `finally`, `synchronized` | — | no |
 | Labelled jump (`break 2`, `break outer`, `goto`) | +1 | no |
 | Sequence of like boolean operators | +1 per run | no |
 | Direct recursion | +1 | no |
-| Closure, arrow function, nested function | — | yes |
-| Class, interface, trait, enum, namespace, object literal | — | no |
+| Closure, arrow function, lambda, nested function, anonymous class method | — | yes |
+| Class, interface, trait, enum, record, namespace, object literal | — | no |
 
 `else if` takes a flat increment deliberately: a long chain reads linearly, so penalising it for
 depth would misrepresent it.
@@ -126,6 +126,27 @@ container: pointer and type parameters are dropped, and the key does not change 
 switches between pointer and value. `init` and `_` may be declared any number of times, so they
 are told apart like positional keys, and a `_` binding names nothing.
 
+| Java | Unit key |
+| --- | --- |
+| `class OrderService { void process(Order o, User u) {} }` | `OrderService::process(Order, User)` |
+| `<T> void put(@NonNull java.util.Map<K, V> m, T[] xs, String... rest)` | `C::put(Map, T[], String...)` |
+| `class Point { Point(int x, int y) {} }` | `Point::Point(int, int)` |
+| a compact constructor in `record Point(int x, int y)` | `Point::Point(int, int)` |
+| `class Outer { class Inner { void m() {} } }` | `Outer::Inner::m()` |
+| `enum Op { PLUS { int apply(int a, int b) {} } }` | `Op::PLUS::apply(int, int)` |
+| `static final Comparator<S> CMP = new Comparator<>() { public int compare(S a, S b) {} };` | `C::CMP::compare(S, S)` |
+| `private final Runnable handler = () -> {};` | `C::handler` |
+| `static final Supplier<X> S = memoize(() -> {});` | `C::S` |
+| `static { … }`, and a second one | `C::<static>`, `C::<static>~2` |
+| `void main() {}` in a compact source file | `main()` |
+| anything else | `<anonymous>` |
+
+Java overloads freely, so a method or constructor key carries its parameter types. Each is the
+type's simple name, with type arguments and annotations dropped. `java.util.List<String>` and an
+imported `List<String>` therefore key alike, and a key survives reordering and adding overloads,
+changing only when a parameter type does. Two overloads whose types differ only by package, such
+as `java.util.Date` and `java.sql.Date`, share a key.
+
 A factory or wrapper call hands its own binding to the callback, so a Pinia store or a
 `React.memo(...)` component is named after the thing it is assigned to. Only a lone callable
 argument is unwrapped — a call that is nobody's value, such as `app.get('/x', fn)` or
@@ -182,6 +203,45 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
 - A file with a `// Code generated … DO NOT EDIT.` line before its `package` clause is neither
   scored nor counted.
 
+**Java**
+
+- A `switch` costs one increment in statement and expression form, with `case …:` groups or
+  `->` rules alike. `yield` is free, and a `when` guard costs only its operators.
+- Each `catch` costs +1 +nesting, and a multi-catch `catch (A | B e)` is one clause. `try`,
+  try-with-resources and `finally` are free.
+- A labelled `break` or `continue` costs +1; an unlabelled jump is free.
+- Only `&&` and `||` form operator runs. `&`, `|` and `^` are free: on booleans they are logical,
+  but syntax alone cannot tell them from the bitwise operators.
+- `synchronized` neither costs nor nests. `assert`, `throw`, `instanceof` and its patterns, and
+  method references are free.
+- Lambdas and the methods of anonymous and local classes raise nesting and roll up into the
+  method that holds them.
+- A `static { … }` block is a unit of its own. Field initialisers and instance initializer
+  blocks are the file's `<toplevel>`.
+- **Recursion:**
+  - What counts: `m()`, `this.m()`, `C.m()` and `C.this.m()`.
+  - `super.m()` runs the parent's implementation and is not recursion.
+  - Constructor chaining through `this(…)` or `super(…)` is not a call.
+  - Overloads share a name, so a call reaches the method only when its argument count fits,
+    where varargs accepts any number beyond the fixed parameters. `process(o) { process(o, u); }`
+    is a delegating overload, not recursion.
+  - An overload with as many parameters still reads as the method itself.
+  - A call through another object of the same type, such as `left.count()`, would need type
+    information and is not counted.
+- A file whose comments before the first line of code say both "generated" and "do not edit" is
+  neither scored nor counted. That is how protobuf, Thrift, Avro and JavaCC output marks itself.
+- **Grammar gaps.** The grammar predates some Java 21–25 syntax, and these parse with an error:
+  - several patterns in one `case` label;
+  - `case final`;
+  - a qualified record pattern;
+  - `import module`;
+  - statements before `super(…)` in a constructor;
+  - `1__000`.
+
+  The code around the error still scores, but the construct itself may not. A type annotation
+  before varargs, `String @Nullable ... args`, parses with an error too, but its method keeps
+  both its score and its key, `setHosts(String...)`.
+
 ## Choices that move the numbers
 
 Implementations of cognitive complexity make different choices in a handful of places, and
@@ -202,21 +262,32 @@ rolling up says how hard the whole thing is to read in place.
 | Code outside any function | not scored | scored as `<toplevel>` |
 | An `if` inside a plain `else` block | no deeper than the `else` | one level deeper, like any branch body |
 | `a && (b \|\| c) && d` | 2, the group counted as its own run | 3, grouping is transparent |
+| `a && b \|\| c && d` | 2, each operator counted once | 3, each switch of operator starts a run |
+| A later link of an `else if` chain | one level deeper per link | one level below its `if`, like the first |
+| A loop or `switch` header | one level deeper | at the construct's own depth |
 | A method calling itself through its receiver | not recursion | +1 |
 | A builtin sharing a method's name, `append()` inside `append` | +1, as recursion | free |
 | A local closure sharing its function's name | resolved to the local | +1 per call, matched by name |
+| A Java overload taking as many arguments | resolved by type, not recursion | +1, matched by name and argument count |
+| A call through another instance of the same type, `left.count()` | +1, as recursion | free |
 
-The last row is a limit rather than a preference. Recursion is recognised by syntax alone, with
-no scope analysis, so a closure that shadows its enclosing function's name reads as a self-call in
-every language.
+The last three rows are limits rather than preferences. Recursion is recognised by syntax alone,
+with no scope or type analysis. So a closure that shadows its enclosing function's name reads as
+a self-call in every language, an overload with the same number of parameters reads as the method
+itself, and a call through another object of the same type is not recognised at all.
+
+Every chain body sits one level below its `if` because `else if` is a flat increment. Nesting each
+later link deeper would charge a long chain for its length, which is exactly what the flat
+increment exists to avoid. A run that returns to an operator after switching away costs again,
+as the counting rule states: `a && b || c && d` switches operator twice, so it is three runs.
 
 ## How these rules are pinned
 
 Every worked example above is also a fixture, under `crates/bonsai-lang-php/tests/`,
-`crates/bonsai-lang-ts/tests/` and `crates/bonsai-lang-go/tests/`, asserted against a stated
-total — so a scoring change that contradicts this document fails the build rather than quietly
-rewriting it. The two cases that tell competing readings of a boolean run apart each carry their
-own test:
+`crates/bonsai-lang-ts/tests/`, `crates/bonsai-lang-go/tests/` and
+`crates/bonsai-lang-java/tests/`, asserted against a stated total — so a scoring change that
+contradicts this document fails the build rather than quietly rewriting it. The two cases that
+tell competing readings of a boolean run apart each carry their own test:
 
 ```text
 if (a && (b || c) || d)   // 3  grouping is transparent: one && run, then one || run

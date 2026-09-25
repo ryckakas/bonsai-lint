@@ -6,6 +6,7 @@
 crates/
 ├── bonsai-core/        the scorer: parsed tree in, scores out. no I/O, no serde, no grammars
 ├── bonsai-lang-go/     Go node kinds, field names and hooks, and its generated-file check
+├── bonsai-lang-java/   Java node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
 ├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
@@ -53,7 +54,11 @@ on `Hooks` implements only the required methods, so a new required method fails
 
 That is also the limit of the design. A new *kind* of variation still costs one change in core, a
 new trait method, even though no other language sees it. Go needed two: how a method reaches
-itself, `unit_scope`, and how an if-chain is read, `if_parts`.
+itself, `unit_scope`, and how an if-chain is read, `if_parts`. Java needed two more, both with
+defaults: `unit_body`, because a `static { }` block leaves its body unfielded, and
+`call_reaches_unit`, because overloads share a name. Its keys also carry parameter types,
+through `UnitName::with_signature`: the key includes the signature, and recursion never matches
+against it.
 
 ### Adding a language
 
@@ -75,7 +80,8 @@ itself, `unit_scope`, and how an if-chain is read, `if_parts`.
 Most of the work is the fixture and the score corpus, not the spec, and nothing in core or the
 engine changes beyond the registry line and the features. A grammar whose shape the defaults
 cannot read overrides that hook in its own crate: Go overrides `if_parts`, because its `else` has
-no node of its own and its `if` takes an initializer beside the condition.
+no node of its own and its `if` takes an initializer beside the condition. Java's `else` has no
+node either, so it overrides `if_parts` as well.
 
 ### Languages embedded in a host syntax
 
@@ -133,13 +139,23 @@ reaches itself through `s` or `(*s)`, or through its type in a method expression
 `(*Stack[T]).Push(s)`, and never through a bare `Push()`, since Go cannot call a method without
 its receiver.
 
+Java lists `this`, the enclosing class's name and `Outer.this`, but not `super`: `super.m()` runs
+the parent's implementation, not this one. Overloads share a name, so `call_reaches_unit` also
+checks that a call's argument count fits the method's parameters, where varargs accepts any
+number beyond the fixed ones. `process(o) { process(o, user()); }` is then a delegating overload
+rather than recursion. An overload taking the same number of arguments still reads as a self-call,
+since only types could tell it apart.
+
 ### Generated files
 
 `LanguageDescriptor::is_generated` lets a language recognise machine-written files by their
 contents. Go's convention is a `// Code generated … DO NOT EDIT.` line before the `package`
 clause. The check needs the source, so it runs on the worker after the read, and the file is then
 dropped uncounted, exactly as a `.min.js` that the planner never admits. `--stdin` and the wasm
-build apply the same check, so an editor showing a generated file agrees with CI.
+build apply the same check, so an editor showing a generated file agrees with CI. Java has no
+single convention, so its rule reads what the common generators write: a file whose comments
+before the first line of code say both "generated" and "do not edit", as protobuf, Thrift, Avro
+and JavaCC output does.
 
 `LanguageDescriptor::unscored_suffixes` is the same idea decided by name alone, before the read:
 the TypeScript descriptor lists `.d.ts`, `.d.mts` and `.d.cts`, and the TSX one the `.min.js`

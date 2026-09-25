@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use tree_sitter::{Node, Tree};
 
 use crate::finding::{Finding, NameOrigin, Suppression, UnitScope, TOPLEVEL_UNIT};
-use crate::language::{field, Flags, Language, Role};
+use crate::language::{Flags, Language, Role};
 use crate::suppression::{toplevel_suppression, unit_marker};
 use crate::walk::{score_node, score_nodes, WalkCx};
 
@@ -80,7 +80,7 @@ fn score_unit(
     container: Option<&str>,
     claimed: &mut HashSet<usize>,
 ) -> Option<Finding> {
-    field(node, lang.fields.body)?;
+    let body = lang.spec.hooks.unit_body(node, lang)?;
     let name = lang.spec.hooks.unit_name(node, src);
     let mut unit_scope = lang.spec.hooks.unit_scope(node, src, container);
     let container = joined(container, unit_scope.container.take());
@@ -94,15 +94,19 @@ fn score_unit(
             lang,
             src,
             unit: &name.text,
+            unit_node: Some(node),
             scope: &unit_scope,
             skip_units: false,
         };
-        field(node, lang.fields.body).map_or(0, |body| score_node(body, &cx))
+        score_node(body, &cx)
     };
 
     Some(Finding {
         container,
-        name: name.text,
+        name: match name.signature {
+            Some(signature) => name.text + &signature,
+            None => name.text,
+        },
         origin: name.origin,
         line: declaration_row(node, lang) + 1,
         score,
@@ -144,6 +148,7 @@ fn toplevel_finding(
         lang,
         src,
         unit: TOPLEVEL_UNIT,
+        unit_node: None,
         scope: &UnitScope::default(),
         skip_units: true,
     };

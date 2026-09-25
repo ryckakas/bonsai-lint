@@ -69,17 +69,18 @@ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
 name = "bonsai-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "tree-sitter",
 ]
 
 [[package]]
 name = "bonsai-engine"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bonsai-core",
  "bonsai-lang-go",
+ "bonsai-lang-java",
  "bonsai-lang-php",
  "bonsai-lang-ts",
  "bonsai-lang-vue",
@@ -94,7 +95,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-go"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bonsai-core",
  "bonsai-testkit",
@@ -103,8 +104,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bonsai-lang-java"
+version = "0.4.0"
+dependencies = [
+ "bonsai-core",
+ "bonsai-testkit",
+ "tree-sitter",
+ "tree-sitter-java",
+]
+
+[[package]]
 name = "bonsai-lang-php"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bonsai-core",
  "bonsai-testkit",
@@ -114,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-ts"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bonsai-core",
  "bonsai-testkit",
@@ -124,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-vue"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bonsai-core",
  "bonsai-lang-ts",
@@ -136,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lint"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bonsai-core",
  "bonsai-engine",
@@ -148,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-testkit"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bonsai-core",
  "tree-sitter",
@@ -644,6 +655,16 @@ name = "tree-sitter-html"
 version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "261b708e5d92061ede329babaaa427b819329a9d427a1d710abb0f67bbef63ee"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-java"
+version = "0.23.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aa6cbcdc8c679b214e616fd3300da67da0e492e066df01bcf5a5921a71e90d6"
 dependencies = [
  "cc",
  "tree-sitter-language",

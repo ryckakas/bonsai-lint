@@ -14,6 +14,30 @@ what a user reads on the GitHub release page.
 
 ### Added
 
+- **Java.** `.java` files are scanned under a new `java` language id, so `--lang java`,
+  `--over java=N` and a `[java]` section in the config all work.
+  - **Keys.** Java overloads freely, so a method or constructor is keyed by its parameter types
+    as well as its name: `OrderService::process(Order, User)`. Each type is its simple name,
+    without type arguments or annotations. Two overloads are therefore baselined apart, and
+    switching between an import and a qualified name never re-keys one.
+  - **Recursion.** A call to the method's own name counts only when its argument count fits, so
+    a delegating overload, `process(o) { process(o, user()); }`, is not recursion. Neither is
+    `super.process()`, which runs the parent's implementation.
+  - **Scoring.** A `switch` costs one increment in statement and expression form, a `when` guard
+    costs only its operators, and each `catch` costs one. `synchronized`, `&`, `|` and `^` are
+    free.
+  - **Units.** Lambdas and the methods of anonymous and local classes roll up into the enclosing
+    method. A `static { }` block is a unit of its own, `C::<static>`. Field initialisers and
+    instance initializer blocks are the file's `<toplevel>`.
+  - Built behind a `java` cargo feature, on by default.
+
+  A file whose comments before the first line of code say both "generated" and "do not edit" is
+  skipped, neither scored nor counted, on disk and through `--stdin`. That is how protobuf,
+  Thrift, Avro and JavaCC output marks itself.
+
+  Upgrading a repository that contains `.java` files will report findings that were previously
+  invisible. Run `bonsai-lint --write-baseline .` to adopt them.
+
 - **musl Linux builds.** Static `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`
   archives ship beside the glibc ones, so Alpine and other musl systems get a prebuilt binary.
   They need no libc at all, so they also serve hosts whose glibc is older than 2.35, such as
@@ -21,6 +45,19 @@ what a user reads on the GitHub release page.
   on their own, and the Go launcher now does too instead of pointing at `cargo install`. musl's
   allocator serialises threads, which made a parallel scan over 15 times slower than the glibc
   build, so these builds use mimalloc, which on arm64 brings them level with the glibc build.
+
+### Changed
+
+- **For embedders of `bonsai-core`**, and breaking for code that builds `UnitName` or `WalkCx`
+  with a struct literal, which is why this is 0.4.0 rather than 0.3.1:
+  - `UnitName` gains a `signature` field. It is joined onto the reported name but never matched
+    against a call. `UnitName::with_signature` sets it.
+  - `Hooks` gains two methods with defaults:
+    - `unit_body`, for a unit kind whose grammar leaves its body unfielded;
+    - `call_reaches_unit`, which lets a language with overloading rule out a call that names the
+      unit.
+  - `WalkCx` gains `unit_node`.
+  - Existing languages score exactly as before.
 
 ## [0.3.0] - 2026-09-24
 

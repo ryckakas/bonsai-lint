@@ -45,7 +45,21 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   leaves the baseline with an un-silenceable finding. Teaching `bound_name` to unwrap a sole
   object argument would give `Widget::setup` and fix both, at the cost of changing existing
   baseline keys. Go reaches the same collision through package-level tables: every row of
-  `map[string]*cmd{"hg": {run: func…}, "git": {run: func…}}` binds a literal to `run`.
+  `map[string]*cmd{"hg": {run: func…}, "git": {run: func…}}` binds a literal to `run`. Java
+  overloads never reach it, because a method's key carries its parameter types.
+- **`super.f()` counts as recursion in TypeScript.** In Java, `super.m()` inside `m()` is an
+  override calling its parent and is not recursion. TypeScript still lists `super` among a
+  method's self-receivers, so `method() { super.method(); }` costs +1 there. Aligning the two
+  would change existing TypeScript scores.
+- **Java through Maven and Gradle.** Java builds usually reach tools through Maven or Gradle, and
+  often only through an internal Maven mirror, so a GitHub download is not an option there. The
+  binary would travel as per-platform Maven Central artifacts, in the pattern `protoc` uses,
+  resolved by a Maven and a Gradle plugin, and published by a dist job as the Go module is.
+  SDKMAN! and an IntelliJ plugin would come after.
+- **Newer Java syntax.** tree-sitter-java 0.23.5 has seen no grammar work since 2023, so a few
+  Java 21–25 constructs parse with an error. The surrounding code still scores, and the list is
+  in [docs/scoring-rules.md](docs/scoring-rules.md). A newer grammar release is picked up by
+  bumping the dependency, and the grammar contract names anything it renamed.
 
 - **A domain cannot opt a language out.** Per-language thresholds work per domain, but there is
   no way to say that a domain is TypeScript only. The workaround is an `exclude` glob.

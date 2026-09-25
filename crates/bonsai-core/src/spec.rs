@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use tree_sitter::Node;
 
 use crate::finding::{Callee, UnitName, UnitScope};
-use crate::language::Language;
+use crate::language::{field, Language};
 use crate::walk::IfPart;
 
 #[derive(Debug)]
@@ -161,5 +161,17 @@ pub trait Hooks: Sync + Debug {
     /// names alone cannot describe.
     fn if_parts<'t>(&self, node: Node<'t>, lang: &Language, visit: &mut dyn FnMut(IfPart<'t>)) {
         crate::walk::if_parts_by_fields(node, lang, visit);
+    }
+
+    /// The code a unit scores, for a unit kind whose grammar leaves its body unfielded. `None`
+    /// is a bodyless declaration, which is not a unit.
+    fn unit_body<'t>(&self, node: Node<'t>, lang: &Language) -> Option<Node<'t>> {
+        field(node, lang.fields.body)
+    }
+
+    /// Asked only once a call already names the unit through one of its own receivers. A
+    /// language with overloading answers whether this call site could reach this declaration.
+    fn call_reaches_unit(&self, _call: Node<'_>, _unit: Node<'_>, _src: &[u8]) -> bool {
+        true
     }
 }

@@ -1,6 +1,6 @@
 # bonsai-lint
 
-![bonsai-lint: cognitive complexity linter for PHP, JavaScript, TypeScript, Vue and Go](docs/images/cover-hero.jpg)
+![bonsai-lint: cognitive complexity linter for PHP, JavaScript, TypeScript, Vue, Go and Java](docs/images/cover-hero.jpg)
 
 **Find the code that's hard to read, in seconds, in one project or a whole monorepo.**
 
@@ -8,8 +8,9 @@
 your syntax trees.*
 
 A cognitive complexity linter written in Rust. One static binary that reads PHP, JavaScript,
-TypeScript, Vue single-file components and Go. Use it for any one of them, or all at once. No
-PHP runtime, no Node runtime, no Go toolchain, no Composer entry, nothing added to your project.
+TypeScript, Vue single-file components, Go and Java. Use it for any one of them, or all at once.
+No PHP runtime, no Node runtime, no Go toolchain, no JVM, no Composer entry, nothing added to your
+project.
 Scans **1.26 million lines in 0.8 seconds**.
 
 The official site is **[bonsai.kauneckas.dev](https://bonsai.kauneckas.dev)**: install and editor
@@ -69,6 +70,9 @@ same version as the CLI. The first run of each version downloads that release's 
 against a checksum recorded in the module, and caches it. The platforms and settings are in
 [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go).
 
+There is no Maven or Gradle plugin yet. On a Java project, use Homebrew, the installer script or
+`npx bonsai-lint`.
+
 ## Use it
 
 ```bash
@@ -77,7 +81,7 @@ bonsai-lint --over 10 src/           # stricter; `--over php=10,typescript=20` p
 bonsai-lint --all src/               # every unit, ranked
 bonsai-lint --format json src/       # for editors and CI
 bonsai-lint --write-baseline src/    # record today's findings, exit 0
-bonsai-lint --lang php src/          # one language only: `php`, `typescript`, `vue` or `go`
+bonsai-lint --lang php src/          # one language only: `php`, `typescript`, `vue`, `go` or `java`
 ```
 
 <details>
@@ -111,6 +115,7 @@ bonsai-lint --format json .
 {
   "thresholds": {
     "go": 15,
+    "java": 15,
     "php": 15,
     "typescript": 15,
     "vue": 15
@@ -171,9 +176,11 @@ cannot read what it was pointed at must not report success.
 | `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs` | TypeScript with JSX | `typescript` |
 | `.vue` | the `<script>` blocks only | `vue` |
 | `.go` | Go | `go` |
+| `.java` | Java | `java` |
 | `*.d.ts`, `*.d.mts`, `*.d.cts` | skipped, signatures only | |
 | `*.min.js`, `*.min.mjs`, `*.min.cjs` | skipped, generated output | |
 | `.go` headed `// Code generated … DO NOT EDIT.` | skipped, generated output | |
+| `.java` whose header says "generated" and "do not edit" | skipped, generated output | |
 
 The language id is what `--lang`, `--over LANG=N` and a `[section]` in the config take, so
 `typescript` covers every JavaScript and TypeScript file however it is parsed. An id that is not
@@ -193,6 +200,14 @@ repository commits them, `exclude = ["vendor/**", "**/testdata/**"]` keeps them 
 
 A Go method is keyed by its receiver type, so `func (s *Stack[T]) Push()` reports as
 `Stack::Push` and keeps its baseline entry when the receiver switches between pointer and value.
+
+Java overloads freely, so a Java method or constructor is keyed by its parameter types as well as
+its name: `OrderService::process(Order, User)`. Each type is its simple name, without type
+arguments or annotations, so two overloads are baselined apart and switching between an import
+and a qualified name never re-keys one. Java has no single generated-code convention, so a `.java`
+file is skipped when the comments before its first line of code say both "generated" and "do not
+edit". That covers protobuf, Thrift, Avro and JavaCC output. Most generated sources sit in a
+gitignored `target/` or `build/` directory and are never scanned in the first place.
 
 `.js` is parsed with the TypeScript grammar, which accepts a superset of JavaScript. Flow
 annotations are the one thing this misparses.
@@ -264,7 +279,7 @@ threshold = 20
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `threshold` | `15` | Fail above this score. A `[php]`, `[typescript]`, `[vue]` or `[go]` section overrides it per language. |
+| `threshold` | `15` | Fail above this score. A `[php]`, `[typescript]`, `[vue]`, `[go]` or `[java]` section overrides it per language. |
 | `exclude` | `[]` | Globs, relative to the config's own directory. `*` stops at `/` and `**` crosses it, as in `.gitignore`. |
 | `toplevel` | `true` | Score code outside any function as `<toplevel>`. |
 | `baseline` | `.bonsai-lint-baseline.json` | Where this directory's baseline lives, relative to it. |
@@ -353,11 +368,11 @@ belongs to nobody. **A marker without a reason is refused**, reported on stderr,
 stands. Suppression hides a finding but never changes a score, and `--all` always shows the real
 number.
 
-A `<toplevel>` finding is reported on line 1, so its marker goes in the comment block at the top
-of the file: trailing `<?php`, in the file's docblock, on the first line of a script behind a
-shebang if there is one, or just above or trailing Go's `package` clause. One comment silences
-one unit, so a marker directly above the first function is that function's; write it on the
-`<?php` or `package` line to address the file instead.
+A `<toplevel>` finding is reported on line 1, so its marker goes in the comment block at the top of
+the file: trailing `<?php`, in the file's docblock, on the first line of a script behind a shebang
+if there is one, or just above or trailing the `package` line in Go or Java. One comment silences
+one unit, so a marker directly above the first function is that function's; write it on the `<?php`
+or `package` line to address the file instead.
 
 </details>
 
@@ -401,12 +416,17 @@ deliberate choice, and this is all of them, so you can judge which suits you:
 | Code outside any function | not scored | scored as `<toplevel>` |
 | An `if` inside a plain `else` block | no deeper than the `else` | one level deeper, like any branch body |
 | `a && (b \|\| c) && d` | 2, the group counted as its own run | 3, grouping is transparent |
+| `a && b \|\| c && d` | 2, each operator counted once | 3, each switch of operator starts a run |
+| A later link of an `else if` chain | one level deeper per link | one level below its `if`, like the first |
+| A loop or `switch` header | one level deeper | at the construct's own depth |
 | A method calling itself through its receiver | not recursion | +1 |
 | A builtin sharing a method's name, `append()` inside `append` | +1, as recursion | free |
 | A local closure sharing its function's name | resolved to the local | +1 per call, matched by name |
+| A Java overload taking as many arguments | resolved by type, not recursion | +1, matched by name and argument count |
+| A call through another instance of the same type, `left.count()` | +1, as recursion | free |
 
-The last row is a limit rather than a preference: recursion is recognised by syntax alone, with no
-scope analysis.
+The last three rows are limits rather than preferences: recursion is recognised by syntax alone,
+with no scope or type analysis.
 
 The first row moves numbers the most. Scoring every function from zero means a pyramid of
 callbacks costs almost nothing:
@@ -440,10 +460,11 @@ threshold unless you set one, so the editor shows exactly what CI would fail on,
 | --- | --- |
 | 1.26 million lines of PHP, JavaScript and TypeScript | **0.77s** |
 | 2.85 million lines of Go, its own standard library | **0.79s** |
+| 2.29 million lines of Java, Spring Framework and Guava | **1.08s** |
 
 That is roughly **1.6 million lines per second** on the monorepo, three languages in one pass,
-and **3.6 million** on the Go standard library, both on a ten-core M5. No warm-up, no daemon, no
-language server. One process, start to finish.
+**3.6 million** on the Go standard library and **2.1 million** on Java, all on a ten-core M5. No
+warm-up, no daemon, no language server. One process, start to finish.
 
 Files are read, parsed and scored in parallel; `--jobs` bounds that, and `--jobs 1` is the same
 scan on one core, at 3.15s. The report is byte for byte identical either way — findings are

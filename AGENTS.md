@@ -5,9 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 `bonsai-lint` is a cognitive complexity linter written in Rust that reads PHP, JavaScript,
-TypeScript, Vue single-file components and Go via tree-sitter grammars, without executing any of
-it. One static binary, no PHP, Node or Go toolchain required to run the analysis. It ships as a
-Cargo workspace plus an independent VS Code extension.
+TypeScript, Vue single-file components, Go and Java via tree-sitter grammars, without executing any
+of it. One static binary, no PHP, Node, Go or Java toolchain required to run the analysis. It ships
+as a Cargo workspace plus an independent VS Code extension.
 
 ## Commands
 
@@ -61,6 +61,7 @@ npx --yes @vscode/vsce package --out /tmp/extension.vsix
 crates/
 ├── bonsai-core/        the scorer: parsed tree in, scores out. No I/O, no serde, no grammars.
 ├── bonsai-lang-go/     Go node kinds, field names and hooks, and its generated-file check
+├── bonsai-lang-java/   Java node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
 ├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
@@ -105,7 +106,9 @@ feature. The full checklist (CI matrix, `cli_<id>.rs`, wasm, extension) is in
 [docs/architecture.md](docs/architecture.md); the CLI's `--lang` help reads the registry and
 needs no edit. Most of the effort is the fixture and score tables, not the spec itself. A grammar
 shape the defaults can't read is handled by overriding that hook in the language's own crate, as
-Go overrides `if_parts` for its node-less `else` and its `if` initializer.
+Go overrides `if_parts` for its node-less `else` and its `if` initializer. Java overrides
+`if_parts` for the same missing `else` node, `unit_body` because `static { }` leaves its block
+unfielded, and `call_reaches_unit` because overloads share a name.
 
 **`GrammarFixture::assert_contract()`** (`bonsai-testkit`) makes six assertions per language,
 because an id-indexed table fails in ways a string match doesn't: the fixture parses cleanly; the
@@ -141,8 +144,9 @@ them when touching scan/domain/path code:
   batch. Warnings and errors have no such sort: they accumulate in merge order alone. So a broken
   replay shows up on stderr, not in the report, and a test for it needs several invalid-UTF-8
   files, not one.
-- A file its language marks as generated (`LanguageDescriptor::is_generated`, Go's
-  `// Code generated … DO NOT EDIT.` header) is read, then dropped on the worker without being
+- A file its language marks as generated (`LanguageDescriptor::is_generated`: Go's
+  `// Code generated … DO NOT EDIT.` header, or a Java header comment saying both "generated" and
+  "do not edit") is read, then dropped on the worker without being
   counted, like a `.min.js` the plan never admits; `--stdin` answers it with an empty report.
 - Invalid UTF-8 is decoded leniently with a warning (replacement bytes land in strings/comments,
   which don't score); an unreadable file is a hard error and fails the run.
@@ -162,6 +166,10 @@ projects on crates.io/npm/VS Code Marketplace).
 - `bonsai-lang-go` has the same five suites plus `generated.rs` (the generated-file header rule).
   Its `common::findings` also rejects a snippet that does not parse cleanly, since Go syntax is
   easy to get subtly wrong inside a string.
+- `bonsai-lang-java` has the same suites as Go, `generated.rs` included, and the same
+  parse-clean check. Its second helper, `findings_in_a_grammar_gap`, insists the snippet does
+  *not* parse cleanly. It pins the workaround for syntax tree-sitter-java cannot read yet, such
+  as `String @Nullable ... args`, and fails once a grammar upgrade learns it.
 - `bonsai-lang-vue` reuses the TypeScript spec under a second id, so it has no naming or scoring
   suite of its own. It has `grammar.rs` (the spec against both TS grammars), `host_grammar.rs`
   (the HTML grammar's kinds, which nothing else would fail on), `sfc.rs` (block extraction) and
@@ -170,10 +178,10 @@ projects on crates.io/npm/VS Code Marketplace).
   discovery, domains, and baseline read/write against real temp directories.
 - `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area (`cli_report.rs`,
   `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`,
-  `cli_go.rs`) over a
+  `cli_go.rs`, `cli_java.rs`) over a
   shared `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in
   a fifth of a second while `cli_parallel` is the slow one.
-- Cross-language parity (same logic in PHP, TypeScript and Go scoring identically) is a tested
+- Cross-language parity (same logic in PHP, TypeScript, Go and Java scoring identically) is a tested
   property, not an assumption — see the README's "same code scores the same" example when
   changing shared scoring logic in `bonsai-core`.
 
