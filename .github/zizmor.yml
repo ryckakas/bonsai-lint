@@ -1,32 +1,44 @@
-# zizmor, run by CI's "Workflow security" job. release.yml is written by `dist generate`, so what
-# it is ignored for below is dist's template; its action pins live in dist-workspace.toml.
+# zizmor, run by CI's required "Workflow security" job. release.yml is written by `dist generate`,
+# so these findings are dist's template and cannot be fixed by hand; its action pins live in
+# dist-workspace.toml. Each is pinned to the line and column that was reviewed, so a regenerated
+# release.yml fails the job until every finding in it has been looked at again.
 rules:
-  # dist creates the GitHub Release, which needs contents: write for the whole workflow.
+  # Accepted risk, and the largest: dist grants contents: write to every job, and its build jobs
+  # export GH_TOKEN, so a dependency's build script in a release build can use a write token.
+  # dist has no setting to narrow it.
   excessive-permissions:
     ignore:
-      - release.yml
-  # The expressions carry dist's own plan output and, on a release, the tag a maintainer pushed.
+      - release.yml:18:3
+  # Tag names and dist's own plan output, both set only by someone who can already push. A fork's
+  # pull request runs only the plan job, with a read-only token and no secrets.
   template-injection:
     ignore:
-      - release.yml
+      - release.yml:80:91
+      - release.yml:131:18
+      - release.yml:141:15
+      - release.yml:145:26
+      - release.yml:145:98
+      - release.yml:198:26
+      - release.yml:248:25
+      - release.yml:279:34
   # dist's optional build container, which none of this project's targets sets.
   unpinned-images:
     ignore:
-      - release.yml
-  # setup-node's cache in the npm publish job, restored only from caches this repository wrote.
+      - release.yml:111:66
+  # setup-node's cache in the npm publish job. A tag build restores only caches written on main.
   cache-poisoning:
     ignore:
-      - release.yml
-  # dist passes every secret to a custom publish job; publish-go.yml reads only GO_MODULE_TOKEN.
+      - release.yml:343:9
+  # npm's token until it trusts this workflow over OIDC; see "Trusted publishing" in ROADMAP.md.
+  use-trusted-publishing:
+    ignore:
+      - release.yml:350:13
+  # dist passes every secret to a custom publish job, and has no setting to narrow it.
+  # publish-go.yml reads only GO_MODULE_TOKEN.
   secrets-inherit:
     ignore:
-      - release.yml
+      - release.yml:360:11
   # A preference for `$/` over `./` in dist's reference to publish-go.yml.
   self-repository:
     ignore:
-      - release.yml
-  # Tokens until crates.io and npm are set up for OIDC; see "Trusted publishing" in ROADMAP.md.
-  use-trusted-publishing:
-    ignore:
-      - release.yml
-      - publish-crates.yml
+      - release.yml:360:11

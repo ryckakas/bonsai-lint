@@ -206,7 +206,8 @@ checks spelling, with the deliberate misspellings the tests feed in listed in `_
 `taplo` checks TOML formatting against `.taplo.toml`. `zizmor` audits the workflows, which hold
 the publishing tokens: every action pinned to a commit, least-privilege tokens, no template
 injection. `.github/zizmor.yml` lists the findings that only dist can change in the `release.yml`
-it generates. They, and `cargo hack` below, are separate tools:
+it generates, each pinned to its line and column, so a regenerated `release.yml` fails the job
+until each finding in it is reviewed again. They, and `cargo hack` below, are separate tools:
 `cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor`.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
