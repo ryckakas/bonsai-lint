@@ -178,6 +178,7 @@ cargo deny check
 cargo shear
 typos
 taplo fmt --check
+zizmor .github
 ```
 
 CI runs exactly these on every pull request, plus the feature subsets below, a build on the
@@ -186,8 +187,11 @@ minimum supported Rust version, and the tests again on `x86_64-unknown-linux-mus
 dependency tree: no known advisory, a license from its list, one version of each crate and
 crates.io as the only source. `cargo shear` fails on a dependency that nothing uses. `typos`
 checks spelling, with the deliberate misspellings the tests feed in listed in `_typos.toml`, and
-`taplo` checks TOML formatting against `.taplo.toml`. They, and `cargo hack` below, are separate
-tools: `cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli`.
+`taplo` checks TOML formatting against `.taplo.toml`. `zizmor` audits the workflows, which hold
+the publishing tokens: every action pinned to a commit, least-privilege tokens, no template
+injection. `.github/zizmor.yml` lists the findings that only dist can change in the `release.yml`
+it generates. They, and `cargo hack` below, are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor`.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
 subset — including none. CI builds every combination with `cargo-hack`, which reads the features
@@ -246,7 +250,10 @@ by accident:
 Releasing is [`dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag builds every
 target, generates the installers and publishes a GitHub Release. Preview with `dist plan`.
 `.github/workflows/release.yml` is generated — edit `dist-workspace.toml` and re-run
-`dist generate` rather than hand-editing it.
+`dist generate` rather than hand-editing it. The actions it uses are pinned to commits in
+`[dist.github-action-commits]`. A dist upgrade can move to newer action tags, and the pins have
+to follow: resolve the new tags to commits, update the table, and regenerate. Dependabot ignores
+those four actions, since a bump it made to `release.yml` would fail `dist plan`.
 
 **Linux ships twice per architecture.** The glibc build needs the builder's glibc, 2.35. The
 static musl build runs on any Linux, so it serves Alpine and older glibc alike. dist's installer
