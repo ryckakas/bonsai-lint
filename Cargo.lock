@@ -80,6 +80,7 @@ version = "0.3.0"
 dependencies = [
  "bonsai-core",
  "bonsai-lang-go",
+ "bonsai-lang-java",
  "bonsai-lang-php",
  "bonsai-lang-ts",
  "bonsai-lang-vue",

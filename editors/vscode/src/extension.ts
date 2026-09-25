@@ -73,6 +73,7 @@ function settings(): Settings {
       "typescriptreact",
       "vue",
       "go",
+      "java",
     ]),
     threshold: typeof threshold === "number" ? threshold : undefined,
   };

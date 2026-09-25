@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        features: ["php", "ts", "php,ts", "vue", "ts,vue", "php,ts,vue", "go", "php,ts,vue,go", ""]
+        features: ["php", "ts", "php,ts", "vue", "ts,vue", "php,ts,vue", "go", "php,ts,vue,go", "java", "php,ts,vue,go,java", ""]
     steps:
       - uses: actions/checkout@v7
 

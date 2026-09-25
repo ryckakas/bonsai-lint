@@ -93,7 +93,7 @@ fn json_thresholds_are_keyed_by_language_id() {
         .keys()
         .cloned()
         .collect::<Vec<_>>();
-    assert_eq!(thresholds, vec!["go", "php", "typescript", "vue"]);
+    assert_eq!(thresholds, vec!["go", "java", "php", "typescript", "vue"]);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn help_offers_every_language_built_in() {
 
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let help = stdout(&output);
-    for id in ["go", "php", "typescript", "vue"] {
+    for id in ["go", "java", "php", "typescript", "vue"] {
         assert!(help.contains(&format!("`{id}`")), "{help}");
     }
 }
@@ -175,10 +175,10 @@ fn identical_logic_scores_the_same_in_php_and_javascript() {
     assert_eq!(scores(&php), scores(&js));
 }
 
-/// Go has no file-scope calls to hang a closure on, so the same claim is made with declared
-/// functions.
+/// Go and Java have no file-scope calls to hang a closure on, so the same claim is made with
+/// declared functions.
 #[test]
-fn identical_logic_scores_the_same_in_php_javascript_and_go() {
+fn identical_logic_scores_the_same_in_php_javascript_go_and_java() {
     let project = Project::new();
     project
         .file(
@@ -192,15 +192,21 @@ fn identical_logic_scores_the_same_in_php_javascript_and_go() {
         .file(
             "go/logic.go",
             "package logic\n\nfunc a(a bool) int {\n\tif a {\n\t\treturn 1\n\t}\n\treturn 0\n}\n\nfunc b(xs []bool) {\n\tfor _, x := range xs {\n\t\tif x {\n\t\t\tf()\n\t\t}\n\t}\n}\n",
+        )
+        .file(
+            "java/Logic.java",
+            "class Logic {\n    int a(boolean a) { if (a) { return 1; } return 0; }\n    void b(boolean[] xs) { for (boolean x : xs) { if (x) { f(); } } }\n}\n",
         );
 
     let php = project.run(&["--all", "--format", "json", "php"]);
     let js = project.run(&["--all", "--format", "json", "js"]);
     let go = project.run(&["--all", "--format", "json", "go"]);
+    let java = project.run(&["--all", "--format", "json", "java"]);
 
     assert_eq!(scores(&php), vec![1, 3]);
     assert_eq!(scores(&php), scores(&js));
     assert_eq!(scores(&php), scores(&go));
+    assert_eq!(scores(&php), scores(&java));
 }
 
 #[test]

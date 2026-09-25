@@ -22,6 +22,8 @@ pub fn descriptors() -> &'static [&'static dyn LanguageDescriptor] {
         all.push(&bonsai_lang_vue::VUE);
         #[cfg(feature = "go")]
         all.push(&bonsai_lang_go::GO);
+        #[cfg(feature = "java")]
+        all.push(&bonsai_lang_java::JAVA);
         all
     })
 }

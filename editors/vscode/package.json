@@ -1,7 +1,7 @@
 {
   "name": "bonsai-lint",
-  "displayName": "bonsai-lint: cognitive complexity for PHP, JS, TS, Vue and Go",
-  "description": "Flags functions that are hard to read, across PHP, JavaScript, TypeScript, Vue and Go. Rust-powered, no runtime required.",
+  "displayName": "bonsai-lint: cognitive complexity for PHP, JS, TS, Vue, Go and Java",
+  "description": "Flags functions that are hard to read, across PHP, JavaScript, TypeScript, Vue, Go and Java. Rust-powered, no runtime required.",
   "version": "0.3.0",
   "publisher": "RicardasKauneckas",
   "license": "MIT",
@@ -24,6 +24,7 @@
     "typescript",
     "vue",
     "go",
+    "java",
     "linter",
     "complexity",
     "cognitive-complexity"
@@ -35,7 +36,8 @@
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
     "onLanguage:vue",
-    "onLanguage:go"
+    "onLanguage:go",
+    "onLanguage:java"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -64,7 +66,8 @@
             "typescript",
             "typescriptreact",
             "vue",
-            "go"
+            "go",
+            "java"
           ],
           "description": "Editor language identifiers to analyse."
         },

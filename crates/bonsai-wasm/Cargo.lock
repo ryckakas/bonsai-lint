@@ -28,6 +28,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bonsai-lang-java"
+version = "0.3.0"
+dependencies = [
+ "bonsai-core",
+ "tree-sitter",
+ "tree-sitter-java",
+]
+
+[[package]]
 name = "bonsai-lang-php"
 version = "0.3.0"
 dependencies = [
@@ -62,6 +71,7 @@ version = "0.2.0"
 dependencies = [
  "bonsai-core",
  "bonsai-lang-go",
+ "bonsai-lang-java",
  "bonsai-lang-php",
  "bonsai-lang-ts",
  "bonsai-lang-vue",
@@ -255,6 +265,14 @@ dependencies = [
 [[package]]
 name = "tree-sitter-html"
 version = "0.23.2"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-java"
+version = "0.23.5"
 dependencies = [
  "cc",
  "tree-sitter-language",
