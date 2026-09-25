@@ -20,7 +20,10 @@ static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(ClapParser)]
 #[command(name = "bonsai-lint", version, about = "Cognitive complexity linter")]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each bool is its own command-line flag"
+)]
 struct Args {
     /// Files or directories to scan
     #[arg(default_value = ".")]

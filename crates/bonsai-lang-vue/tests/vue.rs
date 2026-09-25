@@ -85,11 +85,11 @@ fn two_script_blocks_produce_exactly_one_toplevel_finding() {
         "<script lang=\"ts\">\nif (a) { b() }\n</script>\n\
          <script setup lang=\"ts\">\nif (c) { d() }\n</script>\n",
     );
-    let toplevel: Vec<_> = found
+    let toplevel = found
         .iter()
         .filter(|finding| finding.name == TOPLEVEL_UNIT)
-        .collect();
-    assert_eq!(toplevel.len(), 1);
+        .count();
+    assert_eq!(toplevel, 1);
 }
 
 /// Only script blocks score. Counting `v-if` would make a component incomparable with the same

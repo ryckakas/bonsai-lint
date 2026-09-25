@@ -3,8 +3,9 @@
 [← Back to README](README.md)
 
 Notable changes per release, in the format of [Keep a Changelog](https://keepachangelog.com).
-This project follows [Semantic Versioning](https://semver.org); while it is pre-1.0, `0.1.x` is
-the compatibility unit, so a backwards-compatible change is a patch bump.
+This project follows [Semantic Versioning](https://semver.org). While it is pre-1.0, the minor
+version is the compatibility unit: a backwards-compatible change is a patch bump (0.3.0 → 0.3.1),
+and a breaking change to a library crate's public API moves to the next minor (0.3.x → 0.4.0).
 
 `dist` reads the section matching a tag and uses it as that release's notes, so an entry here is
 what a user reads on the GitHub release page.

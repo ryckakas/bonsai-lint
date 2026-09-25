@@ -9,7 +9,7 @@ use bonsai_core::LanguageDescriptor;
 pub fn descriptors() -> &'static [&'static dyn LanguageDescriptor] {
     static ALL: OnceLock<Vec<&'static dyn LanguageDescriptor>> = OnceLock::new();
     ALL.get_or_init(|| {
-        #[allow(unused_mut)]
+        #[allow(unused_mut, reason = "with no language feature, nothing is pushed")]
         let mut all: Vec<&'static dyn LanguageDescriptor> = Vec::new();
         #[cfg(feature = "php")]
         all.push(&bonsai_lang_php::PHP);

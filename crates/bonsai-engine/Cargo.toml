@@ -8,6 +8,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 readme = "../../README.md"
+keywords = ["complexity", "linter", "static-analysis", "baseline", "tree-sitter"]
+categories = ["development-tools"]
 
 [features]
 default = ["php", "ts", "vue", "go", "java"]

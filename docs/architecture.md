@@ -189,17 +189,33 @@ honest.
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --all-features
+cargo deny check
+cargo shear
+typos
+taplo fmt --check
+zizmor .github
 ```
 
 CI runs exactly these on every pull request, plus the feature subsets below, a build on the
 minimum supported Rust version, and the tests again on `x86_64-unknown-linux-musl`.
-`cargo build --release` produces the binary users get.
+`cargo build --release` produces the binary users get. `cargo deny` applies `deny.toml` to the
+dependency tree: no known advisory, a license from its list, one version of each crate and
+crates.io as the only source. `cargo shear` fails on a dependency that nothing uses. `typos`
+checks spelling, with the deliberate misspellings the tests feed in listed in `_typos.toml`, and
+`taplo` checks TOML formatting against `.taplo.toml`. `zizmor` audits the workflows, which hold
+the publishing tokens: every action pinned to a commit, least-privilege tokens, no template
+injection. `.github/zizmor.yml` lists the findings that only dist can change in the `release.yml`
+it generates. They, and `cargo hack` below, are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor`.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
-subset — including none. CI builds all eleven combinations.
+subset — including none. CI builds every combination with `cargo-hack`, which reads the features
+from the manifest, so a new language needs no CI edit.
 
 ```bash
-cargo build -p bonsai-lint --no-default-features --features php
+cargo hack build -p bonsai-lint --feature-powerset
+cargo build -p bonsai-lint --no-default-features --features php      # one subset
 ```
 
 Feature subsets exist so that adding or removing a language stays a clean operation and the
@@ -250,7 +266,10 @@ by accident:
 Releasing is [`dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag builds every
 target, generates the installers and publishes a GitHub Release. Preview with `dist plan`.
 `.github/workflows/release.yml` is generated — edit `dist-workspace.toml` and re-run
-`dist generate` rather than hand-editing it.
+`dist generate` rather than hand-editing it. The actions it uses are pinned to commits in
+`[dist.github-action-commits]`. A dist upgrade can move to newer action tags, and the pins have
+to follow: resolve the new tags to commits, update the table, and regenerate. Dependabot ignores
+those four actions, since a bump it made to `release.yml` would fail `dist plan`.
 
 **Linux ships twice per architecture.** The glibc build needs the builder's glibc, 2.35. The
 static musl build runs on any Linux, so it serves Alpine and older glibc alike. dist's installer
@@ -259,6 +278,16 @@ from `ldd --version`. The musl build replaces musl's allocator with mimalloc, th
 `override` feature, because tree-sitter's C code calls `malloc` directly. musl's allocator
 serialises threads: on the HERO corpus on arm64, a parallel scan took 16.3 s against glibc's
 0.94 s, and 0.84 s with mimalloc. Nothing but the release and CI's musl job compiles that target.
+
+**The version moves when compatibility does.** The library crates are published, and a CLI
+release depends on them by a caret range that `cargo install` resolves without the lockfile. A
+breaking 0.3.x of `bonsai-core` would therefore stop `cargo install bonsai-lint@0.3.0` from
+compiling, whether or not anyone else embeds it. CI's required Public API job runs
+`cargo-semver-checks` against the latest release on crates.io. A pull request that breaks the
+API bumps the workspace to 0.4.0 in the same change, and after that further breaks pass until
+0.4.0 ships. The job checks only library crates crates.io already has: a new language crate has
+no baseline until its first publish. It fetches the newest cargo-semver-checks on each run,
+because the tool reads rustdoc's JSON output, which changes with Rust releases.
 
 **Every user-facing name is `bonsai-lint`** — the crate, the binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker and the extension's

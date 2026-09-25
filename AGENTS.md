@@ -18,16 +18,27 @@ cargo test --all-features                            # whole workspace
 cargo test -p bonsai-lang-php                         # one crate
 cargo test -p bonsai-lang-php --test grammar          # one integration test file
 cargo build --release                                 # produces target/release/bonsai-lint
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --all-features
+cargo deny check                                      # advisories, licenses, duplicates: deny.toml
+cargo shear                                           # dependencies nothing uses
+cargo hack build -p bonsai-lint --feature-powerset    # every language subset, including none
+typos                                                 # spelling; deliberate misspellings: _typos.toml
+taplo fmt --check                                     # TOML formatting: .taplo.toml
+zizmor .github                                        # workflow security: .github/zizmor.yml
 ```
 
-CI (`.github/workflows/ci.yml`) runs exactly the fmt/clippy/test commands above, plus a build
-matrix across Linux/macOS/Windows, a feature-combination build (`php`, `ts`, `php,ts`, `vue`,
-`ts,vue`, `php,ts,vue`, `go`, `php,ts,vue,go`, `java`, `php,ts,vue,go,java`, none — each
-`cargo build -p bonsai-lint --no-default-features --features "<set>"`), a
-build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and the tests on
-`x86_64-unknown-linux-musl`, the only build that swaps in mimalloc (it needs `musl-tools`, so on
-macOS run it in an `ubuntu` container). Match these locally before pushing rather than relying on
-CI to catch it.
+The last six are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor`.
+
+Every action in the workflows is pinned to a commit, with its version in a comment, and every
+workflow but `release.yml` defaults to a read-only token. A new `uses:` line follows the same
+form, and `zizmor` fails CI until it does.
+
+CI (`.github/workflows/ci.yml`) runs exactly the commands above, plus a test matrix across
+Linux/macOS/Windows, a build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and
+the tests on `x86_64-unknown-linux-musl`, the only build that swaps in mimalloc (it needs
+`musl-tools`, so on macOS run it in an `ubuntu` container). Match these locally before pushing
+rather than relying on CI to catch it.
 
 Every language is behind a cargo feature; `vue` implies `ts` because it reuses that spec. The
 registry must keep compiling with any feature subset, including none — this is exercised, not
@@ -193,12 +204,20 @@ dogfooding stance — the tool measures complexity/nesting in the languages it l
 a version of the same discipline on its own Rust via clippy. Don't loosen these to get code to
 compile; restructure instead.
 
+A set of allow-by-default `rustc` lints, clippy's `cargo` group, and hand-picked clippy
+`restriction` and `nursery` lints are warn too. Each was clean when it was added, so a hit is new
+code to fix, not a lint to switch off. Neither `restriction` nor `nursery` is a group to enable
+wholesale: `restriction`'s lints contradict each other, and `nursery`'s are unsettled. An
+`#[allow]` needs a `reason = "…"`, the same "why" a comment would give.
+
 ## Releasing
 
 Releases go through [`cargo-dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag
 builds every target and publishes a GitHub Release, npm package, Homebrew formula and Go module.
 `.github/workflows/release.yml` is generated from `dist-workspace.toml` — edit the latter and run
-`dist generate`, don't hand-edit the workflow. `dist plan` previews a release. The VS Code
+`dist generate`, don't hand-edit the workflow. Its actions are pinned in
+`[dist.github-action-commits]`, so upgrading dist means re-pinning them to the commits behind
+the tags the new version uses. `dist plan` previews a release. The VS Code
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
 Azure DevOps PAT).
 
@@ -206,10 +225,16 @@ Azure DevOps PAT).
 publishes it as that release's notes, so a missing or misnamed section ships an empty release
 page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY-MM-DD`.
 
-A release bumps `version` in the root `Cargo.toml` **and** the eight internal path dependencies
-beside it, which must match or cargo refuses to build. The npm package, Homebrew formula and Go
-module take their version from that one field; none is edited by hand. The extension is bumped
+The version is `version` in the root `Cargo.toml` **and** the internal path dependencies beside
+it, which must match or cargo refuses to build. The npm package, Homebrew formula and Go module
+take their version from that one field; none is edited by hand. The extension is bumped
 afterwards, because its lockfile can only pin a CLI version that is already published.
+
+**The version moves when compatibility does.** A pull request that breaks a library crate's
+public API bumps the workspace to the next breaking version (0.3.x → 0.4.0) in the same change.
+CI's required **Public API** job (`cargo-semver-checks` against the latest release on crates.io)
+fails until it does. A release that follows only compatible changes bumps the patch version in
+the release PR. A crate that has never been published is left out until its first release.
 
 The Go module `bonsai.kauneckas.dev/bonsai-lint` is a launcher that lives in
 [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go). `.github/workflows/publish-go.yml`

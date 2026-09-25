@@ -46,7 +46,7 @@ fn a_file_without_top_level_logic_reports_nothing() {
 /// at the first token, not at byte 0.
 #[test]
 fn leading_blank_lines_do_not_move_the_toplevel_line() {
-    let findings = common::findings("\n\n\npackage p\n\nvar ok = a && b\n");
+    let findings = findings("\n\n\npackage p\n\nvar ok = a && b\n");
     let toplevel = findings
         .iter()
         .find(|finding| finding.name == bonsai_core::TOPLEVEL_UNIT)

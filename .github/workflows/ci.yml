@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+# Every job only reads the checkout: nothing here pushes, comments or publishes.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -18,19 +22,113 @@ jobs:
     name: Format and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # A broken intra-doc link only shows when the docs are built, which nothing else here does.
+      - name: Docs
+        run: cargo doc --no-deps --workspace --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      # An exact release, since each one adds corrections; Dependabot proposes the next one.
+      - name: Spelling
+        uses: crate-ci/typos@512fc24f32f44ab01972217aaaf3dc86ec234d53 # v1.50.2
+
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: taplo
+
+      - name: TOML formatting
+        run: taplo fmt --check
+
+  dependencies:
+    # deny.toml holds the policy: advisories, licenses, duplicate crates and allowed sources.
+    # A new RustSec advisory fails this on any pull request until the crate is upgraded.
+    name: Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-deny,cargo-shear
+
+      - name: cargo deny
+        run: cargo deny check
+
+      - name: Unused dependencies
+        run: cargo shear
+
+  workflows:
+    # The workflows hold the publishing tokens, so they are audited like code: pinned actions,
+    # least-privilege tokens, no template injection. .github/zizmor.yml lists what dist decides.
+    name: Workflow security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # An exact release, like typos: new audits arrive with a deliberate bump, not with an
+      # unrelated pull request.
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: zizmor@1.30.1
+
+      # The token lets zizmor check that every pinned commit belongs to its action's repository.
+      - name: zizmor
+        run: zizmor --format github .github
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  semver:
+    # The library crates are published, and each CLI release depends on them by a caret range,
+    # which `cargo install` resolves without its lockfile. So a pull request that breaks their
+    # public API bumps the workspace to the next breaking version, 0.3.x to 0.4.0, in the same
+    # change.
+    name: Public API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A crate crates.io has never seen has no baseline to compare against, so it joins the check
+      # after its first publish. The CLI is binary-only and has no library API.
+      - name: Published library crates
+        id: published
+        run: |
+          packages=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(any(.targets[]; .kind | index("lib"))) | .name' \
+            | while read -r name; do
+                curl -fsS -o /dev/null "https://index.crates.io/${name:0:2}/${name:2:2}/$name" \
+                  && echo "$name"
+              done | paste -sd, -)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
+      # Fetches the latest cargo-semver-checks on every run, which keeps it able to read the
+      # rustdoc of the stable toolchain it installs; pinning the tool would break with each release.
+      - uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        with:
+          package: ${{ steps.published.outputs.packages }}
 
   extension:
     # Runs unconditionally rather than behind a paths filter: a required check that gets
@@ -41,9 +139,11 @@ jobs:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -71,11 +171,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Test
         run: cargo test --all-features
@@ -86,13 +188,15 @@ jobs:
     name: Test on musl
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: x86_64-unknown-linux-musl
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Install musl-tools
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -102,22 +206,25 @@ jobs:
 
   features:
     # Every language is feature-gated, so the registry has to keep compiling with any subset —
-    # including none, which must still produce a binary rather than a type error.
+    # including none, which must still produce a binary rather than a type error. cargo-hack
+    # derives the set from the manifest, so a new language joins it without an edit here.
     name: Feature combinations
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        features: ["php", "ts", "php,ts", "vue", "ts,vue", "php,ts,vue", "go", "php,ts,vue,go", "java", "php,ts,vue,go,java", ""]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Build with features "${{ matrix.features }}"
-        run: cargo build -p bonsai-lint --no-default-features --features "${{ matrix.features }}"
+      - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        with:
+          tool: cargo-hack
+
+      - name: Build every feature combination
+        run: cargo hack build -p bonsai-lint --feature-powerset
 
   wasm:
     # The wasm32 arm of `compiled_once!` is compiled by nothing else here, so without this job
@@ -125,16 +232,18 @@ jobs:
     name: WebAssembly target
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # llvm-tools is not optional: build-wasm.sh needs its llvm-ar, because the system ar
       # writes BSD archives and wasm-ld only reads GNU ones.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: wasm32-unknown-unknown
           components: llvm-tools
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       # vendor-grammars.py patches the grammars from the local registry rather than the network.
       - name: Fetch dependencies
@@ -159,17 +268,19 @@ jobs:
     name: Minimum supported Rust version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Read rust-version from the manifest
         id: msrv
         run: echo "version=$(grep '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
 
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       # Build only: the lint config targets current stable, so clippy on an old toolchain would
       # fail on lints that did not exist yet.

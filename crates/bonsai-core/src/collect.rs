@@ -123,9 +123,7 @@ pub fn declaration_row(node: Node<'_>, lang: &Language) -> usize {
         let info = lang.info(child.kind_id());
         info.role != Role::Trivia && !info.flags.has(Flags::LEADING_TRIVIA)
     });
-    first.map_or(node.start_position().row, |child| {
-        child.start_position().row
-    })
+    first.unwrap_or(node).start_position().row
 }
 
 /// Where the parsed region starts. A whole-file parse reports one range beginning at row 0, so
