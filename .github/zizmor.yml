@@ -1,0 +1,32 @@
+# zizmor, run by CI's "Workflow security" job. release.yml is written by `dist generate`, so what
+# it is ignored for below is dist's template; its action pins live in dist-workspace.toml.
+rules:
+  # dist creates the GitHub Release, which needs contents: write for the whole workflow.
+  excessive-permissions:
+    ignore:
+      - release.yml
+  # The expressions carry dist's own plan output and, on a release, the tag a maintainer pushed.
+  template-injection:
+    ignore:
+      - release.yml
+  # dist's optional build container, which none of this project's targets sets.
+  unpinned-images:
+    ignore:
+      - release.yml
+  # setup-node's cache in the npm publish job, restored only from caches this repository wrote.
+  cache-poisoning:
+    ignore:
+      - release.yml
+  # dist passes every secret to a custom publish job; publish-go.yml reads only GO_MODULE_TOKEN.
+  secrets-inherit:
+    ignore:
+      - release.yml
+  # A preference for `$/` over `./` in dist's reference to publish-go.yml.
+  self-repository:
+    ignore:
+      - release.yml
+  # Tokens until crates.io and npm are set up for OIDC; see "Trusted publishing" in ROADMAP.md.
+  use-trusted-publishing:
+    ignore:
+      - release.yml
+      - publish-crates.yml

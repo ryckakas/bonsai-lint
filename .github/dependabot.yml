@@ -3,9 +3,9 @@ version: 2
 # The grammar contract tests exist precisely to catch a tree-sitter upgrade renaming a node out
 # from under the kind tables, so dependency PRs are where they earn their keep.
 #
-# Cooldown holds a release for three days before proposing it, which is long enough for a bad
-# publish to be yanked before it costs a CI run. With no `include` list it applies to every
-# dependency, and with no semver-specific overrides it applies to major, minor and patch alike.
+# Cooldown holds a release for seven days before proposing it: a malicious or broken publish is
+# usually caught and yanked within the week, before it reaches a lockfile. With no `include` list
+# it applies to every dependency, and with no semver-specific overrides to major, minor and patch.
 updates:
   - package-ecosystem: cargo
     directory: /
@@ -13,7 +13,7 @@ updates:
       interval: monthly
     open-pull-requests-limit: 5
     cooldown:
-      default-days: 3
+      default-days: 7
 
   # The extension's devDependencies only — the CLI it drives is the Rust binary above.
   - package-ecosystem: npm
@@ -21,17 +21,19 @@ updates:
     schedule:
       interval: monthly
     cooldown:
-      default-days: 3
+      default-days: 7
 
-  # Covers ci.yml. The actions below are ignored because `dist` pins them in the generated
-  # release.yml and its `dist plan` check fails the moment they differ, so a bump there is a
-  # pull request that can never go green. They move when `dist` itself moves.
+  # Covers the hand-written workflows, whose actions are pinned to a commit with the version in a
+  # comment; Dependabot moves both. The actions below are ignored because dist pins them too, in
+  # the generated release.yml from dist-workspace.toml, and its `dist plan` check fails the moment
+  # they differ. They move by hand when dist moves, in ci.yml and dist-workspace.toml together.
+  # dtolnay/rust-toolchain has no releases to move to, so its pin is by hand as well.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     cooldown:
-      default-days: 3
+      default-days: 7
     ignore:
       - dependency-name: actions/checkout
       - dependency-name: actions/setup-node

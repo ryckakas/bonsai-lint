@@ -24,10 +24,15 @@ cargo shear                                           # dependencies nothing use
 cargo hack build -p bonsai-lint --feature-powerset    # every language subset, including none
 typos                                                 # spelling; deliberate misspellings: _typos.toml
 taplo fmt --check                                     # TOML formatting: .taplo.toml
+zizmor .github                                        # workflow security: .github/zizmor.yml
 ```
 
-The last five are separate tools:
-`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli`.
+The last six are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor`.
+
+Every action in the workflows is pinned to a commit, with its version in a comment, and every
+workflow but `release.yml` defaults to a read-only token. A new `uses:` line follows the same
+form, and `zizmor` fails CI until it does.
 
 CI (`.github/workflows/ci.yml`) runs exactly the commands above, plus a test matrix across
 Linux/macOS/Windows, a build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and
@@ -202,7 +207,9 @@ wholesale: `restriction`'s lints contradict each other, and `nursery`'s are unse
 Releases go through [`cargo-dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag
 builds every target and publishes a GitHub Release, npm package, Homebrew formula and Go module.
 `.github/workflows/release.yml` is generated from `dist-workspace.toml` — edit the latter and run
-`dist generate`, don't hand-edit the workflow. `dist plan` previews a release. The VS Code
+`dist generate`, don't hand-edit the workflow. Its actions are pinned in
+`[dist.github-action-commits]`, so upgrading dist means re-pinning them to the commits behind
+the tags the new version uses. `dist plan` previews a release. The VS Code
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
 Azure DevOps PAT).
 
