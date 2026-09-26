@@ -32,8 +32,8 @@ pub enum NameOrigin {
 pub struct UnitName {
     pub text: String,
     pub origin: NameOrigin,
-    /// Joined onto `text` in the key, but never matched against a call: overloads share one
-    /// callable name and differ only here.
+    /// Joined onto `text` in the key, but never matched against a call: overloads and property
+    /// accessors share one callable name and differ only here.
     pub signature: Option<String>,
 }
 

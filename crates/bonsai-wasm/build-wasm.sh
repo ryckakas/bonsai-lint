@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ ! -d vendor/tree-sitter-typescript ] || [ ! -d vendor/tree-sitter-go ] \
-  || [ ! -d vendor/tree-sitter-java ]; then
+  || [ ! -d vendor/tree-sitter-java ] || [ ! -d vendor/tree-sitter-python ]; then
   echo "grammars not vendored yet; running vendor-grammars.py"
   python3 vendor-grammars.py
 fi

@@ -8,6 +8,7 @@ crates/
 ├── bonsai-lang-go/     Go node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-java/   Java node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
+├── bonsai-lang-python/ Python node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
 ├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
 ├── bonsai-engine/      registry, configuration, domains, baselines, the scan driver
@@ -58,7 +59,22 @@ itself, `unit_scope`, and how an if-chain is read, `if_parts`. Java needed two m
 defaults: `unit_body`, because a `static { }` block leaves its body unfielded, and
 `call_reaches_unit`, because overloads share a name. Its keys also carry parameter types,
 through `UnitName::with_signature`: the key includes the signature, and recursion never matches
-against it.
+against it. Python needed one more, with a default: `is_control_header`, because
+`a if c else b` leaves its condition unfielded between the branches, where no field name can mark
+it as header. It also gave core one rule no other grammar reaches: an `else` that no if chain
+claims, as on a Python loop or `try`, costs +1 on its own. Its property accessors reuse
+`with_signature` for `.setter` and `.deleter`.
+
+### Why every language goes through tree-sitter
+
+A parser written by hand for one language is faster. Against tools built on one, bonsai-lint
+measures about 3× slower per core, and on Python the tree-sitter parse alone is 70% of a
+single-threaded run. The trade is deliberate. One walker over one kind of tree is what makes the
+parity above structural, and a second parser would need a second walker holding the same rules.
+Every grammar also returns a tree for broken code, which the editor relies on because it scans
+on every edit, and a new language costs a spec and hooks rather than a parser. Besides speed, the
+price is that a grammar can trail its language, as Java's grammar-gap tests record. In wall
+time the difference is about a third of a second on 1.5M lines of Python.
 
 ### Adding a language
 
@@ -71,9 +87,10 @@ against it.
    `toplevel.rs`.
 4. Register the descriptor in `bonsai-engine/src/registry.rs` behind a cargo feature, forwarded
    by `bonsai-lint` and on in both `default` lists.
-5. Add the feature to the CI matrix and give it a `cli_<id>.rs` end-to-end suite.
-   `cli_report.rs` lists every threshold key. The `--lang` help reads the registry, so the CLI
-   needs no edit.
+5. Give it a `cli_<id>.rs` end-to-end suite. `cli_report.rs` lists every threshold key and runs
+   the cross-language parity test. CI builds every feature subset with `cargo-hack`, which reads
+   the manifest, and the `--lang` help reads the registry, so neither CI nor the CLI needs an
+   edit.
 6. Outside the workspace: a `LANG_` constant and a vendored grammar patch in `bonsai-wasm`, and
    an activation event and `bonsai-lint.languages` entry in the extension.
 
@@ -81,7 +98,13 @@ Most of the work is the fixture and the score corpus, not the spec, and nothing 
 engine changes beyond the registry line and the features. A grammar whose shape the defaults
 cannot read overrides that hook in its own crate: Go overrides `if_parts`, because its `else` has
 no node of its own and its `if` takes an initializer beside the condition. Java's `else` has no
-node either, so it overrides `if_parts` as well.
+node either, so it overrides `if_parts` as well. Python overrides it because `elif` holds its
+branch in `consequence`, where the default reads an else-if's `body`; nothing in the contract
+fails on that, since the branch would simply go unvisited. It also overrides `unit_body`, so a
+def whose body is only `...` is a declaration rather than a unit.
+
+A grammar that reuses its `else` kind for something other than a branch, such as a switch's
+default, must map that kind differently, since core charges an `else` outside an if chain +1.
 
 ### Languages embedded in a host syntax
 
@@ -146,6 +169,12 @@ number beyond the fixed ones. `process(o) { process(o, user()); }` is then a del
 rather than recursion. An overload taking the same number of arguments still reads as a self-call,
 since only types could tell it apart.
 
+Python lists `self`, `cls` and the enclosing class's full dotted path inside a class, and lets a
+bare call count only in a module function: inside a method, a bare name resolves to a global,
+never to the method. A nested class's own name is not in scope inside its methods either, so
+`Outer.Inner.m()` reaches the method and a bare `Inner.m()` does not. `super().m()` has a call as
+its receiver, so it never matches.
+
 ### Generated files
 
 `LanguageDescriptor::is_generated` lets a language recognise machine-written files by their
@@ -155,7 +184,8 @@ dropped uncounted, exactly as a `.min.js` that the planner never admits. `--stdi
 build apply the same check, so an editor showing a generated file agrees with CI. Java has no
 single convention, so its rule reads what the common generators write: a file whose comments
 before the first line of code say both "generated" and "do not edit", as protobuf, Thrift, Avro
-and JavaCC output does.
+and JavaCC output does. Python uses the same rule over its `#` comments, which catches protobuf,
+gRPC and Thrift output and leaves an editable Django migration scored.
 
 `LanguageDescriptor::unscored_suffixes` is the same idea decided by name alone, before the read:
 the TypeScript descriptor lists `.d.ts`, `.d.mts` and `.d.cts`, and the TSX one the `.min.js`

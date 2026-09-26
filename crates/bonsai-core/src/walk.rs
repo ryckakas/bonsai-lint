@@ -90,6 +90,9 @@ fn walk(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) {
         Role::Call if is_recursive_call(node, cx) => {
             *score += 1;
         }
+        // An if chain scores its own else through `if_parts`, so this else hangs off a loop or a
+        // try, as Python's do. Its body already sits where the construct's own body does.
+        Role::Else => *score += 1,
         _ => {}
     }
 
@@ -193,7 +196,8 @@ fn walk_control(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32) 
         let child = cursor.node();
         if child.is_named() {
             let is_header = cx.lang.is_header_field(cursor.field_id())
-                || body_start.is_some_and(|start| child.end_byte() <= start);
+                || body_start.is_some_and(|start| child.end_byte() <= start)
+                || cx.lang.spec.hooks.is_control_header(node, child);
             walk(child, nesting + u32::from(!is_header), cx, score);
         }
         if !cursor.goto_next_sibling() {

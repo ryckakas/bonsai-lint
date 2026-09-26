@@ -60,6 +60,21 @@ fn an_unknown_unit_is_a_regression() {
     assert!(baseline.is_regression(&located("src/moved.php", "busy", 1)));
 }
 
+/// Two units the namer cannot tell apart share one entry, and an unchanged rerun must accept
+/// both, whichever order they arrive in.
+#[test]
+fn units_sharing_a_key_keep_the_higher_score() {
+    let higher = located("src/a.php", "busy", 30);
+    let lower = located("src/a.php", "busy", 20);
+    for recorded in [[higher.clone(), lower.clone()], [lower, higher]] {
+        let baseline = Baseline::from_findings(&recorded);
+
+        assert_eq!(baseline.len(), 1);
+        assert!(recorded.iter().all(|item| !baseline.is_regression(item)));
+        assert!(baseline.is_regression(&located("src/a.php", "busy", 31)));
+    }
+}
+
 #[test]
 fn entries_that_match_nothing_are_reported() {
     let baseline = Baseline::from_findings(&[

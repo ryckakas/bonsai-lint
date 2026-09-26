@@ -174,4 +174,10 @@ pub trait Hooks: Sync + Debug {
     fn call_reaches_unit(&self, _call: Node<'_>, _unit: Node<'_>, _src: &[u8]) -> bool {
         true
     }
+
+    /// A header the grammar leaves without a field and without a body to stand before, such as
+    /// the condition in the middle of Python's `a if c else b`.
+    fn is_control_header(&self, _control: Node<'_>, _child: Node<'_>) -> bool {
+        false
+    }
 }

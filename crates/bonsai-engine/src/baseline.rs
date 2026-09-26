@@ -27,15 +27,20 @@ impl Default for Baseline {
 }
 
 impl Baseline {
+    /// Two units the namer cannot tell apart share one entry, which keeps the higher score so an
+    /// unchanged rerun accepts both.
     #[must_use]
     pub fn from_findings(findings: &[Located]) -> Self {
         let mut entries: BTreeMap<String, BTreeMap<String, u32>> = BTreeMap::new();
 
         for located in findings {
+            let score = located.finding.score;
             entries
                 .entry(located.key_path.clone())
                 .or_default()
-                .insert(located.finding.qualified_name(), located.finding.score);
+                .entry(located.finding.qualified_name())
+                .and_modify(|accepted| *accepted = (*accepted).max(score))
+                .or_insert(score);
         }
 
         Self {

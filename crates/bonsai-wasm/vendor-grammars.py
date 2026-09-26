@@ -78,6 +78,13 @@ GRAMMARS = [
         "anchor": '    c_config.std("c11").include(&php_dir);\n',
         "config": "c_config",
     },
+    {
+        "crate": "tree-sitter-python",
+        "version": "0.25",
+        "build": "bindings/rust/build.rs",
+        "anchor": '        .flag_if_supported("-Wno-unused-value");\n',
+        "config": "c_config",
+    },
 ]
 
 

@@ -93,7 +93,10 @@ fn json_thresholds_are_keyed_by_language_id() {
         .keys()
         .cloned()
         .collect::<Vec<_>>();
-    assert_eq!(thresholds, vec!["go", "java", "php", "typescript", "vue"]);
+    assert_eq!(
+        thresholds,
+        vec!["go", "java", "php", "python", "typescript", "vue"]
+    );
 }
 
 #[test]
@@ -102,7 +105,7 @@ fn help_offers_every_language_built_in() {
 
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     let help = stdout(&output);
-    for id in ["go", "java", "php", "typescript", "vue"] {
+    for id in ["go", "java", "php", "python", "typescript", "vue"] {
         assert!(help.contains(&format!("`{id}`")), "{help}");
     }
 }
@@ -175,10 +178,10 @@ fn identical_logic_scores_the_same_in_php_and_javascript() {
     assert_eq!(scores(&php), scores(&js));
 }
 
-/// Go and Java have no file-scope calls to hang a closure on, so the same claim is made with
-/// declared functions.
+/// Go and Java have no file-scope calls to hang a closure on, and a Python lambda cannot hold a
+/// statement, so the same claim is made with declared functions.
 #[test]
-fn identical_logic_scores_the_same_in_php_javascript_go_and_java() {
+fn identical_logic_scores_the_same_in_every_language() {
     let project = Project::new();
     project
         .file(
@@ -196,17 +199,23 @@ fn identical_logic_scores_the_same_in_php_javascript_go_and_java() {
         .file(
             "java/Logic.java",
             "class Logic {\n    int a(boolean a) { if (a) { return 1; } return 0; }\n    void b(boolean[] xs) { for (boolean x : xs) { if (x) { f(); } } }\n}\n",
+        )
+        .file(
+            "py/logic.py",
+            "def a(a):\n    if a:\n        return 1\n    return 0\n\n\ndef b(xs):\n    for x in xs:\n        if x:\n            f()\n",
         );
 
     let php = project.run(&["--all", "--format", "json", "php"]);
     let js = project.run(&["--all", "--format", "json", "js"]);
     let go = project.run(&["--all", "--format", "json", "go"]);
     let java = project.run(&["--all", "--format", "json", "java"]);
+    let py = project.run(&["--all", "--format", "json", "py"]);
 
     assert_eq!(scores(&php), vec![1, 3]);
     assert_eq!(scores(&php), scores(&js));
     assert_eq!(scores(&php), scores(&go));
     assert_eq!(scores(&php), scores(&java));
+    assert_eq!(scores(&php), scores(&py));
 }
 
 #[test]

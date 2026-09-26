@@ -23,6 +23,7 @@ bonsai-core = { path = "../bonsai-core" }
 bonsai-lang-go = { path = "../bonsai-lang-go" }
 bonsai-lang-java = { path = "../bonsai-lang-java" }
 bonsai-lang-php = { path = "../bonsai-lang-php" }
+bonsai-lang-python = { path = "../bonsai-lang-python" }
 bonsai-lang-ts = { path = "../bonsai-lang-ts" }
 bonsai-lang-vue = { path = "../bonsai-lang-vue" }
 tree-sitter = "0.27"
@@ -34,6 +35,7 @@ tree-sitter = "0.27"
 tree-sitter-go = { path = "vendor/tree-sitter-go" }
 tree-sitter-java = { path = "vendor/tree-sitter-java" }
 tree-sitter-php = { path = "vendor/tree-sitter-php" }
+tree-sitter-python = { path = "vendor/tree-sitter-python" }
 tree-sitter-typescript = { path = "vendor/tree-sitter-typescript" }
 tree-sitter-html = { path = "vendor/tree-sitter-html" }
 

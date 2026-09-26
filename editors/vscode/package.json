@@ -25,6 +25,7 @@
     "vue",
     "go",
     "java",
+    "python",
     "linter",
     "complexity",
     "cognitive-complexity"
@@ -37,7 +38,8 @@
     "onLanguage:typescriptreact",
     "onLanguage:vue",
     "onLanguage:go",
-    "onLanguage:java"
+    "onLanguage:java",
+    "onLanguage:python"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -67,7 +69,8 @@
             "typescriptreact",
             "vue",
             "go",
-            "java"
+            "java",
+            "python"
           ],
           "description": "Editor language identifiers to analyse."
         },

@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::assert_scores;
+use common::{assert_scores, findings};
 
 #[test]
 fn operator_sequences_cost_per_run_not_per_operator() {
@@ -109,6 +109,20 @@ fn closures_raise_nesting_without_scoring() {
     ]);
 }
 
+/// A unit scores its body, so its own defaults are scored nowhere, while a nested function's are
+/// part of the enclosing unit. Where a default belongs waits on one decision across every language.
+#[test]
+fn only_a_nested_functions_defaults_are_scored() {
+    let own = findings("function f(x = a ? 1 : 2) {}");
+    let f = own.iter().find(|finding| finding.name == "f");
+    assert_eq!(f.map(|finding| finding.score), Some(0));
+    assert!(own
+        .iter()
+        .all(|finding| finding.name != bonsai_core::TOPLEVEL_UNIT));
+
+    assert_scores(&[("function f(x = a ? 1 : 2) {}", 2)]);
+}
+
 /// Callback pyramids are the way JavaScript becomes unreadable. Scoring each function from zero
 /// would report this as two easy functions instead of one hard one.
 #[test]
@@ -130,7 +144,7 @@ fn direct_recursion_costs_one() {
 }
 
 fn score_of_target(source: &str) -> u32 {
-    common::findings(source)
+    findings(source)
         .into_iter()
         .find(|finding| finding.name == "target")
         .unwrap_or_else(|| panic!("no finding produced for:\n{source}"))
