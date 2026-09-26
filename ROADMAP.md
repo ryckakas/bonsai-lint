@@ -35,14 +35,15 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
 
 ## Smaller known items
 
-- **Two units with one qualified name cannot both be baselined.** A baseline is
-  `{path: {qualified_name: score}}`, so when a file declares the same name twice the second write
-  wins and the other unit can never be accepted, leaving an unchanged re-run failing forever. The
-  trigger is a name the namer cannot qualify: `export const Widget = defineComponent({ setup(){} })`
-  yields a bare `setup`, because `bound_name` does not unwrap a lone *object* argument the way
-  `is_sole_callable_argument` unwraps a lone callable, so two components in one file collide.
+- **Two units with one qualified name share one baseline entry.** A baseline is
+  `{path: {qualified_name: score}}`, so when a file declares the same name twice the entry keeps
+  the higher score. An unchanged re-run passes, but the lower-scoring unit can grow up to the
+  other's score unnoticed. The trigger is a name the namer cannot qualify:
+  `export const Widget = defineComponent({ setup(){} })` yields a bare `setup`, because
+  `bound_name` does not unwrap a lone *object* argument the way `is_sole_callable_argument`
+  unwraps a lone callable, so two components in one file collide.
   `disambiguate` deliberately leaves declared duplicates alone, which is right for the report but
-  leaves the baseline with an un-silenceable finding. Teaching `bound_name` to unwrap a sole
+  leaves the two sharing one budget in the baseline. Teaching `bound_name` to unwrap a sole
   object argument would give `Widget::setup` and fix both, at the cost of changing existing
   baseline keys. Go reaches the same collision through package-level tables: every row of
   `map[string]*cmd{"hg": {run: func…}, "git": {run: func…}}` binds a literal to `run`. Python
@@ -71,16 +72,18 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   slice in a parameter annotation, several starred items in one subscript, type parameter
   defaults, and a bracketed continuation line indented less than its block. On CPython's
   standard library and Django that is 3 of 4,782 files. Its next release also turns
-  `expression_statement` into a hidden supertype. The Python crate names no such node, and its
-  naming and suppression tests fail if it ever comes to depend on one.
-- **Default parameter values are not scored.** A unit scores its body, and the top-level pass
-  skips a unit whole, so `def f(x=1 if flag else 2)` and `function f(x = a ? 1 : 2) {}` both
-  lose their ternary. Python evaluates a default when the `def` runs, in the enclosing scope, and
+  `expression_statement` into a hidden supertype. The Python crate reads that node only as an
+  optional wrapper, and its naming and suppression tests fail if it ever comes to depend on it.
+- **A unit's own default parameter values are not scored.** A unit scores its body, and the
+  top-level pass skips a unit whole, so `def f(x=1 if flag else 2)` and
+  `function f(x = a ? 1 : 2) {}` both lose their ternary. A nested function's defaults already
+  count toward the enclosing unit, one level deeper, which charges them to the function's scope
+  in both languages. Python evaluates a default when the `def` runs, in the enclosing scope, and
   TypeScript when the call does, inside the function. Scoring them would be one change across every
   language, deciding which of the two scopes each one is charged to, and it would raise existing
   scores.
-- **The decorator-factory exemption.** The whitepaper exempts a function that holds only a nested
-  function and its `return` from the nesting a closure adds. bonsai-lint applies it in no
+- **The decorator-factory exemption.** Other implementations exempt a function that holds only a
+  nested function and its `return` from the nesting a closure adds. bonsai-lint applies it in no
   language, so the same shape scores the same everywhere. Adopting it would have to be one change
   across every language, and it would lower existing scores.
 - **Parallel CPU overhead.** A parallel scan spends 1.7–1.8× the CPU time of `--jobs 1` in every

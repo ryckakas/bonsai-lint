@@ -72,11 +72,13 @@ Whatever is left over at file scope — procedural code, templates, route tables
 bootstrap, the values of a configuration object — is scored as a single `<toplevel>` unit per
 file, and reported only when it scores above zero.
 
-A unit scores its body. Default parameter values are not scored in any language, neither in the
-unit nor in the file's `<toplevel>`: `def f(x=1 if flag else 2)` and
-`function f(x = a ? 1 : 2) {}` both score 0. Logic in a default is rare, and where it belongs
-differs by language: Python evaluates a default when the `def` runs, TypeScript when the call
-does. So it waits for one decision across every language.
+A unit scores its body, so its own default parameter values are not scored in any language,
+neither in the unit nor in the file's `<toplevel>`: `def f(x=1 if flag else 2)` and
+`function f(x = a ? 1 : 2) {}` both score 0. A nested function's defaults are part of the
+enclosing unit, one level deeper like the rest of the nested function, so either `f` declared
+inside `outer` scores `outer` 2. Logic in a default is rare, and where it belongs differs by
+language: Python evaluates a default when the `def` runs, TypeScript when the call does. So it
+waits for one decision across every language.
 
 A unit is reported on its signature line, below any `#[Attribute]` or `@decorator`. The
 `<toplevel>` unit is reported on line 1, and a suppression marker for it lives in the comment

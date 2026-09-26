@@ -354,9 +354,11 @@ bonsai-lint --write-baseline src/
 Records everything currently above the threshold as accepted. Later runs fail only on scores
 that got worse, or on units the baseline has never seen. An unknown key is treated as a
 regression, never as an acceptance. A renamed function is reported rather than silently
-inheriting someone else's amnesty. Entries that match nothing are reported too, so a baseline
-cannot quietly rot into a permanent exemption, but only by a scan that covered the whole
-domain, so a single file from a pre-commit hook or an editor buffer never cries stale.
+inheriting someone else's amnesty. Two units in one file that share a key, such as a def
+redefined under `if`/`else`, share one entry holding the higher score. Entries that match
+nothing are reported too, so a baseline cannot quietly rot into a permanent exemption, but only
+by a scan that covered the whole domain, so a single file from a pre-commit hook or an editor
+buffer never cries stale.
 
 Without a `bonsai-lint.toml`, the directory holding the baseline is the project root, so
 `bonsai-lint --write-baseline .` followed by `bonsai-lint src/Foo.php` finds the same entries.

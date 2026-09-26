@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{assert_scores, score_of};
+use common::{assert_scores, findings, score_of};
 
 #[test]
 fn operator_sequences_cost_per_run_not_per_operator() {
@@ -44,6 +44,17 @@ fn bitwise_operators_score_zero() {
     assert_scores(&[("x = a & b | c", 0), ("x = a ^ b", 0)]);
 }
 
+/// Other implementations never look inside a keyword argument, an operand or an f-string, which
+/// is a documented divergence.
+#[test]
+fn an_operator_costs_wherever_it_sits() {
+    assert_scores(&[
+        ("f(key=a or b)", 1),
+        ("y = (x or \"\") + z", 1),
+        ("y = f\"{a and b}\"", 1),
+    ]);
+}
+
 #[test]
 fn nesting_compounds() {
     assert_scores(&[
@@ -78,6 +89,7 @@ fn loop_headers_do_not_nest() {
         ("for i in range(n if a else m):\n    f()", 2),
         ("while any(map(lambda x: 1 if x else 0, xs)):\n    f()", 3),
         ("match a if b else c:\n    case 1:\n        f()", 2),
+        ("try:\n    f()\nexcept (A if a else B):\n    g()", 2),
     ]);
 }
 
@@ -188,7 +200,10 @@ fn ternaries_cost_one_plus_nesting() {
 /// it header, where TypeScript's and Java's conditions already are.
 #[test]
 fn a_ternary_condition_is_header() {
-    assert_scores(&[("y = 1 if (2 if b else 3) else 4", 2)]);
+    assert_scores(&[
+        ("y = 1 if (2 if b else 3) else 4", 2),
+        ("y = (1 if  # why\n     (2 if b else 3) else 4)", 2),
+    ]);
 }
 
 /// Python has no labels, so a jump never costs more than the loop around it.
@@ -256,6 +271,19 @@ fn callback_nesting_compounds_into_the_enclosing_unit() {
     )]);
 }
 
+/// A unit scores its body, so its own defaults are scored nowhere, while a nested def's are part
+/// of the enclosing unit. Where a default belongs waits on one decision across every language.
+#[test]
+fn only_a_nested_functions_defaults_are_scored() {
+    let source = "def f(x=1 if flag else 2):\n    pass\n";
+    assert_eq!(score_of(source, "f"), 0);
+    assert!(findings(source)
+        .iter()
+        .all(|finding| finding.name != bonsai_core::TOPLEVEL_UNIT));
+
+    assert_scores(&[("def f(x=1 if flag else 2):\n    pass", 2)]);
+}
+
 /// Other implementations exempt a function holding only a nested def and its return, which is
 /// a documented divergence: the same shape nests in every other language.
 #[test]
@@ -266,7 +294,11 @@ fn a_decorator_factory_nests_its_wrapper() {
 
 #[test]
 fn direct_recursion_costs_one() {
-    assert_scores(&[("target()", 1), ("other.target()", 0)]);
+    assert_scores(&[
+        ("target()", 1),
+        ("target()\ntarget()", 2),
+        ("other.target()", 0),
+    ]);
 }
 
 #[test]
@@ -275,6 +307,9 @@ fn a_method_recurses_through_self_cls_or_its_class() {
         let source = format!("class C:\n    def target(self):\n        {call}\n");
         assert_eq!(score_of(&source, "C::target"), 1, "{call}");
     }
+
+    let twice = "class C:\n    def target(self):\n        self.target()\n        C.target(self)\n";
+    assert_eq!(score_of(twice, "C::target"), 2);
 }
 
 /// A nested class's own name is not in scope inside its methods, so only its full path reaches

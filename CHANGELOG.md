@@ -55,6 +55,10 @@ what a user reads on the GitHub release page.
 
 ### Fixed
 
+- When two units in one file still share a key, such as a Python def redefined under `if`/`else`,
+  `--write-baseline` records the higher of their scores, so an unchanged rerun passes. It kept the
+  last one reported, the lower score, and the higher one failed every run after. The two now share
+  one budget, so the lower one can grow up to the higher score unnoticed.
 - Two Java anonymous classes passed to one constructor, as in
   `new Dispatcher(new Runnable() { … }, new Runnable() { … })`, no longer share a key. Both
   methods were `C::run()`, so the baseline kept one score and an unchanged rerun failed on the

@@ -77,7 +77,8 @@ pub static SPEC: LanguageSpec = LanguageSpec {
         logical_left: "left",
         logical_right: "right",
         logical_operator: "operator",
-        control_header: &[],
+        // An except clause leaves its block unfielded, so position alone would nest its exception.
+        control_header: &["value"],
     },
     hooks: &PythonHooks,
     optional_kinds: &[],

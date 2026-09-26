@@ -182,6 +182,24 @@ fn property_accessors_are_baselined_apart_and_then_quiet() {
     assert_eq!(code(&rerun), 0, "{}", stdout(&rerun));
 }
 
+/// A def redefined under `if`/`else` keys the same twice, so the baseline must keep the higher
+/// score or the other half fails an unchanged rerun.
+#[test]
+fn a_def_redefined_under_if_else_is_adopted_by_its_baseline() {
+    let project = Project::new();
+    project.file("bonsai-lint.toml", "threshold = 0\n");
+    project.file(
+        "app/compat.py",
+        "if FAST:\n    def run(a):\n        if a:\n            return 1\nelse:\n    def run(a):\n        for x in a:\n            if x:\n                if a:\n                    return 1\n",
+    );
+
+    let written = project.run(&["--write-baseline", "."]);
+    assert_eq!(code(&written), 0, "{}", stderr(&written));
+
+    let rerun = project.run(&["."]);
+    assert_eq!(code(&rerun), 0, "{}", stdout(&rerun));
+}
+
 #[test]
 fn a_worsened_setter_breaks_its_baseline_alone() {
     let project = Project::new();
