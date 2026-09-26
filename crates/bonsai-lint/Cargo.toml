@@ -16,10 +16,11 @@ name = "bonsai-lint"
 path = "src/main.rs"
 
 [features]
-default = ["php", "ts", "vue", "go", "java"]
+default = ["php", "ts", "vue", "go", "java", "python"]
 go = ["bonsai-engine/go"]
 java = ["bonsai-engine/java"]
 php = ["bonsai-engine/php"]
+python = ["bonsai-engine/python"]
 ts = ["bonsai-engine/ts"]
 vue = ["bonsai-engine/vue"]
 

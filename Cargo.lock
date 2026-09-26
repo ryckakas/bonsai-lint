@@ -82,6 +82,7 @@ dependencies = [
  "bonsai-lang-go",
  "bonsai-lang-java",
  "bonsai-lang-php",
+ "bonsai-lang-python",
  "bonsai-lang-ts",
  "bonsai-lang-vue",
  "globset",
