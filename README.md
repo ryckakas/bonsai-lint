@@ -493,7 +493,7 @@ scan on one core, at 3.15s. The report is byte for byte identical either way —
 collected and ranked after the scan, never printed as they arrive — so a diff of two runs is
 always a real change, not a scheduling artefact.
 
-One binary, under 8 MB on disk and under 2 MB to download, with every language built in. There
+One binary, about 2 MB to download and about 8 MB on disk, with every language built in. There
 is no variant to choose and nothing to enable.
 
 ## Documentation
