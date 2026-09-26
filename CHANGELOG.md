@@ -12,6 +12,8 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-26
+
 ### Added
 
 - **Python.** `.py` and `.pyw` files are scanned under a new `python` language id, so
@@ -268,7 +270,8 @@ Initial release.
 - Published as a GitHub release, an npm package, and a Homebrew formula, alongside a VS Code
   extension versioned independently.
 
-[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/ryckakas/bonsai-lint/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ryckakas/bonsai-lint/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ryckakas/bonsai-lint/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/ryckakas/bonsai-lint/compare/v0.2.0...v0.2.1
