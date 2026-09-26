@@ -273,11 +273,15 @@ after the release, because a published version can never be taken back:
   that workflow as a trusted publisher (owner `ryckakas`, repository `bonsai-lint`, workflow
   `publish-crates.yml`).
 - **A release that adds a new crate, such as a language, sets `first_publish`.** crates.io trusts a
-  workflow only for a crate that already exists there, so that one run uses the
-  `CARGO_REGISTRY_TOKEN` secret. Create a short-lived token for it, add the new crate's trusted
-  publisher once it is up, then delete the secret.
-- **Run with `dry_run` first.** It packages and verifies every crate, uploads nothing, and needs no
-  token.
+  workflow only for a crate that already exists there, so the new crate is created with the
+  `CARGO_REGISTRY_TOKEN` secret. Every other crate still goes through trusted publishing, which is
+  all they accept, so the workflow publishes in dependency order and switches credentials between
+  runs. Without `first_publish` it refuses to create a crate. Create a short-lived token for it,
+  add the new crate's trusted publisher once it is up, then delete the secret.
+- **A version already on crates.io is skipped,** so a publish that failed partway is rerun as it
+  was and sends only what is missing.
+- **Run with `dry_run` first.** It packages and verifies every crate, uploads nothing, needs no
+  token, and prints which credential each crate would use.
 
 The Go module `bonsai.kauneckas.dev/bonsai-lint` is a launcher that lives in
 [bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go). `.github/workflows/publish-go.yml`

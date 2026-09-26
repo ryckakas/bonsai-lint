@@ -17,7 +17,7 @@ on:
         type: boolean
         default: true
       first_publish:
-        description: "The release adds a crate crates.io has never seen: use CARGO_REGISTRY_TOKEN"
+        description: "Create crates crates.io has never seen, with CARGO_REGISTRY_TOKEN"
         required: true
         type: boolean
         default: false
@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   publish:
-    name: cargo publish --workspace
+    name: cargo publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,15 +49,125 @@ jobs:
       # uploads nothing, so it needs no token.
       - name: Authenticate with crates.io
         id: auth
-        if: ${{ !inputs.dry_run && !inputs.first_publish }}
+        if: ${{ !inputs.dry_run }}
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
 
-      # --workspace resolves the publish order from the dependency graph and verifies every
-      # crate against the others as if they were already on the registry. --locked makes a
-      # lockfile that disagrees with Cargo.toml a hard failure rather than a silent rewrite.
-      # A first publish takes the one API token instead, since a single run publishes every crate.
+      # The existing crates accept only trusted publishing, and only an API token can create a crate
+      # crates.io has never seen. So the crates go up in dependency order, in runs that share a
+      # token, and a version already published is skipped, so a rerun sends only what is missing.
+      # --locked makes a lockfile that disagrees with Cargo.toml a failure, not a silent rewrite.
       - name: Publish
+        shell: python3 {0}
         env:
-          CARGO_REGISTRY_TOKEN: >-
-            ${{ inputs.first_publish && secrets.CARGO_REGISTRY_TOKEN || steps.auth.outputs.token }}
-        run: cargo publish --workspace --locked ${{ inputs.dry_run && '--dry-run' || '' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          FIRST_PUBLISH: ${{ inputs.first_publish }}
+          TRUSTED_TOKEN: ${{ steps.auth.outputs.token }}
+          NEW_CRATE_TOKEN: ${{ inputs.first_publish && secrets.CARGO_REGISTRY_TOKEN || '' }}
+        run: |
+          import json
+          import os
+          import subprocess
+          import sys
+          import urllib.error
+          import urllib.request
+
+          DRY_RUN = os.environ["DRY_RUN"] == "true"
+          FIRST_PUBLISH = os.environ["FIRST_PUBLISH"] == "true"
+          ROUTE = {
+              "done": "already on crates.io, skipped",
+              "trusted": "trusted publishing",
+              "new": "new crate, CARGO_REGISTRY_TOKEN",
+          }
+
+
+          def published_versions(name):
+              """The versions crates.io has for a crate, or None when it has never seen it."""
+              name = name.lower()
+              prefix = {1: "1", 2: "2", 3: f"3/{name[0]}"}.get(len(name), f"{name[:2]}/{name[2:4]}")
+              request = urllib.request.Request(
+                  f"https://index.crates.io/{prefix}/{name}",
+                  headers={"User-Agent": "bonsai-lint publish-crates.yml"},
+              )
+              try:
+                  with urllib.request.urlopen(request) as response:
+                      lines = response.read().decode().splitlines()
+              except urllib.error.HTTPError as error:
+                  if error.code == 404:
+                      return None
+                  raise
+              return {json.loads(line)["vers"] for line in lines if line}
+
+
+          def cargo_publish(names, *flags, token=None):
+              command = ["cargo", "publish", "--locked", *flags]
+              for name in names:
+                  command += ["--package", name]
+              print(" ".join(command), flush=True)
+              env = dict(os.environ, CARGO_REGISTRY_TOKEN=token) if token is not None else None
+              if subprocess.run(command, env=env).returncode:
+                  sys.exit(1)
+
+
+          metadata = json.loads(
+              subprocess.run(
+                  ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              ).stdout
+          )
+          crates = {
+              package["name"]: package
+              for package in metadata["packages"]
+              if package["publish"] is None or "crates-io" in package["publish"]
+          }
+          needs = {
+              name: {dep["name"] for dep in package["dependencies"] if dep["name"] in crates}
+              for name, package in crates.items()
+          }
+          kind = {}
+          for name, package in crates.items():
+              versions = published_versions(name)
+              if versions is None:
+                  kind[name] = "new"
+              else:
+                  kind[name] = "done" if package["version"] in versions else "trusted"
+
+          # Among the crates whose dependencies are out, prefer one that shares the current run's
+          # token, so a new crate splits the publish into as few runs as possible.
+          order = []
+          while len(order) < len(crates):
+              ready = sorted(n for n in crates if n not in order and needs[n] <= set(order))
+              if not ready:
+                  sys.exit("The workspace crates depend on each other in a cycle.")
+              current = next((kind[n] for n in reversed(order) if kind[n] != "done"), None)
+              order.append(next((n for n in ready if kind[n] in ("done", current)), ready[0]))
+
+          runs = []
+          for name in order:
+              print(f"{name} {crates[name]['version']}: {ROUTE[kind[name]]}")
+              if kind[name] == "done":
+                  continue
+              if runs and runs[-1][0] == kind[name]:
+                  runs[-1][1].append(name)
+              else:
+                  runs.append((kind[name], [name]))
+
+          new = [name for name in order if kind[name] == "new"]
+          if new and not FIRST_PUBLISH:
+              message = f"{', '.join(new)} would be created on crates.io: that needs first_publish."
+              if not DRY_RUN:
+                  sys.exit(message)
+              print(f"::warning::{message}")
+
+          if not runs:
+              print("Every crate is already on crates.io at this version.")
+          elif DRY_RUN:
+              cargo_publish([name for _, names in runs for name in names], "--dry-run")
+          else:
+              tokens = {
+                  "trusted": os.environ["TRUSTED_TOKEN"],
+                  "new": os.environ["NEW_CRATE_TOKEN"],
+              }
+              for route, names in runs:
+                  cargo_publish(names, token=tokens[route])
