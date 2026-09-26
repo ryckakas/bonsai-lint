@@ -23,23 +23,18 @@ guides, and a [playground](https://bonsai.kauneckas.dev/play/) that scores code 
 
 ## Why this one
 
-- **One language, or all of them.** Point it at a TypeScript project and it is a TypeScript
-  linter; point it at a PHP one and it is a PHP linter. Nothing to configure either way. Point it at
-  both and they score on one metric in one pass, and the same logic written in either language
-  gets the same number. That is tested.
-- **No runtime, no plugins, no conflicts.** Nothing to wire into an ESLint or PHPStan setup, no
-  plugin versions to keep in step, no Composer entry. An 8 MB binary, under 2 MB to download,
-  or `npx bonsai-lint` and install nothing at all.
-- **Never executes your code.** Syntax-only: no autoloader, no reflection, no module
-  resolution. Safe to point at third-party or untrusted source.
-- **Complexity compounds through callbacks.** A closure inside a loop inside a condition is
-  scored at the depth it actually sits at, so a callback pyramid shows up as one hard function
-  instead of several innocent-looking ones.
-- **Sees the code other tools miss.** Procedural scripts, templates, route files and
-  module-level initialisation are scored too, not skipped for living outside a function. On a
-  legacy codebase that is often where the worst of it has been hiding.
-- **Adoptable on day one.** Baseline your existing violations and gate on regressions, instead
-  of being told to fix hundreds of functions before you can turn it on.
+- **One language or all of them.** Point it at any project with nothing to configure. A mixed
+  codebase scores in one pass on one metric, and the same logic gets the same number in every
+  language. That is tested.
+- **No runtime, no plugins, no conflicts.** Nothing to wire into each language's own linter and
+  no plugin versions to keep in step.
+- **Never executes your code.** Syntax only: no autoloader, reflection or module resolution, so
+  untrusted source is safe to scan.
+- **Callbacks compound.** A closure in a loop in a condition scores at its real depth, so a
+  callback pyramid is one hard function, not several easy ones.
+- **Sees the code other tools miss.** Scripts, templates, route files and module-level setup are
+  scored too. On a legacy codebase that is often where the worst of it hides.
+- **Adoptable on day one.** Baseline existing findings and fail only on regressions.
 
 Cognitive complexity measures how hard code is to *read*, where cyclomatic complexity measures
 how hard it is to *test*. A `switch` with twenty arms is cyclomatically awful and cognitively
