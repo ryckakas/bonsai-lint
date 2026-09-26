@@ -73,6 +73,9 @@ fn a_decorator_on_another_name_does_not_join_the_key() {
 fn a_declaration_only_body_is_not_a_unit() {
     let source = "@overload\ndef parse(x: int) -> int: ...\n\n@typing.overload\ndef parse(x: str) -> str:\n    ...\n\ndef parse(x):\n    return x\n\nclass Reader(Protocol):\n    def read(self) -> bytes:\n        \"\"\"Reads it.\"\"\"\n        ...\n";
     assert_eq!(names(source), ["parse"]);
+
+    let docstring_forms = "@overload\ndef parse(x: int) -> int:\n    (\"Parenthesized.\")\n    ...\n\n@overload\ndef parse(x: str) -> str:\n    \"Implicitly \" \"concatenated.\"\n    ...\n\ndef parse(x):\n    return x\n";
+    assert_eq!(names(docstring_forms), ["parse"]);
 }
 
 #[test]

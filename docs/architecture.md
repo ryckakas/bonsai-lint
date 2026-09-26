@@ -158,9 +158,11 @@ number beyond the fixed ones. `process(o) { process(o, user()); }` is then a del
 rather than recursion. An overload taking the same number of arguments still reads as a self-call,
 since only types could tell it apart.
 
-Python lists `self`, `cls` and the enclosing class's name inside a class, and lets a bare call
-count only in a module function: inside a method, a bare name resolves to a global, never to the
-method. `super().m()` has a call as its receiver, so it never matches.
+Python lists `self`, `cls` and the enclosing class's full dotted path inside a class, and lets a
+bare call count only in a module function: inside a method, a bare name resolves to a global,
+never to the method. A nested class's own name is not in scope inside its methods either, so
+`Outer.Inner.m()` reaches the method and a bare `Inner.m()` does not. `super().m()` has a call as
+its receiver, so it never matches.
 
 ### Generated files
 

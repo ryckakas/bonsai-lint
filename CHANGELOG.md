@@ -27,8 +27,9 @@ what a user reads on the GitHub release page.
     condition does not nest. A comprehension is free but raises nesting like a closure, as the
     callback chain it replaces does in JavaScript.
   - **Recursion.** A module function reaches itself by its bare name, and a method through
-    `self`, `cls` or its class. A bare call inside a method names a global, and `super()` runs
-    the parent's implementation, so neither is recursion.
+    `self`, `cls` or its class's full path, `Outer.Inner` for a nested class. A bare call inside
+    a method names a global, and `super()` runs the parent's implementation, so neither is
+    recursion.
   - **Units.** Lambdas, nested defs, comprehensions and the methods of local classes roll up into
     the enclosing function. Module code, class bodies and decorator arguments are the file's
     `<toplevel>`.

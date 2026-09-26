@@ -73,6 +73,12 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   standard library and Django that is 3 of 4,782 files. Its next release also turns
   `expression_statement` into a hidden supertype. The Python crate names no such node, and its
   naming and suppression tests fail if it ever comes to depend on one.
+- **Default parameter values are not scored.** A unit scores its body, and the top-level pass
+  skips a unit whole, so `def f(x=1 if flag else 2)` and `function f(x = a ? 1 : 2) {}` both
+  lose their ternary. Python evaluates a default when the `def` runs, in the enclosing scope, and
+  TypeScript when the call does, inside the function. Scoring them would be one change across every
+  language, deciding which of the two scopes each one is charged to, and it would raise existing
+  scores.
 - **The decorator-factory exemption.** The whitepaper exempts a function that holds only a nested
   function and its `return` from the nesting a closure adds. bonsai-lint applies it in no
   language, so the same shape scores the same everywhere. Adopting it would have to be one change

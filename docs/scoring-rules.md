@@ -72,6 +72,12 @@ Whatever is left over at file scope — procedural code, templates, route tables
 bootstrap, the values of a configuration object — is scored as a single `<toplevel>` unit per
 file, and reported only when it scores above zero.
 
+A unit scores its body. Default parameter values are not scored in any language, neither in the
+unit nor in the file's `<toplevel>`: `def f(x=1 if flag else 2)` and
+`function f(x = a ? 1 : 2) {}` both score 0. Logic in a default is rare, and where it belongs
+differs by language: Python evaluates a default when the `def` runs, TypeScript when the call
+does. So it waits for one decision across every language.
+
 A unit is reported on its signature line, below any `#[Attribute]` or `@decorator`. The
 `<toplevel>` unit is reported on line 1, and a suppression marker for it lives in the comment
 block at the top of the file, behind the open tag, the shebang or Go's `package` clause, and above
@@ -215,9 +221,11 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
   `await`, `del`, `global`, `:=` and decorators are free.
 - **Recursion:**
   - In a module function, a bare `f()` counts.
-  - In a method, `self.m()`, `cls.m()` and `C.m()` count.
-  - A bare `m()` inside a method names a global, not the method, and `super().m()` runs the
-    parent's implementation. Neither is recursion.
+  - In a method, `self.m()`, `cls.m()` and `C.m()` count. For a nested class the class is
+    reached by its full path, `Outer.Inner.m()`, because its own name is not in scope inside its
+    methods.
+  - A bare `m()` or `Inner.m()` inside a method names a global, not the method, and
+    `super().m()` runs the parent's implementation. None of them is recursion.
 - Module code, class bodies and decorator arguments run on import, so they are the file's
   `<toplevel>`.
 - A docstring is a string, not a comment, so it cannot carry a suppression marker.

@@ -161,10 +161,11 @@ fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {
     }
 }
 
-/// Inside a class a bare name resolves to a global, never to the method, which is reached
-/// through `self`, `cls` or the class itself.
+/// Inside a class a bare name resolves to a global, never to the method. So does a nested class's
+/// own name, which is not in scope inside its methods, so the method is reached through `self`,
+/// `cls` or the class's full dotted path, `Outer.Inner`.
 fn unit_scope(container: Option<&str>) -> UnitScope {
-    let Some(class) = container.and_then(|path| path.rsplit("::").next()) else {
+    let Some(path) = container else {
         return UnitScope {
             container: None,
             self_receivers: Vec::new(),
@@ -176,7 +177,7 @@ fn unit_scope(container: Option<&str>) -> UnitScope {
         self_receivers: vec![
             Cow::Borrowed("self"),
             Cow::Borrowed("cls"),
-            Cow::Owned(class.to_string()),
+            Cow::Owned(path.replace("::", ".")),
         ],
         bare_call_recurses: false,
     }
@@ -204,21 +205,31 @@ fn is_declaration_only(body: Node<'_>) -> bool {
         .named_children(&mut cursor)
         .filter(|statement| statement.kind() != "comment")
         .peekable();
-    statements.next_if(|first| is_expression(*first, "string"));
-    statements.peek().is_some() && statements.all(|statement| is_expression(statement, "ellipsis"))
+    statements.next_if(|first| expression(*first).is_some_and(is_string_constant));
+    statements.peek().is_some()
+        && statements
+            .all(|statement| expression(statement).is_some_and(|inner| inner.kind() == "ellipsis"))
 }
 
-/// An expression used as a statement, with or without the `expression_statement` wrapper the
-/// grammar is dropping.
-fn is_expression(statement: Node<'_>, kind: &str) -> bool {
-    if statement.kind() == kind {
-        return true;
+/// The expression a statement consists of, with or without the `expression_statement` wrapper
+/// the grammar is dropping.
+fn expression(statement: Node<'_>) -> Option<Node<'_>> {
+    if statement.kind() != "expression_statement" {
+        return Some(statement);
     }
-    statement.kind() == "expression_statement"
-        && statement.named_child_count() == 1
-        && statement
-            .named_child(0)
-            .is_some_and(|inner| inner.kind() == kind)
+    (statement.named_child_count() == 1)
+        .then(|| statement.named_child(0))
+        .flatten()
+}
+
+/// Parentheses and implicit concatenation still leave one string constant, so Python reads
+/// `("doc")` and `"a" "b"` as docstrings too.
+fn is_string_constant(expression: Node<'_>) -> bool {
+    match expression.kind() {
+        "string" | "concatenated_string" => true,
+        "parenthesized_expression" => expression.named_child(0).is_some_and(is_string_constant),
+        _ => false,
+    }
 }
 
 /// `a if c else b` leaves its condition unfielded between the two branches.

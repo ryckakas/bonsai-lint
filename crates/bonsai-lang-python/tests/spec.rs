@@ -277,6 +277,17 @@ fn a_method_recurses_through_self_cls_or_its_class() {
     }
 }
 
+/// A nested class's own name is not in scope inside its methods, so only its full path reaches
+/// the method; a bare `Inner` names a global, as a bare call does.
+#[test]
+fn a_nested_class_method_recurses_only_through_its_full_path() {
+    let full = "class Outer:\n    class Inner:\n        def target(self):\n            Outer.Inner.target(self)\n";
+    assert_eq!(score_of(full, "Outer::Inner::target"), 1);
+
+    let short = "class Outer:\n    class Inner:\n        def target(self):\n            Inner.target(self)\n";
+    assert_eq!(score_of(short, "Outer::Inner::target"), 0);
+}
+
 /// Inside a method a bare name resolves to a global, never to the method itself.
 #[test]
 fn a_bare_call_inside_a_method_is_not_recursion() {
