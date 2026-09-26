@@ -331,7 +331,7 @@ package after the package, so the command users get matches the thing they insta
 expected to match. Publishing is manual — `vsce` needs an Azure DevOps PAT.
 
 **The extension depends on the `bonsai-lint` npm package** on a caret range. Under 0.x a caret
-stops at the minor version, so `^0.4.0` accepts 0.4.x but not 0.5.0, and a minor CLI release
+stops at the minor version, so `^0.4.1` accepts later 0.4.x but not 0.5.0, and a minor CLI release
 needs the range raised along with the relock below. It resolves the binary from
 `bonsai-lint.path` first, then from that package, then from `PATH`.
 
