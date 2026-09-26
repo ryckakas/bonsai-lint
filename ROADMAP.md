@@ -45,8 +45,11 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   leaves the baseline with an un-silenceable finding. Teaching `bound_name` to unwrap a sole
   object argument would give `Widget::setup` and fix both, at the cost of changing existing
   baseline keys. Go reaches the same collision through package-level tables: every row of
-  `map[string]*cmd{"hg": {run: func…}, "git": {run: func…}}` binds a literal to `run`. Java
-  overloads never reach it, because a method's key carries its parameter types.
+  `map[string]*cmd{"hg": {run: func…}, "git": {run: func…}}` binds a literal to `run`. Python
+  reaches it through a def redefined under `if`/`else`, and through `functools.singledispatch`
+  implementations that are all named `_`. Java overloads never reach it, because a method's key
+  carries its parameter types, and neither do Python's property accessors, because the accessor
+  joins the key.
 - **`super.f()` counts as recursion in TypeScript.** In Java, `super.m()` inside `m()` is an
   override calling its parent and is not recursion. TypeScript still lists `super` among a
   method's self-receivers, so `method() { super.method(); }` costs +1 there. Aligning the two
@@ -56,10 +59,28 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   binary would travel as per-platform Maven Central artifacts, in the pattern `protoc` uses,
   resolved by a Maven and a Gradle plugin, and published by a dist job as the Go module is.
   SDKMAN! and an IntelliJ plugin would come after.
+- **Python through PyPI and pre-commit.** Python teams install linters with pip, uv or pipx and
+  run them from pre-commit, rarely from npm or Homebrew. The binary would travel as per-platform
+  wheels on PyPI, with a `.pre-commit-hooks.yaml` beside it, published by a dist job as the Go
+  module is.
 - **Newer Java syntax.** tree-sitter-java 0.23.5 has seen no grammar work since 2023, so a few
   Java 21–25 constructs parse with an error. The surrounding code still scores, and the list is
   in [docs/scoring-rules.md](docs/scoring-rules.md). A newer grammar release is picked up by
   bumping the dependency, and the grammar contract names anything it renamed.
+- **Python grammar gaps.** tree-sitter-python 0.25.0 parses a few constructs with an error: a
+  slice in a parameter annotation, several starred items in one subscript, type parameter
+  defaults, and a bracketed continuation line indented less than its block. On CPython's
+  standard library and Django that is 3 of 4,782 files. Its next release also turns
+  `expression_statement` into a hidden supertype. The Python crate names no such node, and its
+  naming and suppression tests fail if it ever comes to depend on one.
+- **The decorator-factory exemption.** The whitepaper exempts a function that holds only a nested
+  function and its `return` from the nesting a closure adds. bonsai-lint applies it in no
+  language, so the same shape scores the same everywhere. Adopting it would have to be one change
+  across every language, and it would lower existing scores.
+- **Parallel CPU overhead.** A parallel scan spends 1.7–1.8× the CPU time of `--jobs 1` in every
+  language: 6.9s against 4.0s on 1.5 million lines of Python on a ten-core M5. Some of that is
+  efficiency cores doing less work per second; the rest may be contention worth profiling. On
+  Python, tree-sitter parsing alone is about 70% of a serial scan.
 
 - **A domain cannot opt a language out.** Per-language thresholds work per domain, but there is
   no way to say that a domain is TypeScript only. The workaround is an `exclude` glob.

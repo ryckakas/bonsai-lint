@@ -74,6 +74,7 @@ function settings(): Settings {
       "vue",
       "go",
       "java",
+      "python",
     ]),
     threshold: typeof threshold === "number" ? threshold : undefined,
   };

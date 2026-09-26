@@ -8,15 +8,16 @@ linear flow of the code; **+nesting** for a flow-breaker that sits inside other 
 | Construct | Increment | Raises nesting |
 | --- | --- | --- |
 | `if`, ternary | +1 +nesting | yes |
-| `else if` / `elseif`, `else` | +1 flat | yes |
+| `else if` / `elseif` / `elif`, `else` | +1 flat | yes |
+| `else:` on a Python loop or `try` | +1 flat | its body sits where the construct's own body does |
 | `switch`, `match`, `select` | +1 +nesting (not per arm) | yes |
 | `for`, `foreach`, `for…of`, `for…in`, `while`, `do` | +1 +nesting | yes |
-| `catch` | +1 +nesting | yes |
-| `try`, `finally`, `synchronized` | — | no |
+| `catch`, `except` | +1 +nesting | yes |
+| `try`, `finally`, `synchronized`, `with` | — | no |
 | Labelled jump (`break 2`, `break outer`, `goto`) | +1 | no |
 | Sequence of like boolean operators | +1 per run | no |
 | Direct recursion | +1 | no |
-| Closure, arrow function, lambda, nested function, anonymous class method | — | yes |
+| Closure, arrow function, lambda, nested function, anonymous class method, comprehension | — | yes |
 | Class, interface, trait, enum, record, namespace, object literal | — | no |
 
 `else if` takes a flat increment deliberately: a long chain reads linearly, so penalising it for
@@ -66,14 +67,15 @@ A function-like is a scoring unit when **no other function-like encloses it in t
 That includes closures: a PHP routes file made of `Route::get(..., function () {})` calls scores
 one unit per route, exactly as its Express equivalent does. Anything nested inside rolls up. A
 declaration without a body — an abstract or interface method, a TypeScript signature, a Go
-function implemented in assembly — is not a unit. Whatever is left over at file scope —
-procedural code, templates, route tables, module-level bootstrap, the values of a configuration
-object — is scored as a single `<toplevel>` unit per file, and reported only when it scores
-above zero.
+function implemented in assembly, a Python def whose body is only `...` — is not a unit.
+Whatever is left over at file scope — procedural code, templates, route tables, module-level
+bootstrap, the values of a configuration object — is scored as a single `<toplevel>` unit per
+file, and reported only when it scores above zero.
 
 A unit is reported on its signature line, below any `#[Attribute]` or `@decorator`. The
 `<toplevel>` unit is reported on line 1, and a suppression marker for it lives in the comment
-block at the top of the file, behind the open tag, the shebang or Go's `package` clause.
+block at the top of the file, behind the open tag, the shebang or Go's `package` clause, and above
+a Python module docstring.
 
 A `.vue` file is the exception to both. Only its script blocks are parsed, so `<toplevel>` is
 reported at the start of the first one rather than line 1, and a marker above `<template>` is
@@ -95,6 +97,25 @@ written:
 | `const config = (() => {})()` | `config` |
 | `app.get('/x', (req, res) => {})` | `app.get#1` |
 | anything else | `<anonymous>` |
+
+| Python | Unit key |
+| --- | --- |
+| `def process(order):` | `process` |
+| `async def fetch(url):` | `fetch` |
+| `class OrderService:` holding `def process(self, o):` | `OrderService::process` |
+| `class Outer:` holding `class Inner:` holding `def m(self):` | `Outer::Inner::m` |
+| `@property def total(self)`, then `@total.setter def total(self, v)` | `Cart::total`, `Cart::total.setter` |
+| `@overload def parse(x: int) -> int: ...`, or any body of only `...` | not a unit |
+| `handler = lambda e: …` | `handler` |
+| `class C:` holding `key = lambda self: …` | `C::key` |
+| `items: list = field(default_factory=lambda: [])` in `class C:` | `C::items` |
+| `atexit.register(lambda: …)` | `atexit.register#0` |
+| anything else | `<anonymous>` |
+
+A property's getter, setter and deleter redefine one name on purpose, so the accessor a decorator
+declares, `@total.setter`, joins the key after a dot, and each accessor is baselined apart.
+Python has no other overloading. A def redefined under `if`/`else`, or several
+`functools.singledispatch` implementations all named `_`, share one key.
 
 | Java | Unit key |
 | --- | --- |
@@ -168,6 +189,50 @@ entry. Where two positional or anonymous keys collide, the later one gains a `~2
   and the various type-level signatures — are not units.
 - `.js` is parsed with the TypeScript grammar. Flow-annotated `.js` will misparse.
 - `super.f()` and `ClassName.f()` count as self-reference for recursion, as `this.f()` does.
+
+**Python**
+
+- `elif` scores exactly as `else if`. An `if` alone under `else:` is nested code, because Python
+  spells a chain `elif`.
+- An `else:` on a `for`, `while` or `try` costs +1, like any `else`: it runs only when the loop
+  did not break, or nothing was raised, and the reader has to track that. Its body sits where
+  the construct's own body does, one level inside a loop and at a `try`'s own depth.
+- `match` costs one increment for the whole statement, and its cases nest. A `case … if` guard
+  costs only its operators.
+- Each `except`, `except*` included, costs +1 +nesting. `try`, `finally` and `with` are free and
+  do not nest.
+- `and` and `or` normalise onto `&&` and `||`, and `not` ends a run as `!` does. `&`, `|` and `^`
+  are bitwise operators and free.
+- A conditional expression, `a if c else b`, costs +1 +nesting like a ternary. The grammar leaves
+  its condition unfielded between the two branches; it is header all the same, and does not nest.
+- A comprehension or generator expression costs nothing but raises nesting like a closure. It has
+  its own scope, and it is what JavaScript writes as a `.filter().map()` chain, which scores that
+  way. A ternary or operator inside it still counts.
+- A lambda and a nested def raise nesting and roll up wherever they sit, and so do the methods of
+  a class defined inside a function. A decorator factory, a function holding only a nested
+  function and its `return`, is not exempt: the same shape nests in every other language.
+- Python has no labels, so `break` and `continue` are always free. `assert`, `raise`, `yield`,
+  `await`, `del`, `global`, `:=` and decorators are free.
+- **Recursion:**
+  - In a module function, a bare `f()` counts.
+  - In a method, `self.m()`, `cls.m()` and `C.m()` count.
+  - A bare `m()` inside a method names a global, not the method, and `super().m()` runs the
+    parent's implementation. Neither is recursion.
+- Module code, class bodies and decorator arguments run on import, so they are the file's
+  `<toplevel>`.
+- A docstring is a string, not a comment, so it cannot carry a suppression marker.
+- A file whose comments before the first line of code say both "generated" and "do not edit" is
+  neither scored nor counted. That is how protobuf, gRPC and Thrift output marks itself. A Django
+  migration says only "Generated by Django", because it is meant to be edited.
+- **Grammar gaps.** These parse with an error:
+  - a slice in a parameter annotation, `def f(x: a[:, 0])` (the same slice in an expression
+    parses);
+  - several starred items in one subscript, `Union[*args, *rest]`;
+  - type parameter defaults, `def f[T = int]()` (Python 3.13);
+  - a bracketed continuation line indented less than its block.
+
+  The code around the error still scores. In a class whose body holds one, the methods after it
+  may lose the class from their keys.
 
 **Java**
 
@@ -268,6 +333,14 @@ rolling up says how hard the whole thing is to read in place.
 | A loop or `switch` header | one level deeper | at the construct's own depth |
 | A method calling itself through its receiver | not recursion | +1 |
 | A builtin sharing a method's name, `append()` inside `append` | +1, as recursion | free |
+| A Python comprehension, `[x for x in xs if x]` | each `for` and `if` clause +1, or ignored | free, but nests like the callback chain it replaces |
+| A Python loop's or `try`'s `else:` | free | +1, like any `else` |
+| A Python `match` | free | +1, like a `switch` |
+| `f(key=a or b)`, `(x or "") + y`, `f"{a and b}"` | not counted | +1, wherever the operator sits |
+| A function holding only a nested function and its `return` | the inner one keeps its level | one level deeper, like any closure |
+| A nested function under an `if` or `with`, or a method of a local class | no deeper than the code around it | one level deeper, like any closure |
+| A bare `m()` inside Python method `m` | +1, as recursion | free: the name is a global |
+| A Python function recursing twice | +1 once, and not through `self` | +1 per call, through `self`, `cls` or its class |
 | A local closure sharing its function's name | resolved to the local | +1 per call, matched by name |
 | A Java overload taking as many arguments | resolved by type, not recursion | +1, matched by name and argument count |
 | A call through another instance of the same type, `left.count()` | +1, as recursion | free |
@@ -281,6 +354,10 @@ Every chain body sits one level below its `if` because `else if` is a flat incre
 later link deeper would charge a long chain for its length, which is exactly what the flat
 increment exists to avoid. A run that returns to an operator after switching away costs again,
 as the counting rule states: `a && b || c && d` switches operator twice, so it is three runs.
+
+Some implementations skip whole positions, and never look inside a keyword argument, an operand of
+`+`, a subscript or an f-string, so an operator, a ternary or a comprehension there costs nothing.
+bonsai-lint counts a flow-breaker wherever it sits.
 
 ## How these rules are pinned
 

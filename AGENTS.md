@@ -63,6 +63,7 @@ crates/
 ├── bonsai-lang-go/     Go node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-java/   Java node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-php/    PHP node kinds, field names and hooks
+├── bonsai-lang-python/ Python node kinds, field names and hooks, and its generated-file check
 ├── bonsai-lang-ts/     TypeScript and TSX, sharing one spec across both dialects
 ├── bonsai-lang-vue/    Vue SFCs: locates the script blocks, scores them with the TS spec
 ├── bonsai-engine/      registry, configuration, domains, baselines, the scan driver
@@ -102,13 +103,17 @@ reading it.
 implementing `Hooks` and `LanguageDescriptor`; a fixture exercising every declared kind, wired
 through `GrammarFixture::assert_contract()`; the scores pinned as `(snippet, total)` tables in
 `tests/spec.rs`; and registering the descriptor in `bonsai-engine/src/registry.rs` behind a cargo
-feature. The full checklist (CI matrix, `cli_<id>.rs`, wasm, extension) is in
-[docs/architecture.md](docs/architecture.md); the CLI's `--lang` help reads the registry and
-needs no edit. Most of the effort is the fixture and score tables, not the spec itself. A grammar
-shape the defaults can't read is handled by overriding that hook in the language's own crate, as
-Go overrides `if_parts` for its node-less `else` and its `if` initializer. Java overrides
-`if_parts` for the same missing `else` node, `unit_body` because `static { }` leaves its block
-unfielded, and `call_reaches_unit` because overloads share a name.
+feature. The full checklist (`cli_<id>.rs`, wasm, extension) is in
+[docs/architecture.md](docs/architecture.md); CI's feature powerset reads the manifest and the
+CLI's `--lang` help reads the registry, so neither needs an edit. Most of the effort is the
+fixture and score tables, not the spec itself. A grammar shape the defaults can't read is handled
+by overriding that hook in the language's own crate, as Go overrides `if_parts` for its node-less
+`else` and its `if` initializer. Java overrides `if_parts` for the same missing `else` node,
+`unit_body` because `static { }` leaves its block unfielded, and `call_reaches_unit` because
+overloads share a name. Python overrides `if_parts` because `elif` holds its branch in
+`consequence`, `unit_body` so a body of only `...` is not a unit, and `is_control_header` because
+`a if c else b` leaves its condition unfielded. Core charges an `else` that no if chain claims
++1, which only Python's loop and `try` else reach.
 
 **`GrammarFixture::assert_contract()`** (`bonsai-testkit`) makes six assertions per language,
 because an id-indexed table fails in ways a string match doesn't: the fixture parses cleanly; the
@@ -145,9 +150,9 @@ them when touching scan/domain/path code:
   replay shows up on stderr, not in the report, and a test for it needs several invalid-UTF-8
   files, not one.
 - A file its language marks as generated (`LanguageDescriptor::is_generated`: Go's
-  `// Code generated … DO NOT EDIT.` header, or a Java header comment saying both "generated" and
-  "do not edit") is read, then dropped on the worker without being
-  counted, like a `.min.js` the plan never admits; `--stdin` answers it with an empty report.
+  `// Code generated … DO NOT EDIT.` header, or a Java or Python header comment saying both
+  "generated" and "do not edit") is read, then dropped on the worker without being counted,
+  like a `.min.js` the plan never admits; `--stdin` answers it with an empty report.
 - Invalid UTF-8 is decoded leniently with a warning (replacement bytes land in strings/comments,
   which don't score); an unreadable file is a hard error and fails the run.
 - A closed stdout ends output quietly and leaves the exit code to the findings, not to the write
@@ -159,13 +164,13 @@ Homebrew reuse), the extension's `displayName` and `description`, and the cover'
 
 The supported languages are enumerated in exactly two places, the README intro and its
 supported-languages table. Both are ordered by usage rather than by when support landed:
-JavaScript, TypeScript, Vue, Java, PHP, Go. That is the Stack Overflow developer survey order,
-with Vue beside TypeScript because it is scored as TypeScript. A new language is slotted in by
-the same ranking, and `docs/scoring-rules.md` orders its per-language tables and sections the
-same way.
+JavaScript, TypeScript, Vue, Python, Java, PHP, Go. That is the Stack Overflow developer survey
+order, ranking a family by its most-used member: Vue sits beside TypeScript because it is scored
+as TypeScript, and Python follows that family. A new language is slotted in by the same
+ranking, and `docs/scoring-rules.md` orders its per-language tables and sections the same way.
 
 Everything else that names languages is functional and follows the registry:
-- the cargo features, and the CI matrix;
+- the cargo features, which CI's feature powerset reads;
 - the extension's activation events and its default `bonsai-lint.languages`;
 - the search tags: GitHub topics and the extension's `keywords`.
 
@@ -186,6 +191,10 @@ projects on crates.io/npm/VS Code Marketplace).
   parse-clean check. Its second helper, `findings_in_a_grammar_gap`, insists the snippet does
   *not* parse cleanly. It pins the workaround for syntax tree-sitter-java cannot read yet, such
   as `String @Nullable ... args`, and fails once a grammar upgrade learns it.
+- `bonsai-lang-python` has the same suites as Go, `generated.rs` included, and the same
+  parse-clean check, since indentation is easy to get wrong inside a Rust string. Its
+  `common::score` wraps a flush-left snippet in `def target():` and indents every line, so the
+  score tables stay readable.
 - `bonsai-lang-vue` reuses the TypeScript spec under a second id, so it has no naming or scoring
   suite of its own. It has `grammar.rs` (the spec against both TS grammars), `host_grammar.rs`
   (the HTML grammar's kinds, which nothing else would fail on), `sfc.rs` (block extraction) and
@@ -194,9 +203,9 @@ projects on crates.io/npm/VS Code Marketplace).
   discovery, domains, and baseline read/write against real temp directories.
 - `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area (`cli_report.rs`,
   `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`,
-  `cli_go.rs`, `cli_java.rs`) over a
-  shared `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in
-  a fifth of a second while `cli_parallel` is the slow one.
+  `cli_go.rs`, `cli_java.rs`, `cli_python.rs`) over a shared `tests/common/mod.rs`. Each file is
+  its own test binary, so `--test cli_vue` runs in a fifth of a second while `cli_parallel` is
+  the slow one.
 - Cross-language parity (the same logic scoring identically in every language) is a tested
   property, not an assumption — see the README's "same code scores the same" example when
   changing shared scoring logic in `bonsai-core`.

@@ -28,6 +28,7 @@ const LANG_PHP: u32 = 1;
 const LANG_VUE: u32 = 2;
 const LANG_GO: u32 = 3;
 const LANG_JAVA: u32 = 4;
+const LANG_PYTHON: u32 = 5;
 
 // A raw `Layout` rather than `Vec::with_capacity`, because freeing has to name the exact
 // layout that was allocated and `with_capacity` only promises *at least* the requested size.
@@ -97,6 +98,7 @@ fn descriptor(language: u32) -> Option<&'static dyn LanguageDescriptor> {
         LANG_VUE => Some(&bonsai_lang_vue::VUE),
         LANG_GO => Some(&bonsai_lang_go::GO),
         LANG_JAVA => Some(&bonsai_lang_java::JAVA),
+        LANG_PYTHON => Some(&bonsai_lang_python::PYTHON),
         _ => None,
     }
 }
