@@ -65,6 +65,17 @@ it as header. It also gave core one rule no other grammar reaches: an `else` tha
 claims, as on a Python loop or `try`, costs +1 on its own. Its property accessors reuse
 `with_signature` for `.setter` and `.deleter`.
 
+### Why every language goes through tree-sitter
+
+A parser written by hand for one language is faster. Against tools built on one, bonsai-lint
+measures about 3× slower per core, and on Python the tree-sitter parse alone is 70% of a
+single-threaded run. The trade is deliberate. One walker over one kind of tree is what makes the
+parity above structural, and a second parser would need a second walker holding the same rules.
+Every grammar also returns a tree for broken code, which the editor relies on because it scans
+on every edit, and a new language costs a spec and hooks rather than a parser. Besides speed, the
+price is that a grammar can trail its language, as Java's grammar-gap tests record. In wall
+time the difference is about a third of a second on 1.5M lines of Python.
+
 ### Adding a language
 
 1. Add a crate with the grammar dependency, a `LanguageSpec`, a type implementing `Hooks` and a
