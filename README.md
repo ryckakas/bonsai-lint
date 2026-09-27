@@ -9,7 +9,8 @@ your syntax trees.*
 
 A multi-language cognitive complexity linter written in Rust. One static binary that currently
 reads JavaScript, TypeScript, Vue single-file components, Python, Java, PHP and Go. Use it for any
-one of them, or all at once. No runtime or toolchain for any of them, nothing added to your project.
+one of them, or all at once. No runtime or toolchain for any of them, and nothing to wire into your
+project.
 Scans **1.26 million lines in 0.8 seconds**.
 
 The official site is **[bonsai.kauneckas.dev](https://bonsai.kauneckas.dev)**: install and editor
@@ -18,6 +19,7 @@ guides, and a [playground](https://bonsai.kauneckas.dev/play/) that scores code 
 [![CI](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/ryckakas/bonsai-lint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/bonsai-lint?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/bonsai-lint)
 [![PyPI](https://img.shields.io/pypi/v/bonsai-lint?color=3775A9&logo=pypi&logoColor=white)](https://pypi.org/project/bonsai-lint/)
+[![Packagist](https://img.shields.io/packagist/v/bonsai-lint/bonsai-lint?color=F28D1A&logo=packagist&logoColor=white)](https://packagist.org/packages/bonsai-lint/bonsai-lint)
 [![dependencies](https://deps.rs/repo/github/ryckakas/bonsai-lint/status.svg)](https://deps.rs/repo/github/ryckakas/bonsai-lint)
 ![Rust 1.90+](https://img.shields.io/badge/rust-1.90%2B-CE422B)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
@@ -44,10 +46,11 @@ fine; three nested `if`s are the reverse.
 ## Install
 
 ```bash
-npx bonsai-lint --over 15 src/            # run it without installing anything
+npx bonsai-lint src/                      # run it without installing anything
 npm install -D bonsai-lint                # or pin it in the project
-uvx bonsai-lint --over 15 src/            # the same, for a Python project
+uvx bonsai-lint src/                      # the same, for a Python project
 pip install bonsai-lint                   # or: uv tool install / pipx install bonsai-lint
+composer require --dev bonsai-lint/bonsai-lint   # in a PHP project
 brew install ryckakas/tap/bonsai-lint     # macOS and Linux
 go install bonsai.kauneckas.dev/bonsai-lint@latest
 cargo install bonsai-lint                 # from source
@@ -59,14 +62,14 @@ and Node only launches it. The analysis itself is pure Rust.
 
 Linux has two builds. One links glibc 2.35 or newer. The other is static and runs on any Linux,
 which covers Alpine and other musl systems as well as older glibc. The installer script, the npm
-package and the Go module each pick the right one for you, and the PyPI wheels always carry the
-static one.
+package and the Go module each pick the right one for you. The PyPI wheels and the Composer package
+always use the static one.
 
 In a Go module, `go get -tool bonsai.kauneckas.dev/bonsai-lint@latest` pins it in `go.mod`, and
 `go tool bonsai-lint` runs it (Go 1.24+). The Go module is a launcher with no dependencies, at the
 same version as the CLI. The first run of each version downloads that release's binary, checks it
 against a checksum recorded in the module, and caches it. The platforms and settings are in
-[bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go).
+[bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher).
 
 From PyPI, `pip install bonsai-lint`, `uv tool install bonsai-lint` or `pipx install bonsai-lint`
 puts the binary on your PATH, and `uvx bonsai-lint` runs it without installing anything. Each wheel
@@ -75,6 +78,14 @@ Linux on x86_64 and arm64 (glibc 2.17 or newer, or musl), and Windows on x64. Th
 distribution, so any other platform gets pip's "no matching distribution". That includes an ARM64
 Python on Windows, where an x64 Python works under emulation, and so does
 `cargo install bonsai-lint`.
+
+From v0.4.3, in a PHP project, `composer require --dev bonsai-lint/bonsai-lint` adds it and
+`vendor/bin/bonsai-lint` runs it. The Composer package is a launcher with no dependencies, at the
+same version as the CLI, and needs PHP 7.4 or newer. The first run of each version downloads that
+release's binary, checks it against a checksum recorded in the package, and caches it inside
+`vendor/`. In CI, cache `vendor/` or set `BONSAI_LINT_CACHE` to skip that download. Its platforms
+and settings are in [bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher), which
+holds the Go module too.
 
 As a [pre-commit](https://pre-commit.com) hook, from v0.4.2:
 

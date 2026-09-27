@@ -1,0 +1,172 @@
+name: Publish the launchers
+
+# Called by release.yml once the GitHub Release exists. It tags bonsai-lint-launcher, which is the Go
+# module and the Composer package at once; dispatched by hand, it reruns a failed publish or
+# rehearses one. A published version is permanent in both, so a tag is never moved.
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release to publish, e.g. v0.4.3"
+        required: true
+        type: string
+      rehearsal:
+        description: "Push to refs/rehearsal/<tag> of bonsai-lint-launcher instead: no tag, no proxy"
+        type: boolean
+        default: true
+      saved_manifest:
+        description: "Rehearsals only: a dist-manifest.json in bonsai-lint-launcher to use instead"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Tag bonsai-lint-launcher
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PLAN: ${{ inputs.plan }}
+      INPUT_TAG: ${{ inputs.tag }}
+      REHEARSAL: ${{ inputs.rehearsal == true }}
+      SAVED_MANIFEST: ${{ inputs.saved_manifest }}
+    steps:
+      - name: Resolve the release
+        run: |
+          tag="${INPUT_TAG:-$(jq -r .announcement_tag <<<"$PLAN")}"
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$tag is not a release tag; prereleases are not published to Go or Composer"
+            exit 1
+          fi
+          if [ -n "$SAVED_MANIFEST" ] && [ "$REHEARSAL" != true ]; then
+            echo "::error::saved_manifest is for rehearsals only"
+            exit 1
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: bonsai-lint
+          sparse-checkout: |
+            Cargo.toml
+            crates/bonsai-lint/Cargo.toml
+          sparse-checkout-cone-mode: false
+
+      # The tag push below authenticates with the credentials this checkout leaves in .git/config,
+      # and the job uploads no artifact they could leak through.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ryckakas/bonsai-lint-launcher
+          token: ${{ secrets.GO_MODULE_TOKEN }} # zizmor: ignore[artipacked]
+          path: launcher
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.5"
+          tools: composer
+          coverage: none
+
+      # The plan dist passes in is written before the build, so it has no checksums yet.
+      - name: Fetch the released manifest
+        run: |
+          if [ -n "$SAVED_MANIFEST" ]; then
+            cp "launcher/$SAVED_MANIFEST" dist-manifest.json
+          else
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern dist-manifest.json
+          fi
+          released="$(jq -r .announcement_tag dist-manifest.json)"
+          if [ "$released" != "$TAG" ]; then
+            echo "::error::the manifest is for $released, not $TAG"
+            exit 1
+          fi
+
+      - name: Generate the release files and test both launchers
+        working-directory: launcher
+        run: |
+          go run ./internal/generate -manifest ../dist-manifest.json -php composer/src/Release.php
+          go vet ./...
+          go test ./...
+          php composer/tests/run.php
+          composer validate --strict
+          git diff --stat
+
+      # composer.json repeats the crate's metadata by hand, and only this job sees both side by side.
+      - name: The Composer package describes the crate
+        run: |
+          python3 - <<'EOF'
+          import json, sys, tomllib
+          crate = tomllib.load(open("bonsai-lint/crates/bonsai-lint/Cargo.toml", "rb"))["package"]
+          workspace = tomllib.load(open("bonsai-lint/Cargo.toml", "rb"))["workspace"]["package"]
+          package = json.load(open("launcher/composer.json"))
+          problems = []
+          if package["description"] != crate["description"]:
+              problems.append(f"description is {package['description']!r}, the crate's is {crate['description']!r}")
+          if package["license"] != workspace["license"]:
+              problems.append(f"license is {package['license']!r}, the crate's is {workspace['license']!r}")
+          missing = [keyword for keyword in crate["keywords"] if keyword not in package["keywords"]]
+          if missing:
+              problems.append(f"keywords lack the crate's {missing}")
+          for problem in problems:
+              print(f"::error::bonsai-lint-launcher's composer.json: {problem}")
+          sys.exit(1 if problems else 0)
+          EOF
+
+      # Nothing is tagged until both launchers have fetched, verified and run this very release.
+      - name: Run the release through both launchers
+        working-directory: launcher
+        run: |
+          BONSAI_LINT_CACHE="$RUNNER_TEMP/go-cache" go run . --version | tee version.txt
+          grep -Fx "bonsai-lint ${TAG#v}" version.txt
+          bash composer/tests/smoke.sh "$TAG"
+
+      - name: Tag the release
+        working-directory: launcher
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898233+github-actions[bot]@users.noreply.github.com"
+          git add release.go composer/src/Release.php
+          if [ "$REHEARSAL" = true ]; then
+            git commit --quiet -m "release $TAG (rehearsal)"
+            # Outside refs/heads, so Packagist never lists it as a branch.
+            git push --force origin "HEAD:refs/rehearsal/$TAG"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            git fetch --quiet origin "refs/tags/$TAG:refs/tags/$TAG"
+            if git diff --quiet "$TAG" -- release.go composer/src/Release.php; then
+              echo "$TAG is already published with these release files"
+              exit 0
+            fi
+            echo "::error::$TAG already exists in bonsai-lint-launcher with different release files"
+            exit 1
+          fi
+          # Only the tag reaches the remote: main keeps both placeholders.
+          git commit --quiet -m "release $TAG"
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
+
+      # The proxy fetches a version on its first request: make that now, not at a user's install.
+      # Packagist needs no such nudge; its GitHub hook fires on the tag push.
+      - name: Ask the Go proxy for it
+        if: env.REHEARSAL != 'true'
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            curl -fsS "https://proxy.golang.org/bonsai.kauneckas.dev/bonsai-lint/@v/$TAG.info" && exit 0
+            echo "attempt $attempt: the proxy does not have $TAG yet"
+            sleep 20
+          done
+          exit 1

@@ -5,3 +5,4 @@ editors/vscode/out/
 .DS_Store
 /build/
 /*.egg-info/
+__pycache__/

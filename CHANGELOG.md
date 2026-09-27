@@ -12,6 +12,17 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- **Installing through Composer.** `composer require --dev bonsai-lint/bonsai-lint` adds it to a
+  PHP project, and `vendor/bin/bonsai-lint` runs it. The package is a launcher with no
+  dependencies that needs PHP 7.4 or newer. The first run of each version downloads that release's
+  binary, checks it against a checksum recorded in the tagged package, and caches it inside
+  `vendor/`. It honours the proxy variables the way Composer does, and never sends a GitHub or
+  Composer token. It lives beside the Go launcher in
+  [bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher), the renamed
+  bonsai-lint-go, and one tag publishes both.
+
 ## [0.4.2] - 2026-09-27
 
 ### Added
