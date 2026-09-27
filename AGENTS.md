@@ -47,7 +47,8 @@ gates. Each run rewrites one comment on the pull request, found by its
 `<!-- bonsai-lint-coverage -->` marker, with the totals and a line per crate. The only job allowed
 to comment runs none of the pull request's code; a fork's pull request gets the table in the run
 summary instead. Doc tests are not counted, since collecting them needs nightly, and neither is the
-separate wasm workspace.
+separate wasm workspace. Mutation testing is too slow for CI and runs on demand; see Testing
+conventions.
 
 Every language is behind a cargo feature; `vue` implies `ts` because it reuses that spec. The
 registry must keep compiling with any feature subset, including none — this is exercised, not
@@ -239,6 +240,31 @@ projects on crates.io/npm/PyPI/VS Code Marketplace).
 - Cross-language parity (the same logic scoring identically in every language) is a tested
   property, not an assumption — see the README's "same code scores the same" example when
   changing shared scoring logic in `bonsai-core`.
+- `bonsai-core` has no grammar, so the language crates test its behaviour. Its one suite,
+  `tests/kind_sets.rs`, checks that `KindSets::all` yields every list, because two of the
+  contract's checks see only the kinds it yields. PHP's `grammar.rs` also proves that a spec its
+  grammar no longer matches fails to compile, and that the error names what to fix.
+
+Mutation testing runs on demand, never in CI. On 2026-09-27, `bonsai-core`'s 237 mutants took
+26 minutes with four jobs on a 10-core machine, which would take hours on a CI runner, and the
+whole workspace has 1112. Run it after changing scoring logic in `bonsai-core`, or over just the
+lines a branch changed:
+
+```bash
+cargo install --locked cargo-mutants
+cargo mutants --package bonsai-core --test-workspace true --all-features -j 4 --timeout 120
+git diff origin/main > /tmp/branch.diff
+cargo mutants --workspace --in-diff /tmp/branch.diff --test-workspace true --all-features -j 4 --timeout 120
+```
+
+- **`--test-workspace true`:** `bonsai-core` is tested from the language crates, so without it
+  every mutant there survives.
+- **`--timeout 120`:** the unmutated baseline runs only the package's own tests, which sets the
+  automatic timeout to its 20-second floor, below a full workspace run.
+- **A surviving mutant is a question, not a missing test.** Of that run's 22 survivors, 11 changed
+  nothing observable: trait defaults every language overrides, equivalent bit operations, a
+  `Debug` implementation and a branch no language reaches. The other 11 were real gaps, now
+  tested.
 
 ## Comments
 
