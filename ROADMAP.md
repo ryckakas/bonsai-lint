@@ -114,6 +114,12 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   but npm still takes the stored `NPM_TOKEN`. dist's generated npm job has no `id-token: write`,
   and it runs Node 20, whose npm is older than the 11.5.1 that OIDC needs. Replacing dist's npm
   job with a custom publish job, as `publish-go.yml` does for Go, would remove the token.
+- **A GitHub App for the launcher tags.** `publish-launcher.yml` pushes the Go and Composer
+  launchers' tags with `GO_MODULE_TOKEN`, a fine-grained personal token, because a workflow's own
+  token reaches only its own repository and GitHub has no trusted publishing between repositories.
+  An app installed on bonsai-lint-launcher alone would mint a one-hour token per run, belong to no
+  account, and could be the only actor a tag ruleset lets create `v*` tags. Its private key would
+  still be a stored secret.
 - **A long lived editor server.** The extension currently starts a process per analysis. A
   `--server` mode reusing the `--stdin` input shape would cut the per keystroke cost.
 - **Type aware linting for the extension.** The TypeScript source has no linter beyond `tsc`.
