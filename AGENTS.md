@@ -25,20 +25,29 @@ cargo hack build -p bonsai-lint --feature-powerset    # every language subset, i
 typos                                                 # spelling; deliberate misspellings: _typos.toml
 taplo fmt --check                                     # TOML formatting: .taplo.toml
 zizmor .github                                        # workflow security: .github/zizmor.yml
+cargo llvm-cov --workspace --all-features --summary-only   # test coverage, per file
 ```
 
-The last six are separate tools:
-`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor`.
+The last seven are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor cargo-llvm-cov`,
+and coverage also needs `rustup component add llvm-tools-preview`.
 
 Every action in the workflows is pinned to a commit, with its version in a comment, and every
 workflow but `release.yml` defaults to a read-only token. A new `uses:` line follows the same
 form, and `zizmor` fails CI until it does.
 
-CI (`.github/workflows/ci.yml`) runs exactly the commands above, plus a test matrix across
-Linux/macOS/Windows, a build-only check on the MSRV read from `Cargo.toml` (`rust-version`), and
-the tests on `x86_64-unknown-linux-musl`, the only build that swaps in mimalloc (it needs
-`musl-tools`, so on macOS run it in an `ubuntu` container). Match these locally before pushing
-rather than relying on CI to catch it.
+CI (`.github/workflows/ci.yml`) runs exactly the commands above but the coverage, plus a test
+matrix across Linux/macOS/Windows, a build-only check on the MSRV read from `Cargo.toml`
+(`rust-version`), and the tests on `x86_64-unknown-linux-musl`, the only build that swaps in
+mimalloc (it needs `musl-tools`, so on macOS run it in an `ubuntu` container). Match these locally
+before pushing rather than relying on CI to catch it.
+
+Coverage runs in `.github/workflows/coverage.yml`, on pull requests only, and reports rather than
+gates. Each run rewrites one comment on the pull request, found by its
+`<!-- bonsai-lint-coverage -->` marker, with the totals and a line per crate. The only job allowed
+to comment runs none of the pull request's code; a fork's pull request gets the table in the run
+summary instead. Doc tests are not counted, since collecting them needs nightly, and neither is the
+separate wasm workspace.
 
 Every language is behind a cargo feature; `vue` implies `ts` because it reuses that spec. The
 registry must keep compiling with any feature subset, including none — this is exercised, not
