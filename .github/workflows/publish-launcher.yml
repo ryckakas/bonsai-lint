@@ -94,10 +94,13 @@ jobs:
             exit 1
           fi
 
+      # The tag's README is what pkg.go.dev shows for this version and what Composer puts in vendor/,
+      # and a tag is never moved, so it is bonsai-lint's own at this release from the first moment.
       - name: Generate the release files and test both launchers
         working-directory: launcher
         run: |
           go run ./internal/generate -manifest ../dist-manifest.json -php composer/src/Release.php
+          go run ./internal/readme -ref "$TAG"
           go vet ./...
           go test ./...
           php composer/tests/run.php
@@ -138,7 +141,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898233+github-actions[bot]@users.noreply.github.com"
-          git add release.go composer/src/Release.php
+          git add release.go composer/src/Release.php README.md
           if [ "$REHEARSAL" = true ]; then
             git commit --quiet -m "release $TAG (rehearsal)"
             # Outside refs/heads, so Packagist never lists it as a branch.
@@ -147,7 +150,7 @@ jobs:
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
             git fetch --quiet origin "refs/tags/$TAG:refs/tags/$TAG"
-            if git diff --quiet "$TAG" -- release.go composer/src/Release.php; then
+            if git diff --quiet "$TAG" -- release.go composer/src/Release.php README.md; then
               echo "$TAG is already published with these release files"
               exit 0
             fi
@@ -170,3 +173,32 @@ jobs:
             sleep 20
           done
           exit 1
+
+      # Packagist shows main's README, and refreshes it on every push. main takes pull requests only,
+      # so this opens one with the tag's README and lets it merge itself once the required checks
+      # pass. A failure leaves the release published and says so.
+      - name: Bring the launcher repository's main to this README
+        continue-on-error: true
+        working-directory: launcher
+        env:
+          GH_TOKEN: ${{ secrets.GO_MODULE_TOKEN }}
+        run: |
+          cp README.md "$RUNNER_TEMP/README.md"
+          git fetch --quiet origin main
+          git reset --quiet --hard origin/main
+          cp "$RUNNER_TEMP/README.md" README.md
+          if git diff --quiet README.md; then
+            echo "main already has bonsai-lint's $TAG README"
+            exit 0
+          fi
+          if [ "$REHEARSAL" = true ]; then
+            git diff --stat README.md
+            exit 0
+          fi
+          branch="readme/$TAG"
+          title="docs: bonsai-lint's README at $TAG"
+          git commit --quiet -m "$title" README.md
+          git push --quiet --force origin "HEAD:refs/heads/$branch"
+          gh pr create --repo ryckakas/bonsai-lint-launcher --base main --head "$branch" --title "$title" \
+            --body "The $TAG tag already carries this README. Written by bonsai-lint's release job with \`go run ./internal/readme -ref $TAG\`."
+          gh pr merge --repo ryckakas/bonsai-lint-launcher --auto --squash --delete-branch "$branch"
