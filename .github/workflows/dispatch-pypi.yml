@@ -1,0 +1,60 @@
+name: Dispatch the PyPI publish
+
+# Called by release.yml once the GitHub Release exists. PyPI trusts publish-pypi.yml only in a
+# top-level run, so this starts it at the tag and waits, which keeps a failed upload failing the
+# release. Dispatched by hand, it rehearses the same path on TestPyPI.
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Rehearse on TestPyPI with this release's archives, e.g. v0.4.1"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PLAN: ${{ inputs.plan }}
+      INPUT_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Start publish-pypi.yml
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            tag="$INPUT_TAG"
+            fields=(-f "ref=$GITHUB_REF_NAME" -f "inputs[target]=testpypi" -f "inputs[dev]=true")
+          else
+            tag="$(jq -r .announcement_tag <<<"$PLAN")"
+            fields=(-f "ref=$tag" -f "inputs[target]=pypi")
+          fi
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$tag is not a release tag; prereleases are not published to PyPI"
+            exit 1
+          fi
+          run_id="$(gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/publish-pypi.yml/dispatches" \
+            "${fields[@]}" -f "inputs[tag]=$tag" -F return_run_details=true \
+            --jq '.workflow_run_id // empty')"
+          if [ -z "$run_id" ]; then
+            echo "::error::GitHub started publish-pypi.yml but did not say which run it is"
+            exit 1
+          fi
+          echo "RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "https://github.com/$GITHUB_REPOSITORY/actions/runs/$run_id"
+
+      - name: Wait for it
+        run: gh run watch "$RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status --interval 30

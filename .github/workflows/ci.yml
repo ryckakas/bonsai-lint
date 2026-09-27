@@ -286,3 +286,44 @@ jobs:
       # fail on lints that did not exist yet.
       - name: Build
         run: cargo build --all-features
+
+  wheels:
+    # publish-pypi.yml runs the builder only at a release, where a refusal it should have made
+    # would already be permanent on PyPI.
+    name: PyPI wheel builder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
+      - name: Test
+        run: uv run --no-project --python 3.12 python -m unittest discover pypi
+
+  hook:
+    # Users install the hook from a tag, so a broken manifest or setup.py would ship with the
+    # release. This installs it the way pre-commit does, from a wheel of this commit's binary.
+    name: pre-commit hook
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
+      - name: Build the CLI and its wheel
+        run: |
+          cargo build -p bonsai-lint
+          uv run --no-project --python 3.12 python pypi/build_wheels.py binary \
+            --binary target/debug/bonsai-lint --target x86_64-unknown-linux-gnu \
+            --out "$RUNNER_TEMP/wheels"
+
+      - name: Run the hook
+        run: bash pypi/hook-smoke.sh "$RUNNER_TEMP/wheels"

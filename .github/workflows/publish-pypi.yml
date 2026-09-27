@@ -1,0 +1,162 @@
+name: Publish to PyPI
+
+# PyPI trusts this file, and only in a top-level run, so release.yml's dispatch-pypi.yml starts it
+# at the release tag rather than calling it. Dispatched by hand, it reruns a failed publish or
+# rehearses one on TestPyPI. A filename on PyPI is permanent, so nothing already there is replaced.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release whose archives to package, e.g. v0.4.2"
+        required: true
+        type: string
+      target:
+        description: "Index to upload to"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+      dev:
+        description: "TestPyPI only: append .dev<run number>, so a rehearsal can repeat"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the wheels
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.request.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+      TARGET: ${{ inputs.target }}
+      DEV: ${{ inputs.dev }}
+      RUN_NUMBER: ${{ github.run_number }}
+    steps:
+      # The pypi environment admits only v* tags too; this says why before anything is built.
+      - name: Check the request
+        id: request
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$TAG is not a release tag; prereleases are not published to PyPI"
+            exit 1
+          fi
+          if [ "$TARGET" = pypi ] && { [ "$GITHUB_REF" != "refs/tags/$TAG" ] || [ "$DEV" = true ]; }; then
+            echo "::error::PyPI takes only a release, dispatched at its own tag and without dev"
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: false
+
+      - name: Download the release
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir archives \
+            --pattern 'bonsai-lint-*.tar.gz' --pattern 'bonsai-lint-*.zip' \
+            --pattern dist-manifest.json
+
+      - name: Build the wheels
+        run: |
+          suffix=""
+          if [ "$DEV" = true ]; then
+            suffix=".dev$RUN_NUMBER"
+          fi
+          uv run --no-project --python 3.12 python pypi/build_wheels.py release \
+            --manifest archives/dist-manifest.json --archives archives --tag "$TAG" \
+            --out wheels --version-suffix "$suffix"
+
+      - name: Check the wheels
+        run: |
+          uvx twine@7.0.0 check --strict wheels/*.whl
+          uvx check-wheel-contents@0.6.3 --ignore W007 wheels
+          for wheel in wheels/*.whl; do
+            uvx wheel@0.48.0 unpack --dest "$RUNNER_TEMP/unpacked" "$wheel"
+          done
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheels
+          path: wheels/*.whl
+          if-no-files-found: error
+
+  # How pip installs a wheel differs by OS family, not by CPU, so one runner per family covers it.
+  verify:
+    name: Install on ${{ matrix.os }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wheels
+          path: wheels
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: false
+
+      # pip, not uv, installs: uv marks every script executable, which would hide a wheel that
+      # forgot to.
+      - name: Install with pip and scan
+        shell: bash
+        run: |
+          uv venv --seed --python 3.12 venv
+          bin=venv/bin
+          if [ "$RUNNER_OS" = Windows ]; then
+            bin=venv/Scripts
+          fi
+          "$bin/python" -m pip install --no-index --find-links wheels bonsai-lint
+          installed="$("$bin/bonsai-lint" --version)"
+          if [ "$installed" != "bonsai-lint $VERSION" ]; then
+            echo "::error::installed $installed, expected bonsai-lint $VERSION"
+            exit 1
+          fi
+          printf 'function busy(a, b) {\n  if (a) { if (b) { return 1; } }\n  return 0;\n}\n' > busy.ts
+          code=0
+          "$bin/bonsai-lint" --over 1 busy.ts || code=$?
+          if [ "$code" != 1 ]; then
+            echo "::error::a unit over the threshold exited $code, not 1"
+            exit 1
+          fi
+
+  publish:
+    name: Upload to ${{ inputs.target }}
+    needs: [build, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.target }}
+      url: ${{ inputs.target == 'pypi' && 'https://pypi.org/p/bonsai-lint' || 'https://test.pypi.org/p/bonsai-lint' }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wheels
+          path: wheels
+
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: wheels/
+          repository-url: ${{ inputs.target == 'pypi' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          skip-existing: true

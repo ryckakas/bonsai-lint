@@ -1,0 +1,7 @@
+- id: bonsai-lint
+  name: bonsai-lint
+  description: Cognitive complexity of the changed files
+  entry: bonsai-lint --config . --allow-no-files
+  language: python
+  files: \.(cjs|cts|go|java|js|jsx|mjs|mts|php|phtml|py|pyw|ts|tsx|vue)$
+  require_serial: true

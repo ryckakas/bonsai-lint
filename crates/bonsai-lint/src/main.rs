@@ -61,6 +61,10 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     config: Option<PathBuf>,
 
+    /// Succeed instead of failing when no supported file is found
+    #[arg(long)]
+    allow_no_files: bool,
+
     /// Do not score code outside any function
     #[arg(long)]
     no_toplevel: bool,
@@ -556,7 +560,7 @@ fn unusable_scan(stats: &ScanStats, args: &Args) -> Option<String> {
         ));
     }
 
-    if stats.files == 0 {
+    if stats.files == 0 && !args.allow_no_files {
         let paths: Vec<String> = args
             .paths
             .iter()
