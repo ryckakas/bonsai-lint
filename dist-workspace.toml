@@ -15,8 +15,10 @@ installers = ["shell", "powershell", "homebrew", "npm"]
 tap = "ryckakas/homebrew-tap"
 # npm publishing needs an NPM_TOKEN secret. ./publish-go tags the Go module in
 # ryckakas/bonsai-lint-go, which needs a GO_MODULE_TOKEN secret with write access to that repo.
-publish-jobs = ["homebrew", "npm", "./publish-go"]
-github-custom-job-permissions = { "publish-go" = { contents = "read" } }
+# ./dispatch-pypi starts publish-pypi.yml at the tag and waits for it; it reads no secret, since
+# PyPI trusts publish-pypi.yml itself.
+publish-jobs = ["homebrew", "npm", "./publish-go", "./dispatch-pypi"]
+github-custom-job-permissions = { "publish-go" = { contents = "read" }, "dispatch-pypi" = { actions = "write", contents = "read" } }
 # The Go launcher unpacks archives with Go's standard library, which has no xz decoder.
 unix-archive = ".tar.gz"
 # A published shrinkwrap makes npm materialise the generated package's whole dependency tree
