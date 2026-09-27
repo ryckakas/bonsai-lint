@@ -58,12 +58,9 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
 - **Java through Maven and Gradle.** Java builds usually reach tools through Maven or Gradle, and
   often only through an internal Maven mirror, so a GitHub download is not an option there. The
   binary would travel as per-platform Maven Central artifacts, in the pattern `protoc` uses,
-  resolved by a Maven and a Gradle plugin, and published by a dist job as the Go module is.
+  resolved by a Maven and a Gradle plugin, and published by a dist job as the Go module and the
+  PyPI wheels are.
   SDKMAN! and an IntelliJ plugin would come after.
-- **Python through PyPI and pre-commit.** Python teams install linters with pip, uv or pipx and
-  run them from pre-commit, rarely from npm or Homebrew. The binary would travel as per-platform
-  wheels on PyPI, with a `.pre-commit-hooks.yaml` beside it, published by a dist job as the Go
-  module is.
 - **Newer Java syntax.** tree-sitter-java 0.23.5 has seen no grammar work since 2023, so a few
   Java 21–25 constructs parse with an error. The surrounding code still scores, and the list is
   in [docs/scoring-rules.md](docs/scoring-rules.md). A newer grammar release is picked up by
@@ -99,8 +96,17 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   costs about 1.6 MB and fetches nothing. Analysed in
   [docs/features/extension-cli-bundling.md](docs/features/extension-cli-bundling.md).
 - **A Windows on ARM build.** There is no native one: the npm wrapper and the Go launcher both run
-  the x64 binary under emulation. dist can build `aarch64-pc-windows-msvc`, but the grammars are
-  C, so that cross-compile needs proving first.
+  the x64 binary under emulation. PyPI has no wheel for an ARM64 Python at all, and python.org
+  makes ARM64 its Windows default around October 2026, so that gap widens. dist can build
+  `aarch64-pc-windows-msvc`, but the grammars are C, so that cross-compile needs proving first.
+- **`exclude` misses a named file outside the workspace root.** `ScanRoot::absolute` joins an
+  empty component onto a file path, leaving a trailing `/`, and `is_excluded` then matches that
+  raw path, so `**/*.spec.ts` stops matching. Inside the root `strip_prefix` hides it, which is
+  why the pre-commit hook, rooted with `--config .`, is unaffected.
+- **`--write-baseline` on a subset empties the rest.** With file arguments, `--domain` or
+  `--lang`, every domain's baseline is rebuilt from that subset's findings alone, dropping the
+  entries it did not scan. Merging into the existing file, or refusing the combination, would
+  fix it.
 - **Checksum verification in the npm wrapper.** The npm package downloads the release archive
   without checking it, while the installer script, the Homebrew formula and the Go launcher all
   check a sha256 recorded before the download. dist already publishes one per archive.

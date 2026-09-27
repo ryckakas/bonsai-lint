@@ -55,6 +55,17 @@ npm test                    # compiles then runs node --test on out/*.test.js
 npx --yes @vscode/vsce package --out /tmp/extension.vsix
 ```
 
+PyPI wheels and the pre-commit hook (`pypi/`, stdlib-only Python 3.11+, which macOS's `python3`
+is not, so `uv` supplies it). CI runs these as its `PyPI wheel builder` and `pre-commit hook`
+jobs:
+
+```bash
+uv run --no-project --python 3.12 python -m unittest discover pypi   # the wheel builder's tests
+uv run --no-project --python 3.12 python pypi/build_wheels.py binary \
+    --binary target/debug/bonsai-lint --target aarch64-apple-darwin --out /tmp/wheels
+bash pypi/hook-smoke.sh /tmp/wheels   # pre-commit try-repo on the committed hook, from that wheel
+```
+
 ## Architecture
 
 ```
@@ -70,6 +81,8 @@ crates/
 ├── bonsai-lint/        the CLI, producing the `bonsai-lint` binary
 ├── bonsai-testkit/     the grammar contract harness, used by every language crate
 └── bonsai-wasm/        the playground's WebAssembly bindings, a separate workspace
+pypi/                   repackages dist's release archives as PyPI wheels, and tests the hook
+.pre-commit-hooks.yaml  the pre-commit hook; setup.py beside it only pulls in the wheel
 ```
 
 `bonsai-core` depends on nothing but `tree-sitter`, so it can be embedded without pulling in
@@ -159,8 +172,9 @@ them when touching scan/domain/path code:
   error.
 
 **Naming the language set:** taglines and descriptions call the tool *multi-language* and never
-enumerate languages. That covers the GitHub About text, the crate description (which npm and
-Homebrew reuse), the extension's `displayName` and `description`, and the cover's alt text.
+enumerate languages. That covers the GitHub About text, the crate description (which npm,
+Homebrew and PyPI reuse), the extension's `displayName` and `description`, and the cover's alt
+text.
 
 The supported languages are enumerated in exactly two places, the README intro and its
 supported-languages table. Both are ordered by usage rather than by when support landed:
@@ -172,12 +186,14 @@ ranking, and `docs/scoring-rules.md` orders its per-language tables and sections
 Everything else that names languages is functional and follows the registry:
 - the cargo features, which CI's feature powerset reads;
 - the extension's activation events and its default `bonsai-lint.languages`;
-- the search tags: GitHub topics and the extension's `keywords`.
+- the pre-commit hook's `files` pattern, which a test derives from the registry;
+- the search tags: GitHub topics, the extension's `keywords`, and the crate's `keywords`, which
+  PyPI reuses.
 
 **Naming convention:** every user-facing name is `bonsai-lint` — crate, binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker, the extension's `bonsai-lint.*`
 settings. The bare `bonsai` namespace deliberately isn't claimed anywhere (it belongs to unrelated
-projects on crates.io/npm/VS Code Marketplace).
+projects on crates.io/npm/PyPI/VS Code Marketplace).
 
 ## Testing conventions
 
@@ -203,9 +219,13 @@ projects on crates.io/npm/VS Code Marketplace).
   discovery, domains, and baseline read/write against real temp directories.
 - `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area (`cli_report.rs`,
   `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`,
-  `cli_go.rs`, `cli_java.rs`, `cli_python.rs`) over a shared `tests/common/mod.rs`. Each file is
-  its own test binary, so `--test cli_vue` runs in a fifth of a second while `cli_parallel` is
-  the slow one.
+  `cli_go.rs`, `cli_java.rs`, `cli_python.rs`, `cli_pre_commit.rs`) over a shared
+  `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in a fifth of
+  a second while `cli_parallel` is the slow one. `cli_pre_commit.rs` reads the hook's arguments
+  from `.pre-commit-hooks.yaml`, so it runs exactly the command users get.
+- `pypi/test_build_wheels.py` builds wheels from dist-shaped archives holding synthetic ELF,
+  Mach-O and PE headers, against the real v0.4.1 `dist-manifest.json` in `pypi/testdata/`. It
+  covers every refusal and asserts the gnu builds stay out, which is a rule by omission.
 - Cross-language parity (the same logic scoring identically in every language) is a tested
   property, not an assumption — see the README's "same code scores the same" example when
   changing shared scoring logic in `bonsai-core`.
@@ -238,7 +258,8 @@ wholesale: `restriction`'s lints contradict each other, and `nursery`'s are unse
 ## Releasing
 
 Releases go through [`cargo-dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag
-builds every target and publishes a GitHub Release, npm package, Homebrew formula and Go module.
+builds every target and publishes a GitHub Release, npm package, Homebrew formula, Go module and
+PyPI wheels.
 `.github/workflows/release.yml` is generated from `dist-workspace.toml` — edit the latter and run
 `dist generate`, don't hand-edit the workflow. `dist plan` previews a release. The VS Code
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
@@ -256,9 +277,10 @@ publishes it as that release's notes, so a missing or misnamed section ships an 
 page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY-MM-DD`.
 
 The version is `version` in the root `Cargo.toml` **and** the internal path dependencies beside
-it, which must match or cargo refuses to build. The npm package, Homebrew formula and Go module
-take their version from that one field; none is edited by hand. The extension is bumped
-afterwards, because its lockfile can only pin a CLI version that is already published.
+it, which must match or cargo refuses to build. The npm package, Homebrew formula, Go module,
+PyPI wheels and the pre-commit hook's `setup.py` take their version from that one field; none is
+edited by hand. The extension is bumped afterwards, because its lockfile can only pin a CLI
+version that is already published.
 
 **The version moves when compatibility does.** A pull request that breaks a library crate's
 public API bumps the workspace to the next breaking version (0.3.x → 0.4.0) in the same change.
@@ -302,6 +324,36 @@ is a custom dist publish job, and it runs once the GitHub Release exists:
 - **Rehearse a launcher change** with `workflow_dispatch` and `rehearsal` ticked. It runs every
   step, but pushes to bonsai-lint-go's `rehearsal` branch instead of tagging, and never contacts
   the proxy.
+
+PyPI gets five wheels per release, which `pypi/build_wheels.py` builds from the released archives,
+each carrying the Release's binary byte for byte. Two workflows publish them, because PyPI trusts
+only a top-level run, and dist calls its custom jobs as reusable workflows:
+- **What runs:** dist's `custom-dispatch-pypi` job (`dispatch-pypi.yml`) dispatches
+  `publish-pypi.yml` at the tag and waits for it, so a failed upload fails the Release run.
+  `publish-pypi.yml` builds and checks the wheels, pip-installs them on Linux, macOS and Windows,
+  and uploads from the `pypi` environment, with attestations.
+- **What it needs:** no secret. PyPI's trusted publisher for `bonsai-lint` names owner `ryckakas`,
+  repository `bonsai-lint`, workflow `publish-pypi.yml` and environment `pypi`, which GitHub
+  admits only from `v*` tags. TestPyPI's names environment `testpypi`, admitted from `main`. A
+  project's first upload goes through a pending publisher, which expires after 30 days and
+  reserves nothing, so it is registered close to that release.
+- **A published file is permanent.** A failed publish is rerun with
+  `gh workflow run publish-pypi.yml --ref vX.Y.Z -f tag=vX.Y.Z -f target=pypi`, which sends only
+  what is missing, within 14 days of the first upload; after that PyPI refuses new files for the
+  release. The dispatch runs `publish-pypi.yml` as it stands at the tag, so a bug in it cannot be
+  fixed for that tag: the version skips PyPI and the next patch release carries the fix. A broken
+  release is yanked whole.
+- **Rehearse a pipeline change** by dispatching `dispatch-pypi.yml` from `main` with a released
+  tag. It publishes `<version>.dev<run>` to TestPyPI through the same dispatch and watch.
+
+The pre-commit hook has no publish step of its own: the tag is its release, and pre-commit pulls
+the wheel from PyPI, so for the few minutes before the upload lands, that rev fails to install.
+- **Only `vX.Y.Z` tags may be reachable from `main`.** `pre-commit autoupdate` moves every user to
+  the nearest tag on `main`, so a stray tag, or a prerelease whose wheel never reaches PyPI,
+  would break their installs. Two tag rulesets refuse to create anything but a `v*` tag, and any
+  `v*-*` tag. A prerelease, if one is ever needed, is tagged on a branch `main` never merges.
+- **The hook id `bonsai-lint` is a contract.** autoupdate refuses a rev that lacks a configured
+  id, so the id is never renamed or removed, and `cli_pre_commit.rs` asserts it.
 
 ## Further reading
 
