@@ -57,6 +57,9 @@ cargo install bonsai-lint                 # from source
 curl -LsSf https://github.com/ryckakas/bonsai-lint/releases/latest/download/bonsai-lint-installer.sh | sh
 ```
 
+<details>
+<summary><b>How each install source works: npm, Linux builds, Go, PyPI and Composer</b></summary>
+
 The npm package fetches the prebuilt binary for your platform on install. Nothing is compiled,
 and Node only launches it. The analysis itself is pure Rust.
 
@@ -82,6 +85,8 @@ Python on Windows, where an x64 Python works under emulation, and so does
 In a PHP project, `composer require --dev bonsai-lint/bonsai-lint` adds it and
 `vendor/bin/bonsai-lint` runs it. It needs PHP 7.4 or newer, and the first run fetches the
 prebuilt binary for your platform.
+
+</details>
 
 As a [pre-commit](https://pre-commit.com) hook, from v0.4.2:
 
