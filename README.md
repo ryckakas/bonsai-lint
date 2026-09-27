@@ -79,14 +79,9 @@ distribution, so any other platform gets pip's "no matching distribution". That 
 Python on Windows, where an x64 Python works under emulation, and so does
 `cargo install bonsai-lint`.
 
-From v0.4.3, in a PHP project, `composer require --dev bonsai-lint/bonsai-lint` adds it and
-`vendor/bin/bonsai-lint` runs it. The Composer package is a launcher with no dependencies, at the
-same version as the CLI, and needs PHP 7.4 or newer. The first run of each version downloads that
-release's binary, checks it against a checksum recorded in the package, and caches it inside
-`vendor/`. In CI, cache `vendor/` or set `BONSAI_LINT_CACHE` to skip that download. Its platforms
-and settings are in
-[bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher/blob/main/LAUNCHERS.md),
-which holds the Go module too.
+In a PHP project, `composer require --dev bonsai-lint/bonsai-lint` adds it and
+`vendor/bin/bonsai-lint` runs it. It needs PHP 7.4 or newer, and the first run fetches the
+prebuilt binary for your platform.
 
 As a [pre-commit](https://pre-commit.com) hook, from v0.4.2:
 
