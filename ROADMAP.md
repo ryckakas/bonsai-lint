@@ -127,7 +127,13 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   An app installed on bonsai-lint-launcher alone would mint a one-hour token per run, belong to no
   account, and could be the only actor a tag ruleset lets create `v*` tags. Its private key would
   still be a stored secret.
-- **A long lived editor server.** The extension currently starts a process per analysis. A
-  `--server` mode reusing the `--stdin` input shape would cut the per keystroke cost.
+- **A language server.** The VS Code extension starts a process per analysis, passing the buffer
+  through `--stdin`, and every other editor needs its own plugin or a generic linter bridge such as
+  `nvim-lint` or `efm-langserver`. An LSP mode, `bonsai-lint lsp`, would serve Neovim, Helix, Zed,
+  Emacs, Sublime and JetBrains from one implementation, publishing the same diagnostics the CLI
+  reports and resolving `bonsai-lint.toml` and baselines as a scan of that file does. It would
+  also cut the per keystroke cost, since the compiled specs and the workspace config live for the
+  session instead of being rebuilt per run. The VS Code extension would then become a thin LSP
+  client.
 - **Type aware linting for the extension.** The TypeScript source has no linter beyond `tsc`.
   Its async surface is where `no-floating-promises` would earn its place.
