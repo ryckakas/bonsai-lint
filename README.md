@@ -69,7 +69,7 @@ In a Go module, `go get -tool bonsai.kauneckas.dev/bonsai-lint@latest` pins it i
 `go tool bonsai-lint` runs it (Go 1.24+). The Go module is a launcher with no dependencies, at the
 same version as the CLI. The first run of each version downloads that release's binary, checks it
 against a checksum recorded in the module, and caches it. The platforms and settings are in
-[bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher).
+[bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher/blob/main/LAUNCHERS.md).
 
 From PyPI, `pip install bonsai-lint`, `uv tool install bonsai-lint` or `pipx install bonsai-lint`
 puts the binary on your PATH, and `uvx bonsai-lint` runs it without installing anything. Each wheel
@@ -84,8 +84,9 @@ From v0.4.3, in a PHP project, `composer require --dev bonsai-lint/bonsai-lint` 
 same version as the CLI, and needs PHP 7.4 or newer. The first run of each version downloads that
 release's binary, checks it against a checksum recorded in the package, and caches it inside
 `vendor/`. In CI, cache `vendor/` or set `BONSAI_LINT_CACHE` to skip that download. Its platforms
-and settings are in [bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher), which
-holds the Go module too.
+and settings are in
+[bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher/blob/main/LAUNCHERS.md),
+which holds the Go module too.
 
 As a [pre-commit](https://pre-commit.com) hook, from v0.4.2:
 
