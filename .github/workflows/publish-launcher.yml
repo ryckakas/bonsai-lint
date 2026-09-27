@@ -96,14 +96,17 @@ jobs:
 
       # The tag's README is what pkg.go.dev shows for this version and what Composer puts in vendor/,
       # and a tag is never moved, so it is bonsai-lint's own at this release from the first moment.
-      - name: Generate the release files and test both launchers
+      # Only checks the generated files can change run here: every commit on the launcher repository's
+      # main has passed its required checks, and rerunning them could only add flakiness.
+      - name: Generate the release files and check them
         working-directory: launcher
         run: |
+          retry() { for attempt in 1 2 3; do "$@" && return 0; echo "::warning::attempt $attempt failed: $*"; sleep 20; done; return 1; }
           go run ./internal/generate -manifest ../dist-manifest.json -php composer/src/Release.php
-          go run ./internal/readme -ref "$TAG"
+          retry go run ./internal/readme -ref "$TAG"
           go vet ./...
-          go test ./...
-          php composer/tests/run.php
+          go test -run 'TestTheComposerReleaseMatchesTheGoRelease|TestTheCommittedReadmeIsTheGeneratedOne' ./...
+          php -l composer/src/Release.php
           composer validate --strict
           git diff --stat
 
@@ -128,13 +131,15 @@ jobs:
           sys.exit(1 if problems else 0)
           EOF
 
-      # Nothing is tagged until both launchers have fetched, verified and run this very release.
+      # Nothing is tagged until both launchers have fetched, verified and run this very release. This
+      # is the step that needs GitHub, so a transient failure gets two more tries.
       - name: Run the release through both launchers
         working-directory: launcher
         run: |
-          BONSAI_LINT_CACHE="$RUNNER_TEMP/go-cache" go run . --version | tee version.txt
-          grep -Fx "bonsai-lint ${TAG#v}" version.txt
-          bash composer/tests/smoke.sh "$TAG"
+          retry() { for attempt in 1 2 3; do "$@" && return 0; echo "::warning::attempt $attempt failed: $*"; sleep 20; done; return 1; }
+          go_launcher() { BONSAI_LINT_CACHE="$RUNNER_TEMP/go-cache" go run . --version > version.txt && grep -Fx "bonsai-lint ${TAG#v}" version.txt; }
+          retry go_launcher
+          retry bash composer/tests/smoke.sh "$TAG"
 
       - name: Tag the release
         working-directory: launcher

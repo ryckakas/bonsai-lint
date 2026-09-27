@@ -314,9 +314,11 @@ GitHub Release exists:
 - **What it does:**
   - it writes that repository's `release.go` and `composer/src/Release.php` from the released
     `dist-manifest.json`;
-  - it runs both launchers' tests, and checks that `composer.json` still carries the crate's
-    description, license and keywords;
-  - it runs both launchers against the real release;
+  - it checks only what the generated files can change: they build (`go vet`, `php -l`), both name
+    the same release (the guard test), `composer.json` validates and still carries the crate's
+    description, license and keywords. The launchers' full suites already passed as the launcher
+    repository's required checks on that commit, and rerunning them could only add flakiness;
+  - it runs both launchers against the real release, retrying a network failure twice;
   - it writes that repository's `README.md` as this repository's README at the release, with its
     relative links pointed back here, because Packagist shows the launcher repository's README;
   - only then does it push the tag `vX.Y.Z`, whose commit carries all three files;
