@@ -12,6 +12,23 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- **Installing through PyPI.** `pip install bonsai-lint`, `uv tool install bonsai-lint` and
+  `pipx install bonsai-lint` install the CLI, and `uvx bonsai-lint` runs it without installing.
+  Each wheel is the release's own binary, byte for byte, with no Python code around it: macOS on
+  Apple silicon and Intel, Linux on x86_64 and arm64 through the static build (glibc 2.17 or
+  newer, or musl), and Windows on x64. There is no source distribution, so other platforms,
+  including an ARM64 Python on Windows, get pip's "no matching distribution". The wheels are
+  published at every release under the same version, through PyPI trusted publishing with
+  attestations.
+- **A pre-commit hook.** `- repo: https://github.com/ryckakas/bonsai-lint` with `id: bonsai-lint`
+  installs the wheel and scores the staged files. It judges each file as `bonsai-lint` run from
+  the repository root does, and a commit touching only files it skips, such as generated code,
+  passes.
+- **`--allow-no-files`.** A run whose paths hold no file it can score exits 0 instead of failing
+  with "no supported files found". A missing path still fails the run.
+
 ## [0.4.1] - 2026-09-26
 
 ### Added

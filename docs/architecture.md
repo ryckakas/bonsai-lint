@@ -302,13 +302,16 @@ target, generates the installers and publishes a GitHub Release. Preview with `d
 to follow: resolve the new tags to commits, update the table, and regenerate. Dependabot ignores
 those four actions, since a bump it made to `release.yml` would fail `dist plan`.
 
-**Linux ships twice per architecture.** The glibc build needs the builder's glibc, 2.35. The
-static musl build runs on any Linux, so it serves Alpine and older glibc alike. dist's installer
-script and npm wrapper choose between them from the host's libc, and the Go launcher does the same
-from `ldd --version`. The musl build replaces musl's allocator with mimalloc, through its
-`override` feature, because tree-sitter's C code calls `malloc` directly. musl's allocator
-serialises threads: on the HERO corpus on arm64, a parallel scan took 16.3 s against glibc's
-0.94 s, and 0.84 s with mimalloc. Nothing but the release and CI's musl job compiles that target.
+**Linux ships twice per architecture.** The glibc build needs the builder's glibc, 2.35. The static
+musl build runs on any Linux, so it serves Alpine and older glibc alike. dist's installer script and
+npm wrapper choose between them from the host's libc, and the Go launcher does the same from
+`ldd --version`. The PyPI wheels carry only the static build: a binary with no dynamic loader meets
+every manylinux and musllinux policy, so one wheel per architecture is tagged for both, and
+`pypi/build_wheels.py` refuses to tag one that has a loader. The musl build replaces musl's
+allocator with mimalloc, through its `override` feature, because tree-sitter's C code calls `malloc`
+directly. musl's allocator serialises threads: on the HERO corpus on arm64, a parallel scan took
+16.3 s against glibc's 0.94 s, and 0.84 s with mimalloc. Nothing but the release and CI's musl job
+compiles that target.
 
 **The version moves when compatibility does.** The library crates are published, and a CLI
 release depends on them by a caret range that `cargo install` resolves without the lockfile. A
@@ -323,9 +326,10 @@ because the tool reads rustdoc's JSON output, which changes with Rust releases.
 **Every user-facing name is `bonsai-lint`** — the crate, the binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker and the extension's
 `bonsai-lint.*` settings. The bare `bonsai` namespace belongs to unrelated projects on
-crates.io, npm and the VS Code Marketplace, so nothing here claims it. Naming the crate and the
-binary alike also keeps `dist` honest: it names the artifacts, the Homebrew formula and the npm
-package after the package, so the command users get matches the thing they installed.
+crates.io, npm, PyPI and the VS Code Marketplace, so nothing here claims it. Naming the crate and
+the binary alike also keeps `dist` honest: it names the artifacts, the Homebrew formula and the
+npm package after the package, and the wheel builder names the PyPI project the same, so the
+command users get matches the thing they installed.
 
 **The VS Code extension versions independently** of the CLI, and the two numbers are not
 expected to match. Publishing is manual — `vsce` needs an Azure DevOps PAT.
