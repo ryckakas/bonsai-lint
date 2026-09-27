@@ -173,8 +173,8 @@ them when touching scan/domain/path code:
 
 **Naming the language set:** taglines and descriptions call the tool *multi-language* and never
 enumerate languages. That covers the GitHub About text, the crate description (which npm,
-Homebrew and PyPI reuse), the extension's `displayName` and `description`, and the cover's alt
-text.
+Homebrew, PyPI and the Composer package reuse), the extension's `displayName` and `description`,
+and the cover's alt text.
 
 The supported languages are enumerated in exactly two places, the README intro and its
 supported-languages table. Both are ordered by usage rather than by when support landed:
@@ -188,7 +188,8 @@ Everything else that names languages is functional and follows the registry:
 - the extension's activation events and its default `bonsai-lint.languages`;
 - the pre-commit hook's `files` pattern, which a test derives from the registry;
 - the search tags: GitHub topics, the extension's `keywords`, and the crate's `keywords`, which
-  PyPI reuses.
+  PyPI reuses and the Composer package extends with `static analysis` and `dev`, the tags that
+  make `composer require` offer `--dev`.
 
 **Naming convention:** every user-facing name is `bonsai-lint` — crate, binary, `bonsai-lint.toml`,
 `.bonsai-lint-baseline.json`, the `bonsai-lint-ignore` marker, the extension's `bonsai-lint.*`
@@ -258,8 +259,8 @@ wholesale: `restriction`'s lints contradict each other, and `nursery`'s are unse
 ## Releasing
 
 Releases go through [`cargo-dist`](https://github.com/axodotdev/cargo-dist): pushing a `v*` tag
-builds every target and publishes a GitHub Release, npm package, Homebrew formula, Go module and
-PyPI wheels.
+builds every target and publishes a GitHub Release, npm package, Homebrew formula, Go module,
+Composer package and PyPI wheels.
 `.github/workflows/release.yml` is generated from `dist-workspace.toml` — edit the latter and run
 `dist generate`, don't hand-edit the workflow. `dist plan` previews a release. The VS Code
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
@@ -278,8 +279,8 @@ page. Add the section before tagging, and keep the heading as `## [x.y.z] - YYYY
 
 The version is `version` in the root `Cargo.toml` **and** the internal path dependencies beside
 it, which must match or cargo refuses to build. The npm package, Homebrew formula, Go module,
-PyPI wheels and the pre-commit hook's `setup.py` take their version from that one field; none is
-edited by hand. The extension is bumped afterwards, because its lockfile can only pin a CLI
+Composer package, PyPI wheels and the pre-commit hook's `setup.py` take their version from that one
+field; none is edited by hand. The extension is bumped afterwards, because its lockfile can only pin a CLI
 version that is already published.
 
 **The version moves when compatibility does.** A pull request that breaks a library crate's
@@ -305,25 +306,43 @@ after the release, because a published version can never be taken back:
 - **Run with `dry_run` first.** It packages and verifies every crate, uploads nothing, needs no
   token, and prints which credential each crate would use.
 
-The Go module `bonsai.kauneckas.dev/bonsai-lint` is a launcher that lives in
-[bonsai-lint-go](https://github.com/ryckakas/bonsai-lint-go). `.github/workflows/publish-go.yml`
-is a custom dist publish job, and it runs once the GitHub Release exists:
-- **What it does:** it writes that repository's `release.go` from the released `dist-manifest.json`,
-  tests the launcher, and pushes the tag `vX.Y.Z`. The release commit hangs off `main` and only
-  the tag reaches the remote, so `main` keeps its placeholder. `main` ships as it stands at that
-  moment, so land launcher changes there only when they are ready.
-- **What it needs:** a `GO_MODULE_TOKEN` secret with contents write access to bonsai-lint-go,
-  whose `main` takes pull requests only while its tags must stay unprotected for the job to push,
-  and the page behind `https://bonsai.kauneckas.dev/bonsai-lint?go-get=1`, served from
-  bonsai-lint-site. The Go proxy resolves the import path through that page, so it must be live
-  before tagging.
-- **A published Go version is permanent.** A failed publish is rerun with `workflow_dispatch`,
-  `rehearsal` unticked. That is a no-op when the tag already exists with the same `release.go`,
-  and it fails when the file differs, because a tag is never moved. A broken version is retracted
-  from the next patch release's `go.mod`.
+The Go module `bonsai.kauneckas.dev/bonsai-lint` and the Composer package `bonsai-lint/bonsai-lint`
+are launchers that live together in
+[bonsai-lint-launcher](https://github.com/ryckakas/bonsai-lint-launcher), and one tag publishes
+both. `.github/workflows/publish-launcher.yml` is a custom dist publish job, and it runs once the
+GitHub Release exists:
+- **What it does:**
+  - it writes that repository's `release.go` and `composer/src/Release.php` from the released
+    `dist-manifest.json`;
+  - it runs both launchers' tests, and checks that `composer.json` still carries the crate's
+    description, license and keywords;
+  - it runs both launchers against the real release;
+  - only then does it push the tag `vX.Y.Z`.
+  - The release commit hangs off `main` and only the tag reaches the remote, so `main` keeps both
+    placeholders. `main` ships as it stands at that moment, so land launcher changes there only
+    when they are ready.
+- **What it needs:**
+  - a `GO_MODULE_TOKEN` secret with contents write access to bonsai-lint-launcher, which was
+    renamed from bonsai-lint-go. The secret becomes `LAUNCHER_TOKEN` at the token's next rotation.
+    bonsai-lint-launcher's `main` takes pull requests only, while its tags must stay unprotected
+    for the job to push;
+  - the page behind `https://bonsai.kauneckas.dev/bonsai-lint?go-get=1`, served from
+    bonsai-lint-site, through which the Go proxy resolves the import path;
+  - Packagist's GitHub hook on bonsai-lint-launcher, which lists each tag as it is pushed.
+- **A published version is permanent in both.** A failed publish is rerun with `workflow_dispatch`,
+  `rehearsal` unticked. That is a no-op when the tag already exists with the same release files,
+  and it fails when they differ, because a tag is never moved. A broken Go version is retracted
+  from the next patch release's `go.mod`; a broken Composer version is superseded by the next
+  patch.
+- **The two release files cannot drift apart.** The launcher repo's
+  `TestTheComposerReleaseMatchesTheGoRelease` requires both to name the same release, so a job
+  that writes only `release.go` fails its own tests and tags nothing.
 - **Rehearse a launcher change** with `workflow_dispatch` and `rehearsal` ticked. It runs every
-  step, but pushes to bonsai-lint-go's `rehearsal` branch instead of tagging, and never contacts
-  the proxy.
+  step, the real downloads included, but pushes `refs/rehearsal/<tag>` instead of tagging, and
+  never contacts the proxy. That ref is outside `refs/heads`, so Packagist never lists it as a
+  branch.
+- **After each tag,** the launcher repo's `published.yml` installs the new version the way users
+  do: through the Go proxy and through Packagist, on Linux, macOS, Windows and Alpine.
 
 PyPI gets five wheels per release, which `pypi/build_wheels.py` builds from the released archives,
 each carrying the Release's binary byte for byte. Two workflows publish them, because PyPI trusts

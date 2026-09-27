@@ -95,8 +95,14 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   npm wrapper costs 23 KB and makes it fetch its own on first use; one package per platform
   costs about 1.6 MB and fetches nothing. Analysed in
   [docs/features/extension-cli-bundling.md](docs/features/extension-cli-bundling.md).
-- **A Windows on ARM build.** There is no native one: the npm wrapper and the Go launcher both run
-  the x64 binary under emulation. PyPI has no wheel for an ARM64 Python at all, and python.org
+- **The extension finding a Composer install.** It looks at `bonsai-lint.path`, then its own npm
+  dependency, then `PATH`, so a PHP project's `vendor/bin/bonsai-lint` needs the setting. Looking
+  in the workspace's `vendor/bin` would fix that. On Windows it would have to start the launcher
+  through `php`, because Node's `execFile` cannot run Composer's `.bat` proxy.
+- **Commit hooks for PHP teams.** A GrumPHP task and a CaptainHook action would run
+  `vendor/bin/bonsai-lint --config . --allow-no-files` on staged files, as the pre-commit hook does.
+- **A Windows on ARM build.** There is no native one: the npm wrapper and the Go and Composer
+  launchers all run the x64 binary under emulation. PyPI has no wheel for an ARM64 Python at all, and python.org
   makes ARM64 its Windows default around October 2026, so that gap widens. dist can build
   `aarch64-pc-windows-msvc`, but the grammars are C, so that cross-compile needs proving first.
 - **`exclude` misses a named file outside the workspace root.** `ScanRoot::absolute` joins an
@@ -108,12 +114,13 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
   entries it did not scan. Merging into the existing file, or refusing the combination, would
   fix it.
 - **Checksum verification in the npm wrapper.** The npm package downloads the release archive
-  without checking it, while the installer script, the Homebrew formula and the Go launcher all
-  check a sha256 recorded before the download. dist already publishes one per archive.
+  without checking it, while the installer script, the Homebrew formula and the Go and Composer
+  launchers all check a sha256 recorded before the download. dist already publishes one per archive.
 - **Trusted publishing for npm.** crates.io already publishes this way (see `publish-crates.yml`),
   but npm still takes the stored `NPM_TOKEN`. dist's generated npm job has no `id-token: write`,
   and it runs Node 20, whose npm is older than the 11.5.1 that OIDC needs. Replacing dist's npm
-  job with a custom publish job, as `publish-go.yml` does for Go, would remove the token.
+  job with a custom publish job, as `publish-launcher.yml` does for the launchers, would remove
+  the token.
 - **A GitHub App for the launcher tags.** `publish-launcher.yml` pushes the Go and Composer
   launchers' tags with `GO_MODULE_TOKEN`, a fine-grained personal token, because a workflow's own
   token reaches only its own repository and GitHub has no trusted publishing between repositories.

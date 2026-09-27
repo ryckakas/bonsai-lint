@@ -35,12 +35,13 @@ rules:
     ignore:
       - release.yml:350:13
   # dist passes every secret to a custom publish job, and has no setting to narrow it.
-  # publish-go.yml reads only GO_MODULE_TOKEN; dispatch-pypi.yml reads none.
+  # publish-launcher.yml reads only GO_MODULE_TOKEN; dispatch-pypi.yml reads none.
   secrets-inherit:
     ignore:
       - release.yml:360:11
       - release.yml:373:11
-  # A preference for `$/` over `./` in dist's references to publish-go.yml and dispatch-pypi.yml.
+  # A preference for `$/` over `./` in dist's references to publish-launcher.yml and
+  # dispatch-pypi.yml.
   self-repository:
     ignore:
       - release.yml:360:11
