@@ -222,6 +222,8 @@ baseline file, and config warnings and read errors on the run. Paths are made re
 subdirectory with `path:` is annotated under that subdirectory, which GitHub cannot place. GitHub
 annotates at most 10 errors per step; the log lists every one.
 
+<img src="docs/images/github-annotation-error-and-warning.png" alt="A pull request's changed TypeScript file with two annotations on one line: a bonsai-lint breach as a check failure, and a warning that its suppression marker needs a reason" width="720">
+
 </details>
 
 A clean run prints nothing and exits 0. Exit 1 means a breach, a strict baseline accepting more
