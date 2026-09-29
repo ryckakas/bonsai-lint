@@ -116,9 +116,10 @@ fn only_a_nested_functions_defaults_are_scored() {
     let own = findings("function f(x = a ? 1 : 2) {}");
     let f = own.iter().find(|finding| finding.name == "f");
     assert_eq!(f.map(|finding| finding.score), Some(0));
-    assert!(own
-        .iter()
-        .all(|finding| finding.name != bonsai_core::TOPLEVEL_UNIT));
+    assert!(
+        own.iter()
+            .all(|finding| finding.name != bonsai_core::TOPLEVEL_UNIT)
+    );
 
     assert_scores(&[("function f(x = a ? 1 : 2) {}", 2)]);
 }

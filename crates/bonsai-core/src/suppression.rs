@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use tree_sitter::Node;
 
 use crate::collect::declaration_row;
-use crate::finding::{Suppression, SUPPRESSION_MARKER};
+use crate::finding::{SUPPRESSION_MARKER, Suppression};
 use crate::language::{Flags, Language, Role};
 
 /// A marker and the id of the comment node it was read from, so a comment can only ever
@@ -111,17 +111,16 @@ fn on_row(node: Node<'_>, row: usize, src: &[u8], lang: &Language) -> Option<Mar
     if node.start_position().row > row {
         return None;
     }
-    if lang.role(node) == Role::Trivia && node.start_position().row == row {
-        if let Some(found) = marker_of(node, src) {
-            return Some(found);
-        }
+    if lang.role(node) == Role::Trivia
+        && node.start_position().row == row
+        && let Some(found) = marker_of(node, src)
+    {
+        return Some(found);
     }
 
     let mut cursor = node.walk();
-    let found = node
-        .children(&mut cursor)
-        .find_map(|child| on_row(child, row, src, lang));
-    found
+    node.children(&mut cursor)
+        .find_map(|child| on_row(child, row, src, lang))
 }
 
 fn parse_marker(comment: &str) -> Option<Suppression> {

@@ -6,8 +6,8 @@ use std::fs;
 mod common;
 
 use common::{
-    assert_matches_serial, code, over_threshold, report, stderr, stdout, Project, BUSY_PHP,
-    CALM_PHP, CALM_TS,
+    BUSY_PHP, CALM_PHP, CALM_TS, Project, assert_matches_serial, code, over_threshold, report,
+    stderr, stdout,
 };
 /// Baits completion-order bugs: a slow first file so the worker holding index 0 finishes last,
 /// ties that `rank` cannot break, and a warning with a position to be wrong about.

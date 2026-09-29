@@ -6,9 +6,9 @@ use std::fs;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
-use bonsai_engine::config;
-use bonsai_engine::scan::{display_path, ScanOutcome};
 use bonsai_engine::Scanner;
+use bonsai_engine::config;
+use bonsai_engine::scan::{ScanOutcome, display_path};
 
 const KNOWN: &[&str] = &["php", "typescript", "vue", "go", "java", "python"];
 const PHP_UNIT: &str = "<?php\nfunction f() { return 1; }\n";
@@ -16,8 +16,7 @@ const TS_UNIT: &str = "function f() { return 1; }\n";
 const GO_UNIT: &str = "package p\n\nfunc f() int { return 1 }\n";
 const JAVA_UNIT: &str = "package p;\n\nclass F { int f() { return 1; } }\n";
 const PYTHON_UNIT: &str = "class F:\n    def f(self):\n        return 1\n";
-const VUE_UNIT: &str =
-    "<template><p v-if=\"a\">x</p></template>\n<script setup lang=\"ts\">\nfunction f() { return 1 }\n</script>\n";
+const VUE_UNIT: &str = "<template><p v-if=\"a\">x</p></template>\n<script setup lang=\"ts\">\nfunction f() { return 1 }\n</script>\n";
 
 fn project() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
@@ -90,10 +89,12 @@ fn excluded_files_are_neither_read_nor_counted() {
     let outcome = scan(&root, &["."], None);
 
     assert_eq!(outcome.stats.files, 1);
-    assert!(outcome
-        .located
-        .iter()
-        .all(|item| !item.path.to_string_lossy().contains("vendor")));
+    assert!(
+        outcome
+            .located
+            .iter()
+            .all(|item| !item.path.to_string_lossy().contains("vendor"))
+    );
 }
 
 /// `.js` and `.tsx` are parsed by a different grammar than `.ts`, but they are one language to
@@ -362,17 +363,21 @@ fn the_language_filter_separates_vue_from_typescript() {
 
     let only_vue = scan(&root, &["."], Some(&["vue".to_string()]));
     assert_eq!(only_vue.stats.files, 1);
-    assert!(only_vue
-        .located
-        .iter()
-        .all(|located| located.finding.language == "vue"));
+    assert!(
+        only_vue
+            .located
+            .iter()
+            .all(|located| located.finding.language == "vue")
+    );
 
     let only_ts = scan(&root, &["."], Some(&["typescript".to_string()]));
     assert_eq!(only_ts.stats.files, 1);
-    assert!(only_ts
-        .located
-        .iter()
-        .all(|located| located.finding.language == "typescript"));
+    assert!(
+        only_ts
+            .located
+            .iter()
+            .all(|located| located.finding.language == "typescript")
+    );
 }
 
 #[test]

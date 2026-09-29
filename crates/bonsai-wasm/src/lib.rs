@@ -9,7 +9,7 @@
 //! The ABI is raw C rather than wasm-bindgen: the whole surface is one string in and one
 //! string out, which does not justify a code-generation toolchain in the build.
 
-use std::alloc::{alloc, dealloc, Layout};
+use std::alloc::{Layout, alloc, dealloc};
 use std::cell::RefCell;
 use std::fmt::Write as _;
 
@@ -38,7 +38,7 @@ fn layout(len: usize) -> Option<Layout> {
 
 /// Reserves `len` bytes for the host to write source into, or returns null if that is refused.
 /// The host owns the allocation until it calls [`bl_free`] with the same `len`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn bl_alloc(len: usize) -> *mut u8 {
     match layout(len) {
         Some(layout) if len > 0 => unsafe { alloc(layout) },
@@ -50,12 +50,13 @@ pub extern "C" fn bl_alloc(len: usize) -> *mut u8 {
 ///
 /// # Safety
 /// `ptr` must come from [`bl_alloc`] with the same `len`, and must not be used afterwards.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn bl_free(ptr: *mut u8, len: usize) {
-    if let Some(layout) = layout(len) {
-        if !ptr.is_null() && len > 0 {
-            unsafe { dealloc(ptr, layout) };
-        }
+    if let Some(layout) = layout(len)
+        && !ptr.is_null()
+        && len > 0
+    {
+        unsafe { dealloc(ptr, layout) };
     }
 }
 
@@ -66,7 +67,7 @@ pub unsafe extern "C" fn bl_free(ptr: *mut u8, len: usize) {
 ///
 /// # Safety
 /// `ptr` must point to `len` readable bytes.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn bl_analyze(ptr: *const u8, len: usize, language: u32) -> usize {
     let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
     let Ok(source) = std::str::from_utf8(bytes) else {
@@ -86,7 +87,7 @@ pub unsafe extern "C" fn bl_analyze(ptr: *const u8, len: usize, language: u32) -
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn bl_result_ptr() -> *const u8 {
     RESULT.with(|cell| cell.borrow().as_ptr())
 }

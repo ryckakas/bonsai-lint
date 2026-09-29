@@ -277,9 +277,11 @@ fn callback_nesting_compounds_into_the_enclosing_unit() {
 fn only_a_nested_functions_defaults_are_scored() {
     let source = "def f(x=1 if flag else 2):\n    pass\n";
     assert_eq!(score_of(source, "f"), 0);
-    assert!(findings(source)
-        .iter()
-        .all(|finding| finding.name != bonsai_core::TOPLEVEL_UNIT));
+    assert!(
+        findings(source)
+            .iter()
+            .all(|finding| finding.name != bonsai_core::TOPLEVEL_UNIT)
+    );
 
     assert_scores(&[("def f(x=1 if flag else 2):\n    pass", 2)]);
 }

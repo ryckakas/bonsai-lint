@@ -8,7 +8,7 @@ use std::process::Output;
 
 mod common;
 
-use common::{code, stderr, stdout, Project, BUSY_GO, BUSY_PHP, BUSY_TS, GENERATED_HEADER};
+use common::{BUSY_GO, BUSY_PHP, BUSY_TS, GENERATED_HEADER, Project, code, stderr, stdout};
 
 fn manifest() -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.pre-commit-hooks.yaml");

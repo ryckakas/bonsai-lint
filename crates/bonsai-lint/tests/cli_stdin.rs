@@ -3,7 +3,7 @@
 mod common;
 
 use common::{
-    code, paths, ranked_scores, report, scores, stderr, Project, BUSY_PHP, BUSY_TS, CALM_PHP,
+    BUSY_PHP, BUSY_TS, CALM_PHP, Project, code, paths, ranked_scores, report, scores, stderr,
 };
 #[test]
 fn stdin_respects_the_workspace_excludes() {

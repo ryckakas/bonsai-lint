@@ -10,7 +10,7 @@
 name = "bonsai-wasm"
 description = "WebAssembly bindings for the bonsai-lint scorer, for the docs-site playground"
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 rust-version = "1.90"
 license = "MIT"
 publish = false

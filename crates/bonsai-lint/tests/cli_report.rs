@@ -5,7 +5,7 @@ use std::process::Stdio;
 
 mod common;
 
-use common::{code, paths, report, scores, stderr, stdout, Project, BUSY_PHP, CALM_PHP, CALM_TS};
+use common::{BUSY_PHP, CALM_PHP, CALM_TS, Project, code, paths, report, scores, stderr, stdout};
 #[test]
 fn a_clean_run_prints_nothing_and_exits_zero() {
     let project = Project::new();

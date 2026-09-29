@@ -133,15 +133,13 @@ fn an_annotation_does_not_move_the_reported_line() {
 /// the file, above or just after the package declaration.
 #[test]
 fn a_marker_above_the_package_declaration_suppresses_the_file() {
-    let source =
-        "// bonsai-lint-ignore: flag table\npackage p;\n\nclass C { static final boolean OK = a && b; }\n";
+    let source = "// bonsai-lint-ignore: flag table\npackage p;\n\nclass C { static final boolean OK = a && b; }\n";
     assert_eq!(suppression_of(source, "<toplevel>"), reasoned("flag table"));
 }
 
 #[test]
 fn a_marker_behind_the_package_declaration_suppresses_the_file() {
-    let source =
-        "package p;\n\n// bonsai-lint-ignore: flag table\n\nclass C { static final boolean OK = a && b; }\n";
+    let source = "package p;\n\n// bonsai-lint-ignore: flag table\n\nclass C { static final boolean OK = a && b; }\n";
     assert_eq!(suppression_of(source, "<toplevel>"), reasoned("flag table"));
 }
 

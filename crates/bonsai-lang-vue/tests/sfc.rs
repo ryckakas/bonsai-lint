@@ -144,8 +144,7 @@ fn a_byte_order_mark_keeps_the_row_correct() {
 /// one is documentation, not a block of the component.
 #[test]
 fn a_script_inside_a_custom_block_is_not_a_block() {
-    let source =
-        "<docs>\nExample:\n<script>function example(){ if (x) { y() } }</script>\n</docs>\n\
+    let source = "<docs>\nExample:\n<script>function example(){ if (x) { y() } }</script>\n</docs>\n\
                   <template><p/></template>\n<script setup>\nconst a = 1\n</script>\n";
     let ranges = extract(source).ranges;
     assert_eq!(ranges.len(), 1);

@@ -20,8 +20,7 @@ fn reasoned(reason: &str) -> Suppression {
 
 #[test]
 fn a_reasoned_marker_above_the_declaration_is_honoured() {
-    let source =
-        "package p\n\n// bonsai-lint-ignore: parser state machine\nfunc target() { if a { f() } }\n";
+    let source = "package p\n\n// bonsai-lint-ignore: parser state machine\nfunc target() { if a { f() } }\n";
     assert_eq!(
         suppression_of(source, "target"),
         reasoned("parser state machine")
@@ -52,8 +51,7 @@ fn a_bare_marker_is_refused() {
 
 #[test]
 fn a_marker_above_a_method_is_honoured() {
-    let source =
-        "package p\n\n// bonsai-lint-ignore: hot path\nfunc (s *Stack) Push(v int) { if a { f() } }\n";
+    let source = "package p\n\n// bonsai-lint-ignore: hot path\nfunc (s *Stack) Push(v int) { if a { f() } }\n";
     assert_eq!(suppression_of(source, "Push"), reasoned("hot path"));
 }
 

@@ -267,7 +267,7 @@ fn accessor(node: Node<'_>, name: &str, src: &[u8]) -> Option<String> {
         .parent()
         .filter(|parent| parent.kind() == "decorated_definition")?;
     let mut cursor = wrapper.walk();
-    let found = wrapper
+    wrapper
         .named_children(&mut cursor)
         .filter(|child| child.kind() == "decorator")
         .filter_map(|decorator| decorator.named_child(0))
@@ -275,8 +275,7 @@ fn accessor(node: Node<'_>, name: &str, src: &[u8]) -> Option<String> {
         .find_map(|target| {
             let object = text(target.child_by_field_name("object")?, src)?;
             (object == name).then(|| text(target.child_by_field_name("attribute")?, src))?
-        });
-    found
+        })
 }
 
 fn lambda_name(node: Node<'_>, src: &[u8]) -> UnitName {

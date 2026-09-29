@@ -7,7 +7,7 @@ use ignore::{DirEntry, WalkBuilder};
 use tree_sitter::{Parser, Range};
 
 use crate::config::Workspace;
-use crate::finding::{normalize_key, Located};
+use crate::finding::{Located, normalize_key};
 use crate::pool;
 use crate::registry;
 
@@ -97,7 +97,7 @@ impl Pass<'_> {
                 return self
                     .plan
                     .entries
-                    .push(Planned::Unreadable(error.to_string()))
+                    .push(Planned::Unreadable(error.to_string()));
             }
         };
         if !entry.file_type().is_some_and(|kind| kind.is_file()) {
@@ -372,7 +372,7 @@ fn score(parsers: &mut Parsers, planned: &Planned) -> Scored {
             return Scored {
                 error: Some(message.clone()),
                 ..Scored::default()
-            }
+            };
         }
     };
 

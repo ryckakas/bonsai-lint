@@ -3,8 +3,8 @@
 mod common;
 
 use common::{
-    code, nested_go, paths, report, stderr, stdout, Project, BUSY_GO, BUSY_TS, CALM_GO,
-    GENERATED_HEADER,
+    BUSY_GO, BUSY_TS, CALM_GO, GENERATED_HEADER, Project, code, nested_go, paths, report, stderr,
+    stdout,
 };
 
 #[test]
@@ -167,9 +167,11 @@ fn a_go_baseline_is_keyed_by_receiver_and_then_quiet() {
 
     let written = project.run(&["--write-baseline", "."]);
     assert_eq!(code(&written), 0, "{}", stderr(&written));
-    assert!(project
-        .read(".bonsai-lint-baseline.json")
-        .contains("Stack::Push"));
+    assert!(
+        project
+            .read(".bonsai-lint-baseline.json")
+            .contains("Stack::Push")
+    );
 
     let rerun = project.run(&["."]);
     assert_eq!(code(&rerun), 0, "{}", stdout(&rerun));

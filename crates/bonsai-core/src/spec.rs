@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use tree_sitter::Node;
 
 use crate::finding::{Callee, UnitName, UnitScope};
-use crate::language::{field, Language};
+use crate::language::{Language, field};
 use crate::walk::IfPart;
 
 #[derive(Debug)]

@@ -1,7 +1,7 @@
 use tree_sitter::Node;
 
 use crate::finding::UnitScope;
-use crate::language::{field, Flags, Language, Role};
+use crate::language::{Flags, Language, Role, field};
 
 pub struct WalkCx<'a> {
     pub lang: &'a Language,
@@ -217,10 +217,8 @@ fn walk_children(node: Node<'_>, nesting: u32, cx: &WalkCx<'_>, score: &mut u32)
 /// alone would pick up `else /* why */ { ... }` as the else body.
 fn first_significant_named_child<'t>(node: Node<'t>, lang: &Language) -> Option<Node<'t>> {
     let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .find(|child| lang.role(*child) != Role::Trivia);
-    found
+    node.named_children(&mut cursor)
+        .find(|child| lang.role(*child) != Role::Trivia)
 }
 
 /// A run of like operators costs +1 however long it is; the cost is in the switching.

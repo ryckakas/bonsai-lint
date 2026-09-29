@@ -164,10 +164,8 @@ fn normalize_logical_operator(operator: &str) -> Option<&'static str> {
 /// The label is an unfielded `identifier` child rather than a field, unlike TypeScript's.
 fn is_penalized_jump(node: Node<'_>) -> bool {
     let mut cursor = node.walk();
-    let labelled = node
-        .named_children(&mut cursor)
-        .any(|child| child.kind() == "identifier");
-    labelled
+    node.named_children(&mut cursor)
+        .any(|child| child.kind() == "identifier")
 }
 
 /// `super.m()` and `Outer.super.m()` call the parent's method, so `super` is kept as the
@@ -236,10 +234,8 @@ fn unit_body<'t>(node: Node<'t>, lang: &Language) -> Option<Node<'t>> {
         return field(node, lang.fields.body);
     }
     let mut cursor = node.walk();
-    let block = node
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == "block");
-    block
+    node.named_children(&mut cursor)
+        .find(|child| child.kind() == "block")
 }
 
 /// Overloads share a name, so a call recurses only when its argument count fits the method's
@@ -301,11 +297,10 @@ fn declared(node: Node<'_>, parameters: Option<Node<'_>>, src: &[u8]) -> UnitNam
     let types: Vec<String> = parameters
         .map(|parameters| {
             let mut cursor = parameters.walk();
-            let types = parameters
+            parameters
                 .named_children(&mut cursor)
                 .filter_map(|parameter| parameter_type(parameter, src))
-                .collect();
-            types
+                .collect()
         })
         .unwrap_or_default();
     UnitName::declared(name).with_signature(format!("({})", types.join(", ")))
@@ -346,13 +341,12 @@ fn annotated_varargs(error: Node<'_>, src: &[u8]) -> Option<String> {
 
 fn written_type(parameter: Node<'_>) -> Option<Node<'_>> {
     let mut cursor = parameter.walk();
-    let written = parameter.named_children(&mut cursor).find(|child| {
+    parameter.named_children(&mut cursor).find(|child| {
         !matches!(
             child.kind(),
             "modifiers" | "variable_declarator" | "marker_annotation" | "annotation"
         ) && !is_comment(*child)
-    });
-    written
+    })
 }
 
 /// The type as its simple name, so `java.util.List<String>` and an imported `List<String>` key
@@ -515,10 +509,9 @@ fn is_callable(argument: Node<'_>) -> bool {
         "lambda_expression" | "method_reference" | "method_invocation" => true,
         "object_creation_expression" => {
             let mut cursor = argument.walk();
-            let anonymous = argument
+            argument
                 .named_children(&mut cursor)
-                .any(|child| child.kind() == "class_body");
-            anonymous
+                .any(|child| child.kind() == "class_body")
         }
         _ => false,
     }

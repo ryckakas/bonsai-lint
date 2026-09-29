@@ -5,8 +5,8 @@ use std::fs;
 mod common;
 
 use common::{
-    assert_matches_serial, baselines, code, nested_php, nested_ts, paths, remove_baselines, report,
-    stderr, stdout, Project, BUSY_TS, CALM_PHP, CALM_TS,
+    BUSY_TS, CALM_PHP, CALM_TS, Project, assert_matches_serial, baselines, code, nested_php,
+    nested_ts, paths, remove_baselines, report, stderr, stdout,
 };
 /// A monorepo's shape: several domains at once, each with its own config, threshold and
 /// baseline. The engine tests cover two domains; the combination below is what a real repository
