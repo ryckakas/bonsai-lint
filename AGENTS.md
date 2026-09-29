@@ -235,9 +235,9 @@ projects on crates.io/npm/PyPI/VS Code Marketplace).
 - `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area (`cli_report.rs`,
   `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`,
   `cli_go.rs`, `cli_java.rs`, `cli_python.rs`, `cli_pre_commit.rs`, `cli_github.rs`) over a
-  shared `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in a fifth of
-  a second while `cli_parallel` is the slow one. `cli_pre_commit.rs` reads the hook's arguments
-  from `.pre-commit-hooks.yaml`, so it runs exactly the command users get.
+  shared `tests/common/mod.rs`. Each file is its own test binary, so `--test cli_vue` runs in a
+  fifth of a second while `cli_parallel` is the slow one. `cli_pre_commit.rs` reads the hook's
+  arguments from `.pre-commit-hooks.yaml`, so it runs exactly the command users get.
 - `pypi/test_build_wheels.py` builds wheels from dist-shaped archives holding synthetic ELF,
   Mach-O and PE headers, against the real v0.4.1 `dist-manifest.json` in `pypi/testdata/`. It
   covers every refusal and asserts the gnu builds stay out, which is a rule by omission.

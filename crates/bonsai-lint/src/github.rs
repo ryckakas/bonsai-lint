@@ -14,6 +14,7 @@ pub(crate) const ERRORS_PER_STEP: usize = 10;
 pub(crate) enum Level {
     Error,
     Warning,
+    Notice,
 }
 
 /// A command without a place lands in the run's summary; one with a file and line, on that line.
@@ -28,6 +29,7 @@ impl fmt::Display for Annotation<'_> {
         let command = match self.level {
             Level::Error => "error",
             Level::Warning => "warning",
+            Level::Notice => "notice",
         };
         let place = self.place.map_or_else(String::new, |(file, line)| {
             format!("file={},line={line},", escape_property(file))
@@ -90,7 +92,7 @@ fn file(path: &Path) -> Option<String> {
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
 }
 
-fn escape_data(text: &str) -> String {
+pub(crate) fn escape_data(text: &str) -> String {
     text.replace('%', "%25")
         .replace('\r', "%0D")
         .replace('\n', "%0A")

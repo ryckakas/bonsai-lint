@@ -241,7 +241,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     }
 
     let baselines = load_baselines(args, &workspace)?;
-    let loose = report_loose_entries(&baselines, &located, &workspace, args, &scan_roots);
+    let (loose, held) = report_loose_entries(&baselines, &located, &workspace, args, &scan_roots);
     let strict_loose = loose.iter().filter(|entry| entry.strict).count();
 
     let breaches: Vec<&Located> = over_threshold
@@ -252,7 +252,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     let gated_by = domain_filter.unwrap_or_else(|| only_visited_domain(&stats));
     let printed = match args.format {
         Format::Text => print_text(&located, args, &workspace, &baselines),
-        Format::Github => print_github(&located, args, &workspace, &baselines),
+        Format::Github => print_github(&located, args, &workspace, &baselines, &held),
         Format::Json => print_json(
             &located,
             args,
@@ -302,10 +302,11 @@ fn verdict(
     }
     let errors = breaches + strict_loose;
     if args.format == Format::Github && errors > github::ERRORS_PER_STEP {
-        eprintln!(
-            "GitHub annotates at most {} errors per step; all {errors} are listed above",
+        let note = format!(
+            "GitHub annotates at most {} errors per step; all {errors} are listed in the log",
             github::ERRORS_PER_STEP
         );
+        eprintln!("{}", github::annotation(Level::Notice, &note));
     }
     ExitCode::FAILURE
 }
@@ -588,12 +589,13 @@ fn report_loose_entries(
     workspace: &Workspace,
     args: &Args,
     scan_roots: &[PathBuf],
-) -> Vec<ReportedLooseEntry> {
+) -> (Vec<ReportedLooseEntry>, Vec<String>) {
     let partial = args.stdin || args.domain.is_some() || !args.lang.is_empty();
     let covered = |root: &Path| !partial && scan_roots.iter().any(|path| root.starts_with(path));
     let shared = args.baseline.is_some();
 
     let mut loose = Vec::new();
+    let mut held = Vec::new();
     let mut unjudged = 0;
     for (index, baseline) in baselines {
         let domain = &workspace.domains[*index];
@@ -612,7 +614,13 @@ fn report_loose_entries(
             .iter()
             .filter(|item| shared || item.domain == *index);
         for entry in baseline.loose(scoped, |item| threshold_of(item, workspace)) {
-            announce_loose(args.format, name, &entry, file, domain.strict_baseline);
+            held.extend(announce_loose(
+                args.format,
+                name,
+                &entry,
+                file,
+                domain.strict_baseline,
+            ));
             let owner = (!shared).then(|| name.to_string());
             loose.push(ReportedLooseEntry::new(
                 owner,
@@ -629,12 +637,19 @@ fn report_loose_entries(
         );
         say(args.format, Level::Warning, &note);
     }
-    loose
+    (loose, held)
 }
 
 /// A loose entry in a strict baseline fails the run, so `github` makes it an error on the
-/// baseline file rather than a warning.
-fn announce_loose(format: Format, owner: &str, entry: &LooseEntry, baseline: &Path, strict: bool) {
+/// baseline file, and holds it back until the breaches are out: the runner annotates only the
+/// first ten errors, and a breach on the pull request's own lines must not lose its place.
+fn announce_loose(
+    format: Format,
+    owner: &str,
+    entry: &LooseEntry,
+    baseline: &Path,
+    strict: bool,
+) -> Option<String> {
     let message = format!(
         "{owner}: {}: {} is baselined at {} but {}",
         entry.key_path,
@@ -644,10 +659,10 @@ fn announce_loose(format: Format, owner: &str, entry: &LooseEntry, baseline: &Pa
     );
     if format != Format::Github {
         eprintln!("{message}");
-        return;
+        return None;
     }
     let level = if strict { Level::Error } else { Level::Warning };
-    eprintln!("{}", github::annotation_on(level, baseline, &message));
+    Some(github::annotation_on(level, baseline, &message))
 }
 
 fn describe(reason: Looseness) -> String {
@@ -692,7 +707,12 @@ fn warn_about_unreasoned_suppressions(located: &[Located], workspace: &Workspace
 /// only warns, and stays in the log so a legacy tree cannot use up the annotations.
 fn print_diagnostics(format: Format, warnings: &[String], errors: &[String]) {
     for warning in warnings {
-        eprintln!("{warning}");
+        // A file name is data; in `github` a line break in one must not start a command.
+        if format == Format::Github {
+            eprintln!("{}", github::escape_data(warning));
+        } else {
+            eprintln!("{warning}");
+        }
     }
     for error in errors {
         say(format, Level::Error, error);
@@ -759,6 +779,7 @@ fn print_github(
     args: &Args,
     workspace: &Workspace,
     baselines: &BTreeMap<usize, Baseline>,
+    held: &[String],
 ) -> io::Result<()> {
     let mut out = io::stdout().lock();
     let reported = located
@@ -775,6 +796,9 @@ fn print_github(
             "{}",
             github::annotation_at(Level::Error, &item.path, line, &message)
         )?;
+    }
+    for annotation in held {
+        writeln!(out, "{annotation}")?;
     }
     Ok(())
 }

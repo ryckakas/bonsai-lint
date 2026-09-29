@@ -134,11 +134,11 @@ pub fn declaration_row(node: Node<'_>, lang: &Language) -> usize {
 }
 
 /// A node that stops at the start of a row, as a file ending in a newline does, ends on the row
-/// above. The floor keeps a zero-width node, such as a `}` the parser had to invent, from ending
-/// before it starts.
+/// above. The floor keeps a zero-width node, which the parser invents to recover from an error,
+/// from ending before it starts.
 fn last_line(node: Node<'_>, line: usize) -> usize {
     let end = node.end_position();
-    let row = if end.column == 0 && end.row > node.start_position().row {
+    let row = if end.column == 0 {
         end.row
     } else {
         end.row + 1

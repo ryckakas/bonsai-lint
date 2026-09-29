@@ -114,7 +114,7 @@ There is no Maven or Gradle plugin yet. On a Java project, use Homebrew, the ins
 bonsai-lint src/                     # fail on anything above 15
 bonsai-lint --over 10 src/           # stricter; `--over php=10,typescript=20` per language
 bonsai-lint --all src/               # every unit, ranked
-bonsai-lint --format json src/       # for editors and CI
+bonsai-lint --format json src/       # for editors and scripts
 bonsai-lint --write-baseline src/    # record today's findings, exit 0
 bonsai-lint --lang php src/          # one language only; `--help` lists the ids
 ```
@@ -216,11 +216,12 @@ against one generated in CI. `line` is the unit's signature and `end_line` its l
 <summary><b>In GitHub Actions</b></summary>
 
 `--format github` prints each breach as a workflow command, so it shows as an annotation on the
-pull request, and fails exactly when the text report does. A loose baseline entry is filed on its
-baseline file, and config warnings and read errors on the run. Paths are made relative to
-`GITHUB_WORKSPACE`, so the step can run from any directory, but a repository checked out into a
-subdirectory with `path:` is annotated under that subdirectory, which GitHub cannot place. GitHub
-annotates at most 10 errors per step; the log lists every one.
+pull request, and fails exactly when the text report does. A marker without a reason warns on its
+unit, a loose baseline entry is filed on its baseline file, and config warnings and read errors
+on the run. Paths are made relative to `GITHUB_WORKSPACE`, so the step can run from any directory;
+a file outside it is annotated on the run. A repository checked out into a subdirectory with
+`path:` is annotated under that subdirectory, which GitHub cannot place. GitHub annotates at most
+10 errors per step; the log lists every one.
 
 <img src="docs/images/github-annotation-error-and-warning.png" alt="A pull request's changed TypeScript file with two annotations on one line: a bonsai-lint breach as a check failure, and a warning that its suppression marker needs a reason" width="720">
 

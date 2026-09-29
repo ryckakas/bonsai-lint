@@ -3,8 +3,9 @@
 //! so switching format in CI never changes what passes.
 
 use std::fs;
+use std::io::Write as _;
 use std::path::Path;
-use std::process::Output;
+use std::process::{Output, Stdio};
 
 mod common;
 
@@ -233,7 +234,8 @@ fn a_loose_entry_warns_on_the_baseline_file_and_errs_only_when_strict() {
                     is baselined at 28 but scores 21\n";
 
     let lenient = run_in_actions(&project, &["--format", "github", "."], Some(&project.root));
-    assert_eq!(stderr(&lenient), format!("::warning {expected}"));
+    assert_eq!(stdout(&lenient), format!("::warning {expected}"));
+    assert_eq!(stderr(&lenient), "");
     assert_eq!(code(&lenient), 0);
 
     let strict = run_in_actions(
@@ -241,11 +243,7 @@ fn a_loose_entry_warns_on_the_baseline_file_and_errs_only_when_strict() {
         &["--format", "github", "--strict-baseline", "."],
         Some(&project.root),
     );
-    assert!(
-        stderr(&strict).starts_with(&format!("::error {expected}")),
-        "{}",
-        stderr(&strict)
-    );
+    assert_eq!(stdout(&strict), format!("::error {expected}"));
     assert!(stderr(&strict).contains("tighten them with --write-baseline"));
     assert_eq!(code(&strict), 1);
 }
@@ -353,8 +351,10 @@ fn past_ten_errors_the_log_says_the_annotations_stop() {
     project.file("src/u10.php", &nested_php("u10", 6));
     let past_it = run_in_actions(&project, &["--format", "github", "."], None);
     assert!(
-        stderr(&past_it)
-            .ends_with("GitHub annotates at most 10 errors per step; all 11 are listed above\n"),
+        stderr(&past_it).ends_with(
+            "::notice title=bonsai-lint::GitHub annotates at most 10 errors per step; all 11 are \
+             listed in the log\n"
+        ),
         "{}",
         stderr(&past_it)
     );
@@ -381,8 +381,95 @@ fn a_shared_baselines_loose_entry_is_filed_on_it() {
     );
 
     assert_eq!(
-        stderr(&output),
+        stdout(&output),
         "::warning file=ledger.json,line=1,title=bonsai-lint::baseline: src/a.php: busy is baselined \
          at 21 but matched nothing in this scan\n"
+    );
+}
+
+/// The runner annotates only the first ten errors, so deleting baselined code under a strict
+/// baseline must not push a breach on the pull request's own lines out of them.
+#[test]
+fn a_breach_comes_before_the_loose_entries_that_could_crowd_it_out() {
+    let project = Project::new();
+    for index in 0..11 {
+        project.file(
+            &format!("src/old{index}.php"),
+            &nested_php(&format!("old{index}"), 6),
+        );
+    }
+    assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
+    for index in 0..11 {
+        fs::remove_file(project.root.join(format!("src/old{index}.php"))).expect("remove");
+    }
+    project.file("src/fresh.php", &nested_php("fresh", 6));
+
+    let output = run_in_actions(
+        &project,
+        &["--format", "github", "--strict-baseline", "."],
+        Some(&project.root),
+    );
+
+    let printed = stdout(&output);
+    let lines: Vec<&str> = printed.lines().collect();
+    assert_eq!(lines.len(), 12);
+    assert!(
+        lines[0].starts_with("::error file=src/fresh.php,line=2,"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[1..]
+            .iter()
+            .all(|line| line.starts_with("::error file=.bonsai-lint-baseline.json,line=1,")),
+        "{lines:?}"
+    );
+}
+
+#[test]
+fn an_editor_buffer_is_annotated_under_its_stdin_path() {
+    let project = Project::new();
+    project.file("src/a.php", CALM_PHP);
+
+    let args = [
+        "--format",
+        "github",
+        "--stdin",
+        "--stdin-path",
+        "src/new/b.php",
+    ];
+    let mut child = project
+        .command(&args)
+        .env("GITHUB_WORKSPACE", &project.root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("binary starts");
+    child
+        .stdin
+        .take()
+        .expect("stdin is piped")
+        .write_all(nested_php("buffer", 6).as_bytes())
+        .expect("stdin accepts input");
+    let output = child.wait_with_output().expect("binary exits");
+
+    assert!(
+        stdout(&output).starts_with("::error file=src/new/b.php,line=2,"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+/// An empty variable names no checkout, so the paths print as they would without it.
+#[test]
+fn an_empty_github_workspace_is_no_workspace() {
+    let project = Project::new();
+    project.file("src/a.php", &nested_php("busy", 6));
+
+    let output = run_in_actions(&project, &["--format", "github", "."], Some(Path::new("")));
+
+    assert!(
+        stdout(&output).starts_with("::error file=src/a.php,line=2,"),
+        "{}",
+        stdout(&output)
     );
 }
