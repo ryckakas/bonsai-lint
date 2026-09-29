@@ -210,8 +210,8 @@ against one generated in CI.
 
 A clean run prints nothing and exits 0. Exit 1 means a breach, a strict baseline accepting more
 than the code needs, or that the scan was untrustworthy, because a path could not be read or
-matched no supported file. A gate that
-cannot read what it was pointed at must not report success.
+matched no supported file. A gate that cannot read what it was pointed at must not report
+success.
 
 <details>
 <summary><b>Supported languages and extensions</b></summary>

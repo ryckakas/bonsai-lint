@@ -240,12 +240,28 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     tolerate_closed_pipe(printed)?;
 
     let accepted = over_threshold.len() - breaches.len();
-    Ok(verdict(breaches.len(), accepted, strict_loose, args))
+    let partial = !scan_roots
+        .iter()
+        .any(|path| workspace.root.starts_with(path));
+    Ok(verdict(
+        breaches.len(),
+        accepted,
+        strict_loose,
+        partial,
+        args,
+    ))
 }
 
 /// A strict baseline fails on entries looser than the code, but the hint must never teach anyone
-/// to rewrite the baseline over a run that still has breaches, which would accept them too.
-fn verdict(breaches: usize, accepted: usize, strict_loose: usize, args: &Args) -> ExitCode {
+/// to rewrite the baseline while something may still fail, here or in a part of the workspace
+/// this run did not see, because the rewrite would accept that too.
+fn verdict(
+    breaches: usize,
+    accepted: usize,
+    strict_loose: usize,
+    partial: bool,
+    args: &Args,
+) -> ExitCode {
     if breaches == 0 && strict_loose == 0 {
         return ExitCode::SUCCESS;
     }
@@ -255,7 +271,7 @@ fn verdict(breaches: usize, accepted: usize, strict_loose: usize, args: &Args) -
             eprintln!("{}", breach_summary(breaches, accepted));
         }
         if strict_loose > 0 {
-            eprintln!("{}", tighten_hint(strict_loose, breaches > 0));
+            eprintln!("{}", tighten_hint(strict_loose, breaches > 0 || partial));
         }
     }
     ExitCode::FAILURE
@@ -268,8 +284,8 @@ fn breach_summary(breaches: usize, accepted: usize) -> String {
     format!("{breaches} unit(s) over the threshold, {accepted} accepted by a baseline")
 }
 
-fn tighten_hint(strict_loose: usize, breached: bool) -> String {
-    let when = if breached {
+fn tighten_hint(strict_loose: usize, unsure: bool) -> String {
+    let when = if unsure {
         "once nothing else fails, "
     } else {
         ""
@@ -591,7 +607,7 @@ fn describe(reason: Looseness) -> String {
     match reason {
         Looseness::Unmatched => "matched nothing in this scan".to_string(),
         Looseness::Suppressed => "is suppressed".to_string(),
-        Looseness::AtOrUnderThreshold { score, threshold } => {
+        Looseness::NotOverThreshold { score, threshold } => {
             format!("scores {score}, not over its threshold of {threshold}")
         }
         Looseness::Lower { score } => format!("scores {score}"),

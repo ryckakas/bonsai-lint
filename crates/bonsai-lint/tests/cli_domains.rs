@@ -298,3 +298,70 @@ fn a_loose_entry_fails_the_run_only_in_a_strict_domain() {
         stderr(&strict)
     );
 }
+
+/// A per-app job judges only its own domain's baseline, and cannot vouch for the rest of the
+/// workspace, so the hint must not send it to rewrite everything while another domain may fail.
+#[test]
+fn a_scan_of_one_domain_judges_only_that_baseline() {
+    let project = Project::new();
+    project
+        .file(
+            "bonsai-lint.toml",
+            "domains = [\"apps/*\"]\nstrict-baseline = true\n",
+        )
+        .file("apps/web/a.php", &nested_php("web", 7))
+        .file("apps/legacy/b.php", &nested_php("gone", 6));
+    assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
+    project
+        .file("apps/web/a.php", &nested_php("web", 6))
+        .file("apps/legacy/c.php", &nested_php("fresh", 6));
+    fs::remove_file(project.root.join("apps/legacy/b.php")).expect("remove");
+
+    let output = project.run(&["apps/web"]);
+
+    assert_eq!(code(&output), 1, "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains("apps/web: a.php: web is baselined at 28 but scores 21"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        !stderr(&output).contains("apps/legacy:"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        stderr(&output).contains("; once nothing else fails, tighten them"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+/// One file spans every domain, so it answers to the root's setting alone.
+#[test]
+fn a_shared_baseline_is_as_strict_as_the_root() {
+    let project = Project::new();
+    project
+        .file("bonsai-lint.toml", "domains = [\"apps/*\"]\n")
+        .file("apps/web/bonsai-lint.toml", "strict-baseline = true\n")
+        .file("apps/web/a.php", &nested_php("web", 7));
+    let shared = ["--baseline", "shared.json"];
+    assert_eq!(
+        code(&project.run(&[&shared[..], &["--write-baseline", "."]].concat())),
+        0
+    );
+    project.file("apps/web/a.php", &nested_php("web", 6));
+    let json = [&shared[..], &["--format", "json", "."]].concat();
+
+    let lenient = project.run(&json);
+    assert_eq!(code(&lenient), 0, "{}", stderr(&lenient));
+    assert_eq!(report(&lenient)["loose_entries"][0]["strict"], false);
+
+    project.file(
+        "bonsai-lint.toml",
+        "domains = [\"apps/*\"]\nstrict-baseline = true\n",
+    );
+    let strict = project.run(&json);
+    assert_eq!(code(&strict), 1, "{}", stderr(&strict));
+    assert_eq!(report(&strict)["loose_entries"][0]["strict"], true);
+}

@@ -68,7 +68,7 @@ impl ReportedLooseEntry {
         let (reason, score, threshold) = match entry.reason {
             Looseness::Unmatched => (LooseReason::Unmatched, None, None),
             Looseness::Suppressed => (LooseReason::Suppressed, None, None),
-            Looseness::AtOrUnderThreshold { score, threshold } => {
+            Looseness::NotOverThreshold { score, threshold } => {
                 (LooseReason::NotOverThreshold, Some(score), Some(threshold))
             }
             Looseness::Lower { score } => (LooseReason::Lower, Some(score), None),

@@ -175,7 +175,7 @@ pub enum Looseness {
     /// Every unit with the entry's key carries a suppression marker with a reason.
     Suppressed,
     /// The unit no longer scores over its threshold, so it needs no entry.
-    AtOrUnderThreshold {
+    NotOverThreshold {
         /// The unit's score, the higher one where two units share the entry.
         score: u32,
         /// The threshold that unit is held to.
@@ -205,7 +205,7 @@ fn judge(
         .map(|item| item.finding.score)
         .max();
     match over {
-        None => Some(Looseness::AtOrUnderThreshold {
+        None => Some(Looseness::NotOverThreshold {
             score: highest.finding.score,
             threshold: threshold(highest),
         }),

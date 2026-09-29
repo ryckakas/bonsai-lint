@@ -26,8 +26,9 @@ what a user reads on the GitHub release page.
   nothing, which used to be only counted, a scan of the whole domain now reports an entry whose
   unit scores less than recorded, no longer scores over its threshold, or is suppressed with a
   reason: `root: src/a.php: busy is baselined at 28 but scores 21`. Without the new flag the exit
-  code is unchanged, and the baseline format too, so existing baselines keep working. Rewrite one
-  with `bonsai-lint --write-baseline .` to silence the new lines, or before turning on strict mode.
+  code is unchanged, and the baseline format too, so existing baselines keep working. To silence
+  the new lines, or before turning on strict mode, rewrite a baseline with `--write-baseline` over
+  the whole workspace and the flags CI runs with.
 - **The JSON report gains `loose_entries`,** always present and empty when there are none: the same
   entries, each with its `domain`, `path`, `unit`, `recorded` score, `reason`, current `score`,
   `threshold` and whether it is `strict`.

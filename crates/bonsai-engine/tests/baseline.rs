@@ -115,7 +115,7 @@ fn an_entry_matching_nothing_is_loose() {
                 "src/a.php",
                 "busy",
                 20,
-                Looseness::AtOrUnderThreshold {
+                Looseness::NotOverThreshold {
                     score: 3,
                     threshold: THRESHOLD
                 }
@@ -137,7 +137,7 @@ fn a_unit_at_its_threshold_is_loose() {
             "src/a.php",
             "busy",
             21,
-            Looseness::AtOrUnderThreshold {
+            Looseness::NotOverThreshold {
                 score: THRESHOLD,
                 threshold: THRESHOLD
             }
@@ -196,16 +196,18 @@ fn a_marker_without_a_reason_does_not() {
 }
 
 /// Two accessors the namer cannot tell apart share one entry holding the higher score, so the
-/// lower one must not read as an improvement.
+/// lower one must not read as an improvement, whichever side of the threshold it is on.
 #[test]
 fn twins_are_judged_by_the_higher_score() {
-    let twins = [
-        located("src/a.php", "set", 20),
-        located("src/a.php", "set", 0),
-    ];
-    let baseline = Baseline::from_findings(&twins[..1]);
+    let baseline = Baseline::from_findings(&[located("src/a.php", "set", 20)]);
 
-    assert!(loose(&baseline, &twins).is_empty());
+    for lower in [18, 0] {
+        let twins = [
+            located("src/a.php", "set", 20),
+            located("src/a.php", "set", lower),
+        ];
+        assert!(loose(&baseline, &twins).is_empty(), "lower twin {lower}");
+    }
 }
 
 #[test]
@@ -236,7 +238,7 @@ fn a_suppressed_twin_is_ignored() {
             "src/a.php",
             "busy",
             38,
-            Looseness::AtOrUnderThreshold {
+            Looseness::NotOverThreshold {
                 score: 3,
                 threshold: THRESHOLD
             }
@@ -260,7 +262,7 @@ fn the_threshold_is_each_units_own() {
     assert_eq!(found[0].key_path, "src/a.go");
     assert_eq!(
         found[0].reason,
-        Looseness::AtOrUnderThreshold {
+        Looseness::NotOverThreshold {
             score: 20,
             threshold: 25
         }

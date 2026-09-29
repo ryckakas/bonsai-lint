@@ -21,8 +21,8 @@ pub struct ScanStats {
     pub files: usize,
     /// How many paths could not be read or walked.
     pub errors: usize,
-    /// Which domains the scan actually visited. Stale baseline entries are only meaningful for
-    /// these; a domain nobody looked at has not gone stale, it was simply out of scope.
+    /// Which domains the scan visited, so a report scoped to one can claim that domain's
+    /// thresholds.
     pub domains: BTreeSet<usize>,
 }
 
