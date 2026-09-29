@@ -35,6 +35,11 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
 
 ## Smaller known items
 
+- **`endLine` in GitHub annotations.** Every finding carries the unit's last line, but
+  `--format github` prints only the first: no documentation says where GitHub draws an annotation
+  spanning lines, and one report says it does not show on a pull request at all. A workflow in a
+  scratch repository echoing a one-line annotation, a range inside the diff and a range ending
+  outside it would settle it, and a patch release could then add `endLine`.
 - **Two units with one qualified name share one baseline entry.** A baseline is
   `{path: {qualified_name: score}}`, so when a file declares the same name twice the entry keeps
   the higher score. An unchanged re-run passes, but the lower-scoring unit can grow up to the

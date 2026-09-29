@@ -254,6 +254,12 @@ fn merge_toplevel(findings: &mut Vec<bonsai_core::Finding>) {
         .filter(|f| is_toplevel(f))
         .map(|f| f.score)
         .sum();
+    findings[first].end_line = findings
+        .iter()
+        .filter(|f| is_toplevel(f))
+        .map(|f| f.end_line)
+        .max()
+        .unwrap_or(findings[first].end_line);
 
     // The merged finding is one unit, so a marker in any of its regions applies to all of it.
     if let Some(marked) = findings

@@ -1,5 +1,7 @@
 //! The command line of bonsai-lint, a multi-language cognitive complexity linter.
 
+mod github;
+
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
 use std::num::NonZeroUsize;
@@ -12,9 +14,12 @@ use bonsai_engine::finding::normalize_key;
 use bonsai_engine::report::{Report, ReportedFinding, ReportedLooseEntry};
 use bonsai_engine::scan::{decode, display_path, rank, resolve};
 use bonsai_engine::{
-    Baseline, Located, Looseness, STACK_SIZE, ScanOutcome, ScanStats, Scanner, registry,
+    Baseline, Located, LooseEntry, Looseness, STACK_SIZE, ScanOutcome, ScanStats, Scanner, registry,
 };
+use clap::error::ErrorKind;
 use clap::{CommandFactory, FromArgMatches, Parser as ClapParser, ValueEnum};
+
+use crate::github::Level;
 
 // musl's malloc serialises threads on one lock, which made a parallel scan over 15 times slower
 // than glibc's. The `override` feature is the half that matters: tree-sitter's C calls malloc.
@@ -41,7 +46,7 @@ struct Args {
     #[arg(long)]
     all: bool,
 
-    /// Output format; `json` is the machine-readable form editors consume
+    /// Output format; `json` is what editors read, `github` annotates pull requests
     #[arg(long, value_enum, default_value_t = Format::Text)]
     format: Format,
 
@@ -94,10 +99,12 @@ struct Args {
 enum Format {
     Text,
     Json,
+    Github,
 }
 
 fn main() -> ExitCode {
     let args = parse_args();
+    let format = args.format;
 
     // The engine gives its own workers this stack; `--stdin` parses on this thread instead.
     let outcome = std::thread::Builder::new()
@@ -109,7 +116,7 @@ fn main() -> ExitCode {
     match outcome {
         Ok(Ok(code)) => code,
         Ok(Err(message)) | Err(message) => {
-            eprintln!("{message}");
+            say(format, Level::Error, &message);
             ExitCode::FAILURE
         }
     }
@@ -131,7 +138,27 @@ fn parse_args() -> Args {
         arg.help(format!("Restrict the scan to these languages ({offered})"))
     });
     let matches = command.get_matches_mut();
-    Args::from_arg_matches(&matches).unwrap_or_else(|error| error.format(&mut command).exit())
+    let args =
+        Args::from_arg_matches(&matches).unwrap_or_else(|error| error.format(&mut command).exit());
+    // Annotating every unit that passes would bury the ones that fail.
+    if args.all && args.format == Format::Github {
+        command
+            .error(
+                ErrorKind::ArgumentConflict,
+                "--all cannot be combined with --format github",
+            )
+            .exit();
+    }
+    args
+}
+
+/// Prints a message about the run as a whole, which `github` shows in the run's summary.
+fn say(format: Format, level: Level, message: &str) {
+    if format == Format::Github {
+        eprintln!("{}", github::annotation(level, message));
+    } else {
+        eprintln!("{message}");
+    }
 }
 
 fn run(args: &Args) -> Result<ExitCode, String> {
@@ -163,11 +190,11 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     let scan_roots: Vec<PathBuf> = args.paths.iter().map(|path| resolve(path)).collect();
 
     for warning in &workspace.warnings {
-        eprintln!("{warning}");
+        say(args.format, Level::Warning, warning);
     }
     if !args.stdin {
         for warning in workspace.undeclared_config_warnings(&scan_roots) {
-            eprintln!("{warning}");
+            say(args.format, Level::Warning, &warning);
         }
     }
 
@@ -185,9 +212,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
         scanner.scan(&args.paths, &workspace, languages.as_deref())
     };
 
-    for message in warnings.iter().chain(&errors) {
-        eprintln!("{message}");
-    }
+    print_diagnostics(args.format, &warnings, &errors);
 
     if let Some(index) = domain_filter {
         located.retain(|item| item.domain == index);
@@ -203,7 +228,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
         rekey_to_workspace(&mut located, &workspace);
     }
 
-    warn_about_unreasoned_suppressions(&located, &workspace);
+    warn_about_unreasoned_suppressions(&located, &workspace, args.format);
 
     let over_threshold: Vec<Located> = located
         .iter()
@@ -227,6 +252,7 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     let gated_by = domain_filter.unwrap_or_else(|| only_visited_domain(&stats));
     let printed = match args.format {
         Format::Text => print_text(&located, args, &workspace, &baselines),
+        Format::Github => print_github(&located, args, &workspace, &baselines),
         Format::Json => print_json(
             &located,
             args,
@@ -265,7 +291,7 @@ fn verdict(
     if breaches == 0 && strict_loose == 0 {
         return ExitCode::SUCCESS;
     }
-    if args.format == Format::Text {
+    if args.format != Format::Json {
         eprintln!();
         if breaches > 0 {
             eprintln!("{}", breach_summary(breaches, accepted));
@@ -273,6 +299,13 @@ fn verdict(
         if strict_loose > 0 {
             eprintln!("{}", tighten_hint(strict_loose, breaches > 0 || partial));
         }
+    }
+    let errors = breaches + strict_loose;
+    if args.format == Format::Github && errors > github::ERRORS_PER_STEP {
+        eprintln!(
+            "GitHub annotates at most {} errors per step; all {errors} are listed above",
+            github::ERRORS_PER_STEP
+        );
     }
     ExitCode::FAILURE
 }
@@ -569,6 +602,7 @@ fn report_loose_entries(
         } else {
             (domain.name.as_str(), domain.root.as_path())
         };
+        let file = args.baseline.as_deref().unwrap_or(&domain.baseline);
         if !covered(root) {
             unjudged += 1;
             continue;
@@ -578,13 +612,7 @@ fn report_loose_entries(
             .iter()
             .filter(|item| shared || item.domain == *index);
         for entry in baseline.loose(scoped, |item| threshold_of(item, workspace)) {
-            eprintln!(
-                "{name}: {}: {} is baselined at {} but {}",
-                entry.key_path,
-                entry.unit,
-                entry.recorded,
-                describe(entry.reason)
-            );
+            announce_loose(args.format, name, &entry, file, domain.strict_baseline);
             let owner = (!shared).then(|| name.to_string());
             loose.push(ReportedLooseEntry::new(
                 owner,
@@ -595,12 +623,31 @@ fn report_loose_entries(
     }
 
     if args.strict_baseline && unjudged > 0 {
-        eprintln!(
+        let note = format!(
             "--strict-baseline: {unjudged} baseline(s) not judged; only a scan of a whole domain, \
              without --stdin, --domain or --lang, judges its baseline"
         );
+        say(args.format, Level::Warning, &note);
     }
     loose
+}
+
+/// A loose entry in a strict baseline fails the run, so `github` makes it an error on the
+/// baseline file rather than a warning.
+fn announce_loose(format: Format, owner: &str, entry: &LooseEntry, baseline: &Path, strict: bool) {
+    let message = format!(
+        "{owner}: {}: {} is baselined at {} but {}",
+        entry.key_path,
+        entry.unit,
+        entry.recorded,
+        describe(entry.reason)
+    );
+    if format != Format::Github {
+        eprintln!("{message}");
+        return;
+    }
+    let level = if strict { Level::Error } else { Level::Warning };
+    eprintln!("{}", github::annotation_on(level, baseline, &message));
 }
 
 fn describe(reason: Looseness) -> String {
@@ -616,21 +663,39 @@ fn describe(reason: Looseness) -> String {
 
 /// A marker without a reason is refused rather than obeyed, so it has to say so out loud —
 /// otherwise the author would believe the finding was silenced.
-fn warn_about_unreasoned_suppressions(located: &[Located], workspace: &Workspace) {
-    for item in located {
-        if item.finding.score > threshold_of(item, workspace)
+fn warn_about_unreasoned_suppressions(located: &[Located], workspace: &Workspace, format: Format) {
+    let unreasoned = located.iter().filter(|item| {
+        item.finding.score > threshold_of(item, workspace)
             && item.finding.suppression == Suppression::MissingReason
-        {
+    });
+    for item in unreasoned {
+        let message = format!(
+            "`{}` needs a reason, e.g. `// {}: why this has to stay complex` — ignoring it and \
+             reporting {}",
+            bonsai_core::SUPPRESSION_MARKER,
+            bonsai_core::SUPPRESSION_MARKER,
+            item.finding.qualified_name()
+        );
+        if format == Format::Github {
+            let line = item.finding.line;
             eprintln!(
-                "{}:{}: `{}` needs a reason, e.g. `// {}: why this has to stay complex` — \
-                 ignoring it and reporting {}",
-                item.path.display(),
-                item.finding.line,
-                bonsai_core::SUPPRESSION_MARKER,
-                bonsai_core::SUPPRESSION_MARKER,
-                item.finding.qualified_name()
+                "{}",
+                github::annotation_at(Level::Warning, &item.path, line, &message)
             );
+        } else {
+            eprintln!("{}:{}: {message}", item.path.display(), item.finding.line);
         }
+    }
+}
+
+/// A file that could not be read fails the run, so `github` shows why; a file decoded leniently
+/// only warns, and stays in the log so a legacy tree cannot use up the annotations.
+fn print_diagnostics(format: Format, warnings: &[String], errors: &[String]) {
+    for warning in warnings {
+        eprintln!("{warning}");
+    }
+    for error in errors {
+        say(format, Level::Error, error);
     }
 }
 
@@ -689,6 +754,42 @@ fn print_text(
     Ok(())
 }
 
+fn print_github(
+    located: &[Located],
+    args: &Args,
+    workspace: &Workspace,
+    baselines: &BTreeMap<usize, Baseline>,
+) -> io::Result<()> {
+    let mut out = io::stdout().lock();
+    let reported = located
+        .iter()
+        .filter(|item| is_reported(item, args, workspace, baselines));
+    for item in reported {
+        let recorded = baselines
+            .get(&baseline_index(item, args))
+            .and_then(|baseline| baseline.recorded(item));
+        let message = breach_message(item, threshold_of(item, workspace), recorded);
+        let line = item.finding.line;
+        writeln!(
+            out,
+            "{}",
+            github::annotation_at(Level::Error, &item.path, line, &message)
+        )?;
+    }
+    Ok(())
+}
+
+/// A unit its baseline accepted at a lower score names that score, or the threshold would read
+/// as if the baseline had been ignored.
+fn breach_message(item: &Located, threshold: u32, recorded: Option<u32>) -> String {
+    let name = item.finding.qualified_name();
+    let score = item.finding.score;
+    match recorded {
+        Some(recorded) => format!("{name} scores {score}, above its baselined {recorded}"),
+        None => format!("{name} scores {score}, over the threshold of {threshold}"),
+    }
+}
+
 fn print_json(
     located: &[Located],
     args: &Args,
@@ -704,6 +805,7 @@ fn print_json(
         .map(|item| ReportedFinding {
             path: item.path.display().to_string(),
             line: item.finding.line,
+            end_line: item.finding.end_line,
             name: item.finding.qualified_name(),
             score: item.finding.score,
             language: item.finding.language,

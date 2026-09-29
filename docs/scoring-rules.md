@@ -90,6 +90,10 @@ reported at the start of the first one rather than line 1, and a marker above `<
 outside every parsed region and does nothing at all. Put it at the top of a script block; a
 marker in any block suppresses the one `<toplevel>` the component reports.
 
+The JSON report also gives the line a unit ends on, usually its closing brace. A Python body ends
+on its last statement, or on a comment below it indented as deep as the body. `<toplevel>` ends on
+the file's last line, or in a `.vue` file where its last script block does.
+
 Units are named from wherever they are bound, since most closures are anonymous where they are
 written:
 

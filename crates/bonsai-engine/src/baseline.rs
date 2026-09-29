@@ -92,10 +92,17 @@ impl Baseline {
     /// fails loud rather than silently inheriting someone else's grandfathering.
     #[must_use]
     pub fn is_regression(&self, located: &Located) -> bool {
+        self.recorded(located)
+            .is_none_or(|accepted| located.finding.score > accepted)
+    }
+
+    /// Returns the score this baseline accepts for the unit, `None` when it holds no entry for it.
+    #[must_use]
+    pub fn recorded(&self, located: &Located) -> Option<u32> {
         self.entries
             .get(&located.key_path)
             .and_then(|units| units.get(&located.finding.qualified_name()))
-            .is_none_or(|accepted| located.finding.score > *accepted)
+            .copied()
     }
 
     /// Returns the entries a rewrite over the same scan would drop or lower, in path and unit order.

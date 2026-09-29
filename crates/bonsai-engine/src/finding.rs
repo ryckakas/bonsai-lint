@@ -17,7 +17,7 @@ pub struct Located {
     pub key_path: String,
     /// The owning domain's index into [`Workspace::domains`](crate::Workspace::domains).
     pub domain: usize,
-    /// The unit's name, line, score and suppression, as `bonsai-core` scored it.
+    /// The unit's name, lines, score and suppression, as `bonsai-core` scored it.
     pub finding: Finding,
 }
 

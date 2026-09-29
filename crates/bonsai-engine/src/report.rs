@@ -28,8 +28,10 @@ pub struct Report {
 pub struct ReportedFinding {
     /// The file's path, relative when the scanned path was, with forward slashes on every platform.
     pub path: String,
-    /// The 1-based line the unit starts on.
+    /// The 1-based line the unit is reported on: its signature, below any attributes or decorators.
     pub line: usize,
+    /// The 1-based line the unit ends on.
+    pub end_line: usize,
     /// The unit's qualified name, such as `Class::method`, which its baseline entry is keyed by.
     pub name: String,
     /// The unit's cognitive complexity.

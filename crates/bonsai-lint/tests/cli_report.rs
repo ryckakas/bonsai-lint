@@ -1,11 +1,15 @@
 //! Exit codes, output shapes and the flags that change what a scan means.
 
 use std::fmt::Write as _;
+use std::fs;
+use std::path::Path;
 use std::process::Stdio;
 
 mod common;
 
-use common::{BUSY_PHP, CALM_PHP, CALM_TS, Project, code, paths, report, scores, stderr, stdout};
+use common::{
+    BUSY_PHP, BUSY_VUE, CALM_PHP, CALM_TS, Project, code, paths, report, scores, stderr, stdout,
+};
 #[test]
 fn a_clean_run_prints_nothing_and_exits_zero() {
     let project = Project::new();
@@ -254,6 +258,40 @@ fn a_reader_closing_the_pipe_early_is_not_a_failure() {
 
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(!stderr(&output).contains("panicked"), "{}", stderr(&output));
+}
+
+/// GitHub drops both lines of an annotation that ends before it starts, and an editor can only
+/// highlight lines the file has.
+#[test]
+fn every_unit_ends_inside_its_file_and_not_before_it_starts() {
+    let project = Project::new();
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    for fixture in [
+        "bonsai-lang-go/tests/fixtures/grammar.go",
+        "bonsai-lang-java/tests/fixtures/Grammar.java",
+        "bonsai-lang-php/tests/fixtures/grammar.php",
+        "bonsai-lang-python/tests/fixtures/grammar.py",
+        "bonsai-lang-ts/tests/fixtures/grammar.ts",
+    ] {
+        let source = fs::read_to_string(crates.join(fixture)).expect("fixture exists");
+        let name = Path::new(fixture).file_name().expect("has a name");
+        project.file(&name.to_string_lossy(), &source);
+    }
+    project.file("Panel.vue", BUSY_VUE);
+    project.file("broken.ts", "function broken() {\n  if (a) { f(); }\n");
+
+    let findings = report(&project.run(&["--all", "--format", "json", "."]));
+    let findings = findings["findings"]
+        .as_array()
+        .expect("findings is an array");
+    assert!(findings.len() > 20, "every fixture scores");
+    for finding in findings {
+        let path = finding["path"].as_str().expect("path is a string");
+        let lines = project.read(path).lines().count() as u64;
+        let line = finding["line"].as_u64().expect("line is a number");
+        let end_line = finding["end_line"].as_u64().expect("end_line is a number");
+        assert!(line <= end_line && end_line <= lines, "{finding}");
+    }
 }
 
 #[test]

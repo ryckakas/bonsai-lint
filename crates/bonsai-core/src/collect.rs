@@ -106,6 +106,7 @@ fn score_unit(
         score_node(body, &cx)
     };
 
+    let line = declaration_row(node, lang) + 1;
     Some(Finding {
         container,
         name: match name.signature {
@@ -113,7 +114,8 @@ fn score_unit(
             None => name.text,
         },
         origin: name.origin,
-        line: declaration_row(node, lang) + 1,
+        line,
+        end_line: last_line(node, line),
         score,
         suppression: marker.map_or(Suppression::None, |(_, found)| found),
         language: lang.spec.id,
@@ -129,6 +131,19 @@ pub fn declaration_row(node: Node<'_>, lang: &Language) -> usize {
         info.role != Role::Trivia && !info.flags.has(Flags::LEADING_TRIVIA)
     });
     first.unwrap_or(node).start_position().row
+}
+
+/// A node that stops at the start of a row, as a file ending in a newline does, ends on the row
+/// above. The floor keeps a zero-width node, such as a `}` the parser had to invent, from ending
+/// before it starts.
+fn last_line(node: Node<'_>, line: usize) -> usize {
+    let end = node.end_position();
+    let row = if end.column == 0 && end.row > node.start_position().row {
+        end.row
+    } else {
+        end.row + 1
+    };
+    row.max(line)
 }
 
 /// Where the parsed region starts. A whole-file parse reports one range beginning at row 0, so
@@ -170,6 +185,7 @@ fn toplevel_finding(
         name: TOPLEVEL_UNIT.to_string(),
         origin: NameOrigin::TopLevel,
         line,
+        end_line: last_line(root, line),
         score,
         suppression: toplevel_suppression(root, src, lang, claimed),
         language: lang.spec.id,

@@ -29,6 +29,14 @@ fn line_of(source: &str, qualified: &str) -> usize {
         .line
 }
 
+fn span_of(source: &str, qualified: &str) -> (usize, usize) {
+    let finding = findings(source)
+        .into_iter()
+        .find(|finding| finding.qualified_name() == qualified)
+        .unwrap_or_else(|| panic!("no unit named {qualified} in:\n{source}"));
+    (finding.line, finding.end_line)
+}
+
 #[test]
 fn a_closure_takes_the_variable_it_is_assigned_to() {
     let source = "<?php\n$handler = function () { if ($a) { echo 1; } };\n";
@@ -169,4 +177,10 @@ fn an_attribute_does_not_move_the_reported_line() {
     let method =
         "<?php\nclass A {\n    #[Route('/x')]\n    #[Deprecated]\n    public function m() {}\n}\n";
     assert_eq!(line_of(method, "A::m"), 5);
+}
+
+#[test]
+fn a_unit_ends_on_its_closing_line() {
+    let source = "<?php\nclass A {\n    #[Route('/x')]\n    public function m() {\n        if ($a) { f(); }\n    }\n}\n";
+    assert_eq!(span_of(source, "A::m"), (4, 6));
 }

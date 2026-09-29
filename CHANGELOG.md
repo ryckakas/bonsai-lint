@@ -19,6 +19,10 @@ what a user reads on the GitHub release page.
   instead of accepting the old score for good. The key can be set per domain, and a domain
   without it takes the root's. Only a scan of a whole domain judges its baseline, so a pre-commit
   hook or an editor never fails on one.
+- **`--format github`,** for GitHub Actions. Each breach becomes an annotation on its line of the
+  pull request, a loose baseline entry one on the baseline file, and config warnings and read
+  errors one on the run. It fails exactly when the text report does. Paths are made relative to
+  `GITHUB_WORKSPACE`, so the step can run from any directory.
 
 ### Changed
 
@@ -32,11 +36,15 @@ what a user reads on the GitHub release page.
 - **The JSON report gains `loose_entries`,** always present and empty when there are none: the same
   entries, each with its `domain`, `path`, `unit`, `recorded` score, `reason`, current `score`,
   `threshold` and whether it is `strict`.
-- **For embedders of `bonsai-engine`**, and breaking, which is why this is 0.5.0 rather than 0.4.4:
+- **Each finding in the JSON report gains `end_line`,** the unit's last line.
+- **For embedders of `bonsai-core` and `bonsai-engine`**, and breaking, which is why this is 0.5.0
+  rather than 0.4.4:
   - `Baseline::loose` returns each loose entry as a `LooseEntry` with a `Looseness` reason, and
     replaces `Baseline::unmatched`.
   - `ConfigFile` and `Domain` gain `strict_baseline`, and `Report` gains `loose_entries`, built from
     the new `ReportedLooseEntry` and `LooseReason`.
+  - `Finding` and `ReportedFinding` gain `end_line`, and `Baseline::recorded` returns the score a
+    baseline accepts for a unit.
 
 ## [0.4.3] - 2026-09-27
 

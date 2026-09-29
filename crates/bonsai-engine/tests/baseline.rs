@@ -20,6 +20,7 @@ fn located(key_path: &str, name: &str, score: u32) -> Located {
             name: name.to_string(),
             origin: NameOrigin::Declared,
             line: 1,
+            end_line: 1,
             score,
             suppression: Suppression::None,
             language: "php",
@@ -84,6 +85,24 @@ fn an_unknown_unit_is_a_regression() {
 
     assert!(baseline.is_regression(&located("src/a.php", "renamed", 1)));
     assert!(baseline.is_regression(&located("src/moved.php", "busy", 1)));
+}
+
+#[test]
+fn the_recorded_score_is_looked_up_by_path_and_name() {
+    let baseline = Baseline::from_findings(&[located("src/a.php", "busy", 20)]);
+
+    assert_eq!(
+        baseline.recorded(&located("src/a.php", "busy", 35)),
+        Some(20)
+    );
+    assert_eq!(
+        baseline.recorded(&located("src/a.php", "renamed", 35)),
+        None
+    );
+    assert_eq!(
+        baseline.recorded(&located("src/moved.php", "busy", 35)),
+        None
+    );
 }
 
 /// Two units the namer cannot tell apart share one entry, and an unchanged rerun must accept

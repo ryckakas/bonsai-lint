@@ -126,6 +126,7 @@ bonsai-lint --lang php src/          # one language only; `--help` lists the ids
 bonsai-lint --domain web                       # one declared domain only
 bonsai-lint --baseline PATH .                  # one baseline file for the whole repo, wherever you choose
 bonsai-lint --strict-baseline .                # fail while the baseline accepts more than the code needs
+bonsai-lint --format github .                  # annotate the pull request from GitHub Actions
 bonsai-lint --config packages/web src/         # discover config from here, not from the first path
 bonsai-lint --no-toplevel src/                 # skip code outside any function
 bonsai-lint --stdin --stdin-path src/a.php < buffer   # score an unsaved buffer as that file
@@ -163,6 +164,7 @@ bonsai-lint --format json .
     {
       "path": "packages/billing/src/invoice-mapper.service.ts",
       "line": 47,
+      "end_line": 112,
       "name": "InvoiceMapperService::mapLineItems",
       "score": 69,
       "language": "typescript",
@@ -171,6 +173,7 @@ bonsai-lint --format json .
     {
       "path": "services/api/src/Controller/CheckoutController.php",
       "line": 207,
+      "end_line": 268,
       "name": "CheckoutController::applyDiscounts",
       "score": 25,
       "language": "php",
@@ -179,6 +182,7 @@ bonsai-lint --format json .
     {
       "path": "packages/web/src/parser/lexer.js",
       "line": 19,
+      "end_line": 140,
       "name": "Lexer",
       "score": 22,
       "language": "typescript",
@@ -204,7 +208,19 @@ has the `domain` whose baseline holds it (`null` for a `--baseline PATH` file), 
 
 `domain` names the domain a file resolved to — `root` when there is no `bonsai-lint.toml`
 declaring any — and `path` is always forward-slashed, so a report generated on Windows compares
-against one generated in CI.
+against one generated in CI. `line` is the unit's signature and `end_line` its last line.
+
+</details>
+
+<details>
+<summary><b>In GitHub Actions</b></summary>
+
+`--format github` prints each breach as a workflow command, so it shows as an annotation on the
+pull request, and fails exactly when the text report does. A loose baseline entry is filed on its
+baseline file, and config warnings and read errors on the run. Paths are made relative to
+`GITHUB_WORKSPACE`, so the step can run from any directory, but a repository checked out into a
+subdirectory with `path:` is annotated under that subdirectory, which GitHub cannot place. GitHub
+annotates at most 10 errors per step; the log lists every one.
 
 </details>
 

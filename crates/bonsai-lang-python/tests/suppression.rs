@@ -22,6 +22,14 @@ fn line_of(source: &str, qualified: &str) -> usize {
         .line
 }
 
+fn span_of(source: &str, qualified: &str) -> (usize, usize) {
+    let finding = findings(source)
+        .into_iter()
+        .find(|finding| finding.qualified_name() == qualified)
+        .unwrap_or_else(|| panic!("no finding keyed {qualified} in:\n{source}"));
+    (finding.line, finding.end_line)
+}
+
 fn reasoned(reason: &str) -> Suppression {
     Suppression::Reasoned(reason.to_string())
 }
@@ -136,6 +144,19 @@ fn a_marker_in_a_docstring_is_not_a_marker() {
 fn a_decorator_does_not_move_the_reported_line() {
     let source = "@app.route(\"/\")\n@login_required\ndef target():\n    if a:\n        f()\n";
     assert_eq!(line_of(source, "target"), 3);
+}
+
+#[test]
+fn a_unit_ends_on_its_last_statement() {
+    let source = "@app.route(\"/\")\ndef target():\n    if a:\n        f()\n\n\nx = 1\n";
+    assert_eq!(span_of(source, "target"), (2, 4));
+}
+
+/// The grammar keeps a comment indented at body depth inside the block, so the unit reaches it.
+#[test]
+fn a_trailing_comment_at_body_depth_extends_the_unit() {
+    let source = "def target():\n    if a:\n        f()\n    # still the body\n\n# the module\n";
+    assert_eq!(span_of(source, "target"), (1, 4));
 }
 
 /// File-level code is reported on line 1, so its marker sits in the comment block at the top of
