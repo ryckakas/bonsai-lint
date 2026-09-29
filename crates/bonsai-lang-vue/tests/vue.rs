@@ -156,8 +156,6 @@ fn top_level_code_in_both_blocks_adds_up_to_one_finding() {
     assert_eq!(toplevel.line, 1);
 }
 
-/// A template is not scored, but a `render()` is: it is ordinary script code. Moving logic out of
-/// a template and into `render()` therefore makes it visible rather than hiding it.
 /// Top-level code has no declaration to point at, so it is reported where its block starts,
 /// which in a component is rarely line 1.
 #[test]
@@ -170,6 +168,8 @@ fn top_level_code_is_reported_on_the_line_its_script_block_starts() {
     assert_eq!(find(&found, TOPLEVEL_UNIT).line, 5);
 }
 
+/// A template is not scored, but a `render()` is: it is ordinary script code. Moving logic out of
+/// a template and into `render()` therefore makes it visible rather than hiding it.
 #[test]
 fn a_render_function_in_a_script_block_is_scored() {
     let found = findings(

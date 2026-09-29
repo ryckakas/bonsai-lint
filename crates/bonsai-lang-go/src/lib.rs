@@ -209,10 +209,8 @@ fn normalize_logical_operator(operator: &str) -> Option<&'static str> {
 /// The label is a child rather than a field, so the TypeScript check cannot be reused.
 fn is_penalized_jump(node: Node<'_>, _src: &[u8]) -> bool {
     let mut cursor = node.walk();
-    let labelled = node
-        .named_children(&mut cursor)
-        .any(|child| child.kind() == "label_name");
-    labelled
+    node.named_children(&mut cursor)
+        .any(|child| child.kind() == "label_name")
 }
 
 fn resolve_callee(node: Node<'_>) -> Option<Callee<'_>> {

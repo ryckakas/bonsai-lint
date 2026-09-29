@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use tree_sitter::{Node, Tree};
 
-use crate::finding::{Finding, NameOrigin, Suppression, UnitScope, TOPLEVEL_UNIT};
+use crate::finding::{Finding, NameOrigin, Suppression, TOPLEVEL_UNIT, UnitScope};
 use crate::language::{Flags, Language, Role};
 use crate::suppression::{toplevel_suppression, unit_marker};
-use crate::walk::{score_node, score_nodes, WalkCx};
+use crate::walk::{WalkCx, score_node, score_nodes};
 
 #[must_use]
 pub fn analyze(tree: &Tree, src: &[u8], lang: &Language, toplevel: bool) -> Vec<Finding> {

@@ -4,7 +4,7 @@ use std::fs;
 
 mod common;
 
-use common::{code, stderr, stdout, Project, BUSY_PHP, BUSY_PHP_TOO, CALM_PHP};
+use common::{BUSY_PHP, BUSY_PHP_TOO, CALM_PHP, Project, code, stderr, stdout};
 #[test]
 fn stale_baseline_entries_are_reported_only_by_a_scan_that_covers_the_domain() {
     let project = Project::new();

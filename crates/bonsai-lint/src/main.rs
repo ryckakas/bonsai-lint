@@ -9,7 +9,7 @@ use bonsai_engine::config::{self, Workspace};
 use bonsai_engine::finding::normalize_key;
 use bonsai_engine::report::{Report, ReportedFinding};
 use bonsai_engine::scan::{decode, display_path, rank, resolve};
-use bonsai_engine::{registry, Baseline, Located, ScanOutcome, ScanStats, Scanner, STACK_SIZE};
+use bonsai_engine::{Baseline, Located, STACK_SIZE, ScanOutcome, ScanStats, Scanner, registry};
 use clap::{CommandFactory, FromArgMatches, Parser as ClapParser, ValueEnum};
 
 // musl's malloc serialises threads on one lock, which made a parallel scan over 15 times slower

@@ -1,5 +1,6 @@
 [workspace]
-resolver = "2"
+# Prefers dependency versions that still build on `rust-version`, which CI's MSRV job checks.
+resolver = "3"
 members = [
     "crates/bonsai-core",
     "crates/bonsai-lang-go",
@@ -15,7 +16,7 @@ members = [
 
 [workspace.package]
 version = "0.4.3"
-edition = "2021"
+edition = "2024"
 rust-version = "1.90"
 license = "MIT"
 repository = "https://github.com/ryckakas/bonsai-lint"

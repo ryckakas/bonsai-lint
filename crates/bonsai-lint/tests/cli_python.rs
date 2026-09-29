@@ -3,8 +3,8 @@
 mod common;
 
 use common::{
-    code, paths, python_accessors, report, stderr, stdout, Project, BUSY_PYTHON, BUSY_TS,
-    CALM_PYTHON, PYTHON_GENERATED_HEADER,
+    BUSY_PYTHON, BUSY_TS, CALM_PYTHON, PYTHON_GENERATED_HEADER, Project, code, paths,
+    python_accessors, report, stderr, stdout,
 };
 
 fn names(output: &std::process::Output) -> Vec<String> {

@@ -3,7 +3,7 @@
 mod common;
 
 use common::{
-    baselines, code, paths, report, stderr, stdout, vue_component, Project, BUSY_TS, BUSY_VUE,
+    BUSY_TS, BUSY_VUE, Project, baselines, code, paths, report, stderr, stdout, vue_component,
 };
 fn vue_domains() -> Project {
     let project = Project::new();
@@ -194,8 +194,7 @@ fn a_domain_can_turn_off_toplevel_scoring_for_vue_without_affecting_its_neighbou
         "domains = [\"apps/*\"]\nthreshold = 0\n",
     );
     project.file("apps/flat/bonsai-lint.toml", "toplevel = false\n");
-    let component =
-        "<template><p/></template>\n<script setup lang=\"ts\">\nif (a) { if (b) { c() } }\n</script>\n";
+    let component = "<template><p/></template>\n<script setup lang=\"ts\">\nif (a) { if (b) { c() } }\n</script>\n";
     project.file("apps/flat/Panel.vue", component);
     project.file("apps/plain/Panel.vue", component);
 

@@ -3,8 +3,8 @@
 mod common;
 
 use common::{
-    code, java_overloads, paths, report, stderr, stdout, Project, BUSY_JAVA, BUSY_TS, CALM_JAVA,
-    JAVA_GENERATED_HEADER,
+    BUSY_JAVA, BUSY_TS, CALM_JAVA, JAVA_GENERATED_HEADER, Project, code, java_overloads, paths,
+    report, stderr, stdout,
 };
 
 #[test]

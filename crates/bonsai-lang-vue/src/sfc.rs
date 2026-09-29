@@ -116,7 +116,7 @@ fn block(script: Node<'_>, src: &[u8]) -> Option<Block> {
 
 fn attributes<'a>(start: Node<'_>, src: &'a [u8]) -> Vec<(&'a str, Option<&'a str>)> {
     let mut cursor = start.walk();
-    let found = start
+    start
         .named_children(&mut cursor)
         .filter(|child| child.kind() == "attribute")
         .filter_map(|attribute| {
@@ -125,8 +125,7 @@ fn attributes<'a>(start: Node<'_>, src: &'a [u8]) -> Vec<(&'a str, Option<&'a st
                 .ok()?;
             Some((name, attribute_value(attribute, src)))
         })
-        .collect();
-    found
+        .collect()
 }
 
 fn attribute_value<'a>(attribute: Node<'_>, src: &'a [u8]) -> Option<&'a str> {
@@ -139,8 +138,6 @@ fn attribute_value<'a>(attribute: Node<'_>, src: &'a [u8]) -> Option<&'a str> {
 
 fn named_child<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> {
     let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == kind);
-    found
+    node.named_children(&mut cursor)
+        .find(|child| child.kind() == kind)
 }
