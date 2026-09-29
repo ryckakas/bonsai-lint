@@ -1,3 +1,6 @@
+//! The Python node kinds, field names and hooks bonsai-lint's scorer reads, and Python's
+//! generated-file check.
+
 use std::borrow::Cow;
 
 use bonsai_core::language::field;
@@ -9,9 +12,11 @@ use bonsai_core::{
 };
 use tree_sitter::Node;
 
+/// The type behind [`PYTHON`], serving `.py` and `.pyw` files.
 #[derive(Debug)]
 pub struct Python;
 
+/// The Python language descriptor, registered by bonsai-engine.
 pub static PYTHON: Python = Python;
 
 impl LanguageDescriptor for Python {
@@ -32,6 +37,7 @@ impl LanguageDescriptor for Python {
     }
 }
 
+/// The node kinds, field names and hooks that score Python, under the language id `python`.
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "python",
     kinds: KindSets {
@@ -407,6 +413,8 @@ fn statement(node: Node<'_>) -> Node<'_> {
     current
 }
 
+/// Reports whether a file's header comments say both "generated" and "do not edit", ignoring case.
+///
 /// Python has no single convention, but protobuf, gRPC and Thrift output all say both phrases
 /// in the comments before the first line of code. A Django migration says only "Generated",
 /// since it is meant to be edited.

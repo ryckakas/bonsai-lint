@@ -1,3 +1,6 @@
+//! A component's script scores as the same logic would in a TypeScript file, its template not at
+//! all, and each finding is reported at its line in the `.vue` file.
+
 mod common;
 
 use std::fmt::Write;

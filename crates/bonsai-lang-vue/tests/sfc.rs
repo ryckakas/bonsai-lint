@@ -1,3 +1,6 @@
+//! Extraction decides what in a component is script and which grammar reads it. A block it
+//! missed would score zero in silence, so text holding `<script` but no readable block warns.
+
 mod common;
 
 use common::{extract, parses_cleanly};

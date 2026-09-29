@@ -51,6 +51,7 @@ mimalloc = { version = "0.1.52", features = ["override"] }
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_debug_implementations = "warn"
+missing_docs = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 let_underscore_drop = "warn"
@@ -100,6 +101,7 @@ verbose_file_reads = "warn"
 # From `nursery`, whose lints are too unsettled to take as a group.
 needless_collect = "warn"
 or_fun_call = "warn"
+too_long_first_doc_paragraph = "warn"
 
 [profile.release]
 lto = true

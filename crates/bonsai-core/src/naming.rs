@@ -1,3 +1,7 @@
+//! Text helpers the language crates share for building unit names and keys.
+
+/// Returns `text` trimmed and stripped of one pair of enclosing single or double quotes, for a
+/// name written as a string literal.
 #[must_use]
 pub fn strip_quotes(text: &str) -> String {
     let trimmed = text.trim();

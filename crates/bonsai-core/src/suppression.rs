@@ -1,3 +1,5 @@
+//! The search for a [`SUPPRESSION_MARKER`] in the comments around a declaration.
+
 use std::collections::HashSet;
 
 use tree_sitter::Node;
@@ -10,6 +12,8 @@ use crate::language::{Flags, Language, Role};
 /// silence one unit.
 pub(crate) type Marker = (usize, Suppression);
 
+/// Returns the marker a unit carries in a comment above its declaration or on its signature line,
+/// or [`Suppression::None`].
 #[must_use]
 pub fn suppression(node: Node<'_>, src: &[u8], lang: &Language) -> Suppression {
     unit_marker(node, src, lang).map_or(Suppression::None, |(_, found)| found)

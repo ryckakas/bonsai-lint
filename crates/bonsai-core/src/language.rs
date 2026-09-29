@@ -1,3 +1,5 @@
+//! A [`LanguageSpec`] compiled against its grammar, every kind and field resolved to an id.
+
 use std::fmt;
 use std::num::NonZeroU16;
 
@@ -10,16 +12,26 @@ use crate::spec::LanguageSpec;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[repr(u8)]
 pub enum Role {
+    /// A kind no list claims, which the walker only descends through.
     #[default]
     Other,
+    /// An `if` statement, costing +1 plus nesting, or a flat +1 where it continues an `else if`.
     If,
+    /// An else-if clause with a node of its own, such as `elif`, costing a flat +1.
     ElseIf,
+    /// An `else`, costing +1; in an if chain its body also nests a level deeper.
     Else,
+    /// A loop, `switch`, `catch` or ternary, costing +1 plus nesting, its body a level deeper.
     Control,
+    /// A `break` or `continue`, costing +1 only when the language's hooks penalise it.
     Jump,
+    /// A jump that always costs +1, such as `goto`.
     Goto,
+    /// A binary operation, whose boolean operators cost +1 per run of like ones.
     Logical,
+    /// A call, costing +1 when it is direct recursion into the unit being scored.
     Call,
+    /// A comment, the only place a suppression marker is read from.
     Trivia,
 }
 
@@ -29,13 +41,22 @@ pub enum Role {
 pub struct Flags(u8);
 
 impl Flags {
+    /// A function-like kind, scored as a unit of its own unless another unit encloses it.
     pub const UNIT: Self = Self(1 << 0);
+    /// A class-like kind whose name, where it has one, prefixes the key of each unit inside it.
     pub const CONTAINER: Self = Self(1 << 1);
+    /// A closure-like kind, which costs nothing itself but nests its contents a level deeper.
     pub const NESTING_FN: Self = Self(1 << 2);
+    /// A kind that leads a declaration, such as a decorator, stepped over to find its line and
+    /// its marker.
     pub const LEADING_TRIVIA: Self = Self(1 << 3);
+    /// A parenthesised expression, looked through so that grouping never ends an operator run.
     pub const PARENTHESIS: Self = Self(1 << 4);
+    /// A kind that may open a file before its code, such as a shebang or a package clause, which
+    /// the search for the file's marker steps over.
     pub const PREAMBLE: Self = Self(1 << 5);
 
+    /// Returns whether the flag `other` is set.
     #[must_use]
     pub const fn has(self, other: Self) -> bool {
         self.0 & other.0 != 0
@@ -47,29 +68,52 @@ impl Flags {
     }
 }
 
+/// The role and flags one node kind carries, as a compiled [`Language`] stores them.
 #[derive(Clone, Copy, Default, Debug)]
 pub struct KindInfo {
+    /// The kind's dispatch role, [`Role::Other`] when no list claims it.
     pub role: Role,
+    /// The properties the kind carries besides its role.
     pub flags: Flags,
 }
 
+/// The field ids a [`Language`] reads, resolved from its spec's field names.
+///
+/// Each is `Some` once compilation succeeds, except `else_body` when the spec names none.
 #[derive(Debug, Default)]
 pub struct FieldIds {
+    /// The field holding a declaration's name.
     pub name: Option<NonZeroU16>,
+    /// The field holding a unit's or control structure's body, and an else-if clause's branch.
     pub body: Option<NonZeroU16>,
+    /// The field holding the condition of an `if` or else-if.
     pub condition: Option<NonZeroU16>,
+    /// The field holding the branch an `if` takes when its condition holds.
     pub if_then: Option<NonZeroU16>,
+    /// The field holding an `if`'s else-if and else clauses, which may repeat.
     pub if_alternative: Option<NonZeroU16>,
+    /// The field holding an else clause's body; without it, the clause's first named child that
+    /// is not a comment is taken.
     pub else_body: Option<NonZeroU16>,
+    /// The field holding a binary operation's left operand.
     pub logical_left: Option<NonZeroU16>,
+    /// The field holding a binary operation's right operand.
     pub logical_right: Option<NonZeroU16>,
+    /// The field holding a binary operation's operator, whose text the hooks normalise.
     pub logical_operator: Option<NonZeroU16>,
 }
 
+/// A [`LanguageSpec`] compiled against a tree-sitter grammar, its kinds and fields resolved to ids.
+///
+/// Built by [`LanguageSpec::compile`], usually once per process through
+/// [`compiled_once!`](crate::compiled_once).
 #[derive(Debug)]
 pub struct Language {
+    /// The spec this was compiled from.
     pub spec: &'static LanguageSpec,
+    /// The grammar the spec was compiled against, which a parser must use for the ids to match.
     pub ts: TsLanguage,
+    /// The spec's field names, resolved to this grammar's ids.
     pub fields: FieldIds,
     kinds: Box<[KindInfo]>,
     header_field: Box<[bool]>,
@@ -87,12 +131,14 @@ impl Language {
             .unwrap_or_default()
     }
 
+    /// Returns the role of `node`'s kind.
     #[inline]
     #[must_use]
     pub fn role(&self, node: Node<'_>) -> Role {
         self.info(node.kind_id()).role
     }
 
+    /// Returns the flags of `node`'s kind.
     #[inline]
     #[must_use]
     pub fn flags(&self, node: Node<'_>) -> Flags {
@@ -113,20 +159,26 @@ impl Language {
     }
 }
 
+/// Returns the first child of `node` in the field `id`, finding nothing when `id` is `None`.
 #[inline]
 #[must_use]
 pub fn field(node: Node<'_>, id: Option<NonZeroU16>) -> Option<Node<'_>> {
     id.and_then(|id| node.child_by_field_id(id.get()))
 }
 
+/// Every mismatch found between a [`LanguageSpec`] and the grammar it was compiled against.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct SpecErrors {
+    /// Declared kinds, other than optional ones, that the grammar has no named node for, sorted.
     pub unknown_kinds: Vec<&'static str>,
+    /// Declared field names the grammar lacks, sorted.
     pub unknown_fields: Vec<&'static str>,
+    /// Kinds listed under two roles, each with the role it had and the one that followed.
     pub conflicting_roles: Vec<(&'static str, Role, Role)>,
 }
 
 impl SpecErrors {
+    /// Returns whether no mismatch was found.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.unknown_kinds.is_empty()
@@ -167,6 +219,10 @@ impl LanguageSpec {
         }
     }
 
+    /// Compiles the spec against a grammar, resolving each declared kind and field name to an id.
+    ///
+    /// Fails naming every kind and field the grammar lacks and every kind claimed by two roles, so
+    /// a grammar upgrade that renames a node is caught rather than scored as zero.
     pub fn compile(&'static self, ts: TsLanguage) -> Result<Language, SpecErrors> {
         let mut errors = SpecErrors::default();
         let mut kinds = vec![KindInfo::default(); ts.node_kind_count()];

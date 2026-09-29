@@ -1,3 +1,5 @@
+//! The languages compiled into this build, each behind its own cargo feature.
+
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -43,6 +45,10 @@ pub fn language_ids() -> Vec<&'static str> {
     ids
 }
 
+/// Returns the language that scores `path`, chosen by its extension.
+///
+/// `None` means no language claims the extension, or the name ends in one of that language's
+/// [`unscored_suffixes`](LanguageDescriptor::unscored_suffixes).
 #[must_use]
 pub fn for_path(path: &Path) -> Option<&'static dyn LanguageDescriptor> {
     let name = path.file_name()?.to_str()?;

@@ -1,3 +1,10 @@
+//! Multi-language cognitive complexity scoring: a parsed tree-sitter tree in, scores out, with no
+//! I/O and no grammar of its own.
+//!
+//! A language describes itself with a [`LanguageSpec`] and its [`Hooks`], which
+//! [`LanguageSpec::compile`] resolves against its grammar once; [`analyze`] then scores a parsed
+//! tree into [`Finding`]s.
+
 mod collect;
 pub mod finding;
 pub mod language;
@@ -18,8 +25,10 @@ pub use walk::IfPart;
 /// What the registry stores for a file type. Compilation is memoised behind
 /// [`compiled_once!`], so the facade never names a grammar crate's types.
 pub trait LanguageDescriptor: Sync + std::fmt::Debug {
+    /// Returns the spec this file type's code is scored with.
     fn spec(&self) -> &'static LanguageSpec;
 
+    /// Returns the file extensions this type claims, without the leading dot.
     fn extensions(&self) -> &'static [&'static str];
 
     /// Each implementor returns its own `compiled_once!` static: one shared body would be a
@@ -49,6 +58,7 @@ pub trait LanguageDescriptor: Sync + std::fmt::Debug {
 /// are already positions in the original file and no line offset is ever applied.
 #[derive(Debug)]
 pub struct Extraction {
+    /// The compiled language that parses and scores the ranges.
     pub language: &'static Language,
     /// Ordered and non-overlapping, as `set_included_ranges` requires. Empty scores nothing.
     pub ranges: Vec<tree_sitter::Range>,

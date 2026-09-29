@@ -1,3 +1,6 @@
+//! The Go node kinds, field names and hooks bonsai-lint's scorer reads, and Go's generated-file
+//! check.
+
 use std::borrow::Cow;
 use std::num::NonZeroU16;
 
@@ -8,9 +11,11 @@ use bonsai_core::{
 };
 use tree_sitter::Node;
 
+/// The type behind [`GO`], serving `.go` files.
 #[derive(Debug)]
 pub struct Go;
 
+/// The Go language descriptor, registered by bonsai-engine.
 pub static GO: Go = Go;
 
 impl LanguageDescriptor for Go {
@@ -31,6 +36,7 @@ impl LanguageDescriptor for Go {
     }
 }
 
+/// The node kinds, field names and hooks that score Go, under the language id `go`.
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "go",
     kinds: KindSets {

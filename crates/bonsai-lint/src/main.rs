@@ -1,3 +1,5 @@
+//! The command line of bonsai-lint, a multi-language cognitive complexity linter.
+
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
 use std::num::NonZeroUsize;
