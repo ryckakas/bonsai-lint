@@ -1,0 +1,9 @@
+def import_rows(rows):
+    if rows:
+        if rows:
+            if rows:
+                if rows:
+                    if rows:
+                        if rows:
+                            return 1
+    return 0

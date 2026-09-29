@@ -1,0 +1,4 @@
+strict-baseline = true
+
+[ruby]
+threshold = 10

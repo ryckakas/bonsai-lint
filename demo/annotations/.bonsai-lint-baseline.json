@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "entries": {
+    "src/Checkout.php": {
+      "Checkout::applyDiscounts": 21
+    },
+    "src/Removed.php": {
+      "oldRule": 28
+    }
+  }
+}
