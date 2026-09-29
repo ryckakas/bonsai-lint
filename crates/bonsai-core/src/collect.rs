@@ -7,6 +7,11 @@ use crate::language::{Flags, Language, Role};
 use crate::suppression::{toplevel_suppression, unit_marker};
 use crate::walk::{WalkCx, score_node, score_nodes};
 
+/// Scores every unit in a parsed tree, returning one finding per unit in source order.
+///
+/// `src` is the text `tree` was parsed from. With `toplevel`, the code outside every unit is
+/// scored too, as a last [`TOPLEVEL_UNIT`] finding reported only when it scores above zero.
+/// Colliding names are already told apart, as [`disambiguate`] does.
 #[must_use]
 pub fn analyze(tree: &Tree, src: &[u8], lang: &Language, toplevel: bool) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -171,6 +176,9 @@ fn toplevel_finding(
     })
 }
 
+/// Appends `~2`, `~3` and so on to each positional or anonymous finding whose container and name
+/// an earlier one already took.
+///
 /// Only positional and anonymous names can collide in a way the author did not choose. Declared
 /// and bound names that collide are a genuine duplicate in the source, which is the author's
 /// problem rather than the namer's. Public because a file parsed as several regions has to be

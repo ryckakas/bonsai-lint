@@ -1,3 +1,6 @@
+//! The Java node kinds, field names and hooks bonsai-lint's scorer reads, and Java's
+//! generated-file check.
+
 use std::borrow::Cow;
 use std::num::NonZeroU16;
 
@@ -9,9 +12,11 @@ use bonsai_core::{
 };
 use tree_sitter::Node;
 
+/// The type behind [`JAVA`], serving `.java` files.
 #[derive(Debug)]
 pub struct Java;
 
+/// The Java language descriptor, registered by bonsai-engine.
 pub static JAVA: Java = Java;
 
 impl LanguageDescriptor for Java {
@@ -32,6 +37,7 @@ impl LanguageDescriptor for Java {
     }
 }
 
+/// The node kinds, field names and hooks that score Java, under the language id `java`.
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "java",
     kinds: KindSets {

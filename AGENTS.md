@@ -277,6 +277,17 @@ a reader could not recover from the code itself, delete it. Where a rule is corr
 — a value deliberately absent from a match arm or a list — pair the "why" with a named test
 asserting the absence, since a comment alone cannot fail.
 
+**Public API docs are the other exception.** Every crate is published, and docs.rs shows its
+`///` and `//!` docs to embedders who never open the source, so each public item says what it is
+for. `missing_docs` requires one on every public item, every crate and every integration test
+file. Clippy's `too_long_first_doc_paragraph` fails a first paragraph over 200 characters.
+- **The first paragraph is one sentence** saying what the item is, since docs.rs lists it beside
+  the name.
+- **The rest adds what the signature can't say:** a unit, a range, what `None` means, where a
+  value comes from, and the "why". No lint limits its length, so the rules above still hold: never
+  restate the name or the type.
+- **Private items keep the "why"-only rule,** whether it is written with `//` or `///`.
+
 ## Workspace-wide lint config (`Cargo.toml`)
 
 `unsafe_code = "forbid"`, clippy `pedantic` warn, and `excessive_nesting`/`too_many_lines` are

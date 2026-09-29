@@ -1,3 +1,5 @@
+//! The TypeScript and JavaScript node kinds, field names and hooks bonsai-lint's scorer reads.
+
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
@@ -5,6 +7,7 @@ use bonsai_core::{
 };
 use tree_sitter::Node;
 
+/// The type behind [`TYPESCRIPT`] and [`TSX`], one per TypeScript grammar.
 #[derive(Debug)]
 pub struct TsDialect {
     extensions: &'static [&'static str],
@@ -46,6 +49,8 @@ impl LanguageDescriptor for TsDialect {
     }
 }
 
+/// Builds the TypeScript spec under a language id of the caller's choosing.
+///
 /// The two dialects differ only by JSX nodes and `type_assertion`, none of which the scorer
 /// references, so one spec serves both. The id is a parameter because an embedded dialect reuses
 /// these kinds under a name of its own.
@@ -113,6 +118,8 @@ pub const fn spec(id: &'static str) -> LanguageSpec {
     }
 }
 
+/// The node kinds, field names and hooks that score TypeScript and JavaScript, under the language
+/// id `typescript`.
 pub static SPEC: LanguageSpec = spec("typescript");
 
 #[derive(Debug)]

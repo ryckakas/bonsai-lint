@@ -1,3 +1,6 @@
+//! The scan driver, which plans a walk over the given paths, scores the files in parallel and
+//! ranks what they report.
+
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::path::{Component, Path, PathBuf};
@@ -11,18 +14,24 @@ use crate::finding::{Located, normalize_key};
 use crate::pool;
 use crate::registry;
 
+/// How much a scan covered: the files it scored, the paths it failed on, the domains it visited.
 #[derive(Debug, Default, Clone)]
 pub struct ScanStats {
+    /// Files read and scored, not counting those their language marks as generated.
     pub files: usize,
+    /// How many paths could not be read or walked.
     pub errors: usize,
     /// Which domains the scan actually visited. Stale baseline entries are only meaningful for
     /// these; a domain nobody looked at has not gone stale, it was simply out of scope.
     pub domains: BTreeSet<usize>,
 }
 
+/// Everything a scan produced: the ranked findings, the tallies and the diagnostics.
 #[derive(Debug, Default)]
 pub struct ScanOutcome {
+    /// Every scored unit, worst first, with ties in path and then line order.
     pub located: Vec<Located>,
+    /// The tallies that tell a clean scan from one that read nothing or failed.
     pub stats: ScanStats,
     /// Paths that could not be read. Any of these makes the scan untrustworthy.
     pub errors: Vec<String>,
@@ -284,6 +293,10 @@ fn region(
     (!extraction.ranges.is_empty()).then_some((extraction.language, extraction.ranges))
 }
 
+/// The entry point for scoring, over paths on disk or one source already in memory.
+///
+/// It keeps a parser per grammar for [`analyze_source`](Self::analyze_source), so reusing one
+/// scanner across calls saves rebuilding them.
 #[derive(Debug, Default)]
 pub struct Scanner {
     parsers: Parsers,
@@ -291,6 +304,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
+    /// Creates a scanner that runs up to one worker per available core.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -303,6 +317,11 @@ impl Scanner {
         self
     }
 
+    /// Scores one source already in memory, such as an unsaved editor buffer.
+    ///
+    /// It runs on the calling thread, which needs [`STACK_SIZE`](crate::STACK_SIZE) of stack for
+    /// deeply nested code. `path` only names the file in `warnings`; exclusion and the
+    /// generated-file check are left to the caller.
     pub fn analyze_source(
         &mut self,
         descriptor: &'static dyn LanguageDescriptor,
@@ -440,6 +459,8 @@ pub fn rank(located: &mut [Located]) {
     });
 }
 
+/// Returns `path` as reports print it, without `.` components and with forward slashes.
+///
 /// `bonsai-lint .` and `bonsai-lint src` must print `src/a.php` the same way, so the `./` a
 /// walk from the current directory prepends is dropped. The separator is forward slash on every
 /// platform too: these paths are read out of JSON by editors and compared in CI, where a report
@@ -468,6 +489,8 @@ pub fn decode(bytes: Vec<u8>, path: &Path, warnings: &mut Vec<String>) -> String
     })
 }
 
+/// Returns the absolute, canonical form of `path`, for comparing against domain roots.
+///
 /// Every path that is compared against a domain root goes through here, so `/tmp` and
 /// `/private/tmp` cannot end up on opposite sides of a `starts_with`. A file that does not exist
 /// yet, an unsaved editor buffer, resolves through its directory.

@@ -1,3 +1,5 @@
+//! Configuration discovery, which reads `bonsai-lint.toml` files into a [`Workspace`] of domains.
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -6,8 +8,13 @@ use serde::Deserialize;
 
 use crate::finding::normalize_key;
 
+/// The configuration file's name, read at the workspace root and in each declared domain.
 pub const CONFIG_FILE: &str = "bonsai-lint.toml";
+/// The baseline's file name in a domain's root, unless its config sets `baseline`.
+///
+/// With no config above the scan, the nearest directory holding this file is the workspace root.
 pub const BASELINE_FILE: &str = ".bonsai-lint-baseline.json";
+/// The highest score that passes wherever no config sets another.
 pub const DEFAULT_THRESHOLD: u32 = 15;
 
 /// Every other top-level key must be a `[language]` table.
@@ -20,13 +27,24 @@ const KEYS: &[&str] = &[
     "baseline",
 ];
 
+/// One `bonsai-lint.toml` as written, before inheritance and defaults fill in what it leaves out.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ConfigFile {
+    /// The name reports and `--domain` know the domain by.
+    ///
+    /// `None` means `root` for the workspace root, and a domain's path from that root otherwise.
     pub name: Option<String>,
+    /// Globs naming the directories that are domains, read only from the root config.
     pub domains: Option<Vec<String>>,
+    /// The highest score that passes, unless a language section in this file sets its own.
     pub threshold: Option<u32>,
+    /// Globs of paths to skip, relative to this config's directory.
     pub exclude: Option<Vec<String>>,
+    /// Whether code outside any function is scored as `<toplevel>`.
+    ///
+    /// `None` in a domain takes the root's setting, and `None` at the root means `true`.
     pub toplevel: Option<bool>,
+    /// Where this directory's baseline lives, relative to it.
     pub baseline: Option<PathBuf>,
     /// Anything left over is a per-language section. A mistyped top-level key lands here and
     /// fails to deserialise, which is preferable to being silently ignored.
@@ -34,19 +52,31 @@ pub struct ConfigFile {
     pub languages: BTreeMap<String, LanguageSection>,
 }
 
+/// A `[language]` table, named by a language id.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LanguageSection {
+    /// The highest score that passes in that language, overriding the file's own `threshold`.
     pub threshold: Option<u32>,
 }
 
+/// A directory with its own thresholds, excludes and baseline, the root config's settings
+/// already folded in.
+///
+/// The workspace root is always a domain, the first in [`Workspace::domains`].
 #[derive(Debug, Clone)]
 pub struct Domain {
+    /// The name reports and `--domain` use, unique within the workspace.
     pub name: String,
+    /// The directory the domain covers, and the base of its baseline keys and `exclude` globs.
     pub root: PathBuf,
+    /// The highest score that passes in a language missing from `language_thresholds`.
     pub threshold: u32,
+    /// The highest score that passes, per language id.
     pub language_thresholds: BTreeMap<String, u32>,
+    /// Whether code outside any function is scored as `<toplevel>`.
     pub toplevel: bool,
+    /// Where the domain's baseline file lives.
     pub baseline: PathBuf,
     /// Matched against paths relative to this domain's root; the workspace's own `exclude` is
     /// matched against the workspace root.
@@ -54,6 +84,7 @@ pub struct Domain {
 }
 
 impl Domain {
+    /// Returns the highest score that passes for the language id `language`.
     #[must_use]
     pub fn threshold_for(&self, language: &str) -> u32 {
         self.language_thresholds
@@ -63,14 +94,23 @@ impl Domain {
     }
 }
 
+/// A configured project: its root, its domains, and the root's excludes.
+///
 /// Domains are declared by glob at the workspace root rather than discovered by walking up
 /// from every file, so a stray config cannot create a domain nobody sanctioned and the whole
 /// policy stays readable in one place.
 #[derive(Debug)]
 pub struct Workspace {
+    /// The directory holding the root config.
+    ///
+    /// Without any config, it is the nearest directory at or above the one [`discover`] started
+    /// from that holds a [`BASELINE_FILE`], or else that starting directory.
     pub root: PathBuf,
+    /// The root domain first, then every declared domain in path order.
     pub domains: Vec<Domain>,
+    /// The root config's `exclude` globs, matched against paths relative to the workspace root.
     pub exclude: GlobSet,
+    /// Config problems that were ignored rather than refused, such as an unknown language section.
     pub warnings: Vec<String>,
 }
 
@@ -86,6 +126,10 @@ impl Workspace {
             .map_or(0, |(index, _)| index)
     }
 
+    /// Returns whether `path` matches the root's `exclude` or its own domain's.
+    ///
+    /// Like the domain roots, `path` is expected absolute and canonical, as
+    /// [`resolve`](crate::scan::resolve) makes it.
     #[must_use]
     pub fn is_excluded(&self, path: &Path) -> bool {
         let relative = path.strip_prefix(&self.root).unwrap_or(path);
@@ -123,12 +167,37 @@ impl Workspace {
     }
 }
 
+/// Why the configuration could not be read into a [`Workspace`].
 #[derive(Debug)]
 pub enum ConfigError {
-    Read { path: PathBuf, error: String },
-    Parse { path: PathBuf, error: String },
-    Invalid { path: PathBuf, error: String },
-    Glob { pattern: String, error: String },
+    /// A config file could not be read from disk.
+    Read {
+        /// The config file.
+        path: PathBuf,
+        /// What went wrong, as a message for the user.
+        error: String,
+    },
+    /// A config file is not valid TOML or does not fit the config's shape, such as an unknown key.
+    Parse {
+        /// The config file.
+        path: PathBuf,
+        /// What went wrong, as a message for the user.
+        error: String,
+    },
+    /// A config file parsed but clashes with the rest of the workspace, such as a repeated name.
+    Invalid {
+        /// The config file of the domain at fault, which a domain declared only by glob lacks.
+        path: PathBuf,
+        /// What went wrong, as a message for the user.
+        error: String,
+    },
+    /// An `exclude` or `domains` glob that does not compile, or is negated.
+    Glob {
+        /// The pattern at fault, or every pattern joined by commas when the set failed to build.
+        pattern: String,
+        /// What went wrong, as a message for the user.
+        error: String,
+    },
 }
 
 impl std::fmt::Display for ConfigError {

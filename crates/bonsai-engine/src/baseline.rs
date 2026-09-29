@@ -1,3 +1,5 @@
+//! Baselines, which record the findings already over a threshold so only new or worse ones fail.
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
@@ -49,6 +51,10 @@ impl Baseline {
         }
     }
 
+    /// Reads a baseline written by [`Baseline::save`].
+    ///
+    /// A file that does not parse, or holds another format version, fails with
+    /// [`io::ErrorKind::InvalidData`] rather than loading as an empty baseline.
     pub fn load(path: &Path) -> io::Result<Self> {
         let text = fs::read_to_string(path)?;
         let baseline: Self = serde_json::from_str(&text)
@@ -68,6 +74,7 @@ impl Baseline {
         Ok(baseline)
     }
 
+    /// Writes the baseline as pretty-printed JSON, creating any missing parent directories.
     pub fn save(&self, path: &Path) -> io::Result<()> {
         if let Some(parent) = path
             .parent()
@@ -108,11 +115,13 @@ impl Baseline {
             .collect()
     }
 
+    /// Returns how many units the baseline accepts, across every file.
     #[must_use]
     pub fn len(&self) -> usize {
         self.entries.values().map(BTreeMap::len).sum()
     }
 
+    /// Returns whether the baseline accepts no unit at all.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0

@@ -1,14 +1,22 @@
+//! The tree walk that adds up cognitive complexity, and the parts of an `if` chain it scores.
+
 use tree_sitter::Node;
 
 use crate::finding::UnitScope;
 use crate::language::{Flags, Language, Role, field};
 
+/// What a walk scores against: the compiled language, the source and the unit being scored.
 pub struct WalkCx<'a> {
+    /// The language the tree was parsed with.
     pub lang: &'a Language,
+    /// The source text the tree was parsed from.
     pub src: &'a [u8],
+    /// The unit's name without its signature, which a call must name to count as recursion.
     pub unit: &'a str,
     /// `None` in the top-level pass, which has no declaration for a call to reach.
     pub unit_node: Option<Node<'a>>,
+    /// How a call of the unit's name reaches the unit, from
+    /// [`Hooks::unit_scope`](crate::Hooks::unit_scope).
     pub scope: &'a UnitScope,
     /// Set only for the top-level pass. Inside a unit body a nested function-like rolls up, but
     /// at file scope it is a unit in its own right and `collect` already reports it, so counting
@@ -24,6 +32,7 @@ impl std::fmt::Debug for WalkCx<'_> {
     }
 }
 
+/// Scores `node` and everything beneath it, starting at nesting level 0.
 #[must_use]
 pub fn score_node(node: Node<'_>, cx: &WalkCx<'_>) -> u32 {
     let mut score = 0;
@@ -31,6 +40,7 @@ pub fn score_node(node: Node<'_>, cx: &WalkCx<'_>) -> u32 {
     score
 }
 
+/// Scores each of `nodes` as [`score_node`] does and returns the sum.
 #[must_use]
 pub fn score_nodes<'t>(nodes: impl Iterator<Item = Node<'t>>, cx: &WalkCx<'_>) -> u32 {
     let mut score = 0;

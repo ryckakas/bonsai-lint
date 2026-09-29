@@ -1,14 +1,23 @@
+//! The grammar contract harness every bonsai-lint language crate's tests run, through
+//! [`GrammarFixture::assert_contract`].
+
 use std::collections::HashSet;
 
 use bonsai_core::{IfPart, LanguageSpec, Role};
 use tree_sitter::{Language as TsLanguage, Node, Parser};
 
+/// A language's spec, the grammar it compiles against, and fixture source to check them with.
+///
 /// The contract a language crate must keep with the grammar it is compiled against. The
 /// kind-id table turns a renamed node into a silent zero rather than a compile error, so these
 /// checks are what make that design safe to rely on.
 pub struct GrammarFixture {
+    /// The spec whose node kinds and field names are checked.
     pub spec: &'static LanguageSpec,
+    /// The grammar the spec is compiled against and the fixture is parsed with.
     pub language: TsLanguage,
+    /// Source that must parse cleanly and produce every kind the spec declares, bar its optional
+    /// ones.
     pub source: &'static str,
     /// Groups where at least one spelling must be live, for kinds a grammar renamed between
     /// releases and where both spellings are declared.
@@ -24,6 +33,8 @@ impl std::fmt::Debug for GrammarFixture {
 }
 
 impl GrammarFixture {
+    /// Asserts that the spec, the grammar and the fixture still agree, panicking at the first
+    /// check that fails.
     pub fn assert_contract(&self) {
         let tree = self.parse();
         self.assert_fixture_parses_cleanly(&tree);

@@ -1,3 +1,5 @@
+//! The PHP node kinds, field names and hooks bonsai-lint's scorer reads.
+
 use bonsai_core::naming::{compact, strip_quotes};
 use bonsai_core::{
     Callee, FieldNames, Hooks, KindSets, Language, LanguageDescriptor, LanguageSpec, UnitName,
@@ -5,9 +7,11 @@ use bonsai_core::{
 };
 use tree_sitter::Node;
 
+/// The type behind [`PHP`], serving `.php` and `.phtml` files.
 #[derive(Debug)]
 pub struct Php;
 
+/// The PHP language descriptor, registered by bonsai-engine.
 pub static PHP: Php = Php;
 
 impl LanguageDescriptor for Php {
@@ -24,6 +28,7 @@ impl LanguageDescriptor for Php {
     }
 }
 
+/// The node kinds, field names and hooks that score PHP, under the language id `php`.
 pub static SPEC: LanguageSpec = LanguageSpec {
     id: "php",
     kinds: KindSets {

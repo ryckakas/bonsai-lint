@@ -1,10 +1,16 @@
+//! The Vue descriptor for bonsai-lint, which locates a single-file component's script blocks so
+//! they are scored with the TypeScript spec.
+
 mod sfc;
 
 use bonsai_core::{Extraction, Language, LanguageDescriptor, LanguageSpec};
 
+/// The type behind [`VUE`], serving `.vue` files.
 #[derive(Debug)]
 pub struct Vue;
 
+/// The Vue language descriptor, registered by bonsai-engine.
+///
 /// Only the script blocks score. A `v-if` chain is branching, but the metric is defined over
 /// script code, and counting a template would make a component incomparable with the same
 /// logic written in TypeScript.
@@ -28,6 +34,10 @@ impl LanguageDescriptor for Vue {
     }
 }
 
+/// The TypeScript spec under the language id `vue`.
+///
+/// The id is what `--lang`, `--over` and a config section key on, so components get a budget
+/// separate from TypeScript's.
 pub static VUE_SPEC: LanguageSpec = bonsai_lang_ts::spec("vue");
 
 /// The kind-id table is resolved per grammar, so these cannot be shared with `bonsai-lang-ts`'s
