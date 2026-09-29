@@ -290,7 +290,12 @@ by accident:
 - A file that is not valid UTF-8 is decoded leniently with a warning: the replaced bytes sit in
   strings and comments, which do not score. An unreadable file is an error and fails the run.
 - A closed stdout — `bonsai-lint --all . | head` — ends the output quietly and leaves the exit
-  code to the findings.
+  code to the scan's result.
+- Only a scan that covers a baseline's whole domain judges it, and never one run with `--stdin`,
+  `--domain` or `--lang`. A partial scan cannot tell a deleted unit from one it did not look at,
+  and under `strict-baseline` its verdict would fail a pre-commit hook or an editor on code
+  nobody touched. For the same reason, a run that saw only part of the workspace asks for the
+  rest to pass before the baseline is rewritten.
 
 ## Releasing
 

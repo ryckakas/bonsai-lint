@@ -178,8 +178,11 @@ them when touching scan/domain/path code:
   like a `.min.js` the plan never admits; `--stdin` answers it with an empty report.
 - Invalid UTF-8 is decoded leniently with a warning (replacement bytes land in strings/comments,
   which don't score); an unreadable file is a hard error and fails the run.
-- A closed stdout ends output quietly and leaves the exit code to the findings, not to the write
-  error.
+- A closed stdout ends output quietly and leaves the exit code to the scan's result, not to the
+  write error.
+- Only a scan that covers a baseline's whole domain judges it, never one with `--stdin`,
+  `--domain` or `--lang`: a partial scan cannot tell a deleted unit from one it did not look at,
+  and under `strict-baseline` its verdict would fail pre-commit hooks and editors.
 
 **Naming the language set:** taglines and descriptions call the tool *multi-language* and never
 enumerate languages. That covers the GitHub About text, the crate description (which npm,
@@ -227,7 +230,8 @@ projects on crates.io/npm/PyPI/VS Code Marketplace).
   (the HTML grammar's kinds, which nothing else would fail on), `sfc.rs` (block extraction) and
   `vue.rs` (scoring, and that a reported line is a line in the `.vue` file).
 - `bonsai-engine` integration tests (`baseline.rs`, `config.rs`, `scan.rs`) exercise config
-  discovery, domains, and baseline read/write against real temp directories.
+  discovery, domains, baseline read/write and which entries the code has outgrown, against real
+  temp directories.
 - `bonsai-lint/tests/` drives the compiled binary end-to-end, split by area (`cli_report.rs`,
   `cli_stdin.rs`, `cli_baseline.rs`, `cli_domains.rs`, `cli_parallel.rs`, `cli_vue.rs`,
   `cli_go.rs`, `cli_java.rs`, `cli_python.rs`, `cli_pre_commit.rs`) over a shared

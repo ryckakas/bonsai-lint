@@ -25,6 +25,7 @@ const KEYS: &[&str] = &[
     "exclude",
     "toplevel",
     "baseline",
+    "strict-baseline",
 ];
 
 /// One `bonsai-lint.toml` as written, before inheritance and defaults fill in what it leaves out.
@@ -46,6 +47,11 @@ pub struct ConfigFile {
     pub toplevel: Option<bool>,
     /// Where this directory's baseline lives, relative to it.
     pub baseline: Option<PathBuf>,
+    /// Whether a baseline entry looser than the code fails the run, written `strict-baseline`.
+    ///
+    /// `None` in a domain takes the root's setting, and `None` at the root means `false`.
+    #[serde(rename = "strict-baseline")]
+    pub strict_baseline: Option<bool>,
     /// Anything left over is a per-language section. A mistyped top-level key lands here and
     /// fails to deserialise, which is preferable to being silently ignored.
     #[serde(flatten)]
@@ -78,6 +84,8 @@ pub struct Domain {
     pub toplevel: bool,
     /// Where the domain's baseline file lives.
     pub baseline: PathBuf,
+    /// Whether an entry in the domain's baseline that is looser than the code fails the run.
+    pub strict_baseline: bool,
     /// Matched against paths relative to this domain's root; the workspace's own `exclude` is
     /// matched against the workspace root.
     pub exclude: GlobSet,
@@ -354,6 +362,7 @@ fn default_domain(root: &Path) -> Domain {
         language_thresholds: BTreeMap::new(),
         toplevel: true,
         baseline: root.join(BASELINE_FILE),
+        strict_baseline: false,
         exclude: GlobSet::empty(),
     }
 }
@@ -403,6 +412,10 @@ fn domain_from(
             .baseline
             .clone()
             .map_or_else(|| root.join(BASELINE_FILE), |path| root.join(path)),
+        strict_baseline: config
+            .strict_baseline
+            .or(inherited.strict_baseline)
+            .unwrap_or(false),
         exclude,
     }
 }

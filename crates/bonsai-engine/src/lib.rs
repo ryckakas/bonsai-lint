@@ -13,7 +13,7 @@ pub mod registry;
 pub mod report;
 pub mod scan;
 
-pub use baseline::Baseline;
+pub use baseline::{Baseline, LooseEntry, Looseness};
 pub use config::{Domain, Workspace};
 pub use finding::Located;
 pub use pool::STACK_SIZE;

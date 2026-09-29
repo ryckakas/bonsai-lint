@@ -12,6 +12,32 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+### Added
+
+- **`--strict-baseline`, and `strict-baseline = true` in `bonsai-lint.toml`.** A baseline entry
+  looser than the code fails the run with exit 1, so the baseline tightens as the code improves
+  instead of accepting the old score for good. The key can be set per domain, and a domain
+  without it takes the root's. Only a scan of a whole domain judges its baseline, so a pre-commit
+  hook or an editor never fails on one.
+
+### Changed
+
+- **Baseline entries the code has outgrown are named, one line each.** Besides entries that match
+  nothing, which used to be only counted, a scan of the whole domain now reports an entry whose
+  unit scores less than recorded, no longer scores over its threshold, or is suppressed with a
+  reason: `root: src/a.php: busy is baselined at 28 but scores 21`. Without the new flag the exit
+  code is unchanged, and the baseline format too, so existing baselines keep working. To silence
+  the new lines, or before turning on strict mode, rewrite a baseline with `--write-baseline` over
+  the whole workspace and the flags CI runs with.
+- **The JSON report gains `loose_entries`,** always present and empty when there are none: the same
+  entries, each with its `domain`, `path`, `unit`, `recorded` score, `reason`, current `score`,
+  `threshold` and whether it is `strict`.
+- **For embedders of `bonsai-engine`**, and breaking, which is why this is 0.5.0 rather than 0.4.4:
+  - `Baseline::loose` returns each loose entry as a `LooseEntry` with a `Looseness` reason, and
+    replaces `Baseline::unmatched`.
+  - `ConfigFile` and `Domain` gain `strict_baseline`, and `Report` gains `loose_entries`, built from
+    the new `ReportedLooseEntry` and `LooseReason`.
+
 ## [0.4.3] - 2026-09-27
 
 ### Added
