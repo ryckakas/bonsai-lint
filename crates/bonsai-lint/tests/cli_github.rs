@@ -229,8 +229,8 @@ fn a_loose_entry_warns_on_the_baseline_file_and_errs_only_when_strict() {
     project.file("src/a.php", &nested_php("busy", 7));
     assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
     project.file("src/a.php", &nested_php("busy", 6));
-    let expected = "file=.bonsai-lint-baseline.json,title=bonsai-lint::root: src/a.php: busy is \
-                    baselined at 28 but scores 21\n";
+    let expected = "file=.bonsai-lint-baseline.json,line=1,title=bonsai-lint::root: src/a.php: busy \
+                    is baselined at 28 but scores 21\n";
 
     let lenient = run_in_actions(&project, &["--format", "github", "."], Some(&project.root));
     assert_eq!(stderr(&lenient), format!("::warning {expected}"));
@@ -382,7 +382,7 @@ fn a_shared_baselines_loose_entry_is_filed_on_it() {
 
     assert_eq!(
         stderr(&output),
-        "::warning file=ledger.json,title=bonsai-lint::baseline: src/a.php: busy is baselined at \
-         21 but matched nothing in this scan\n"
+        "::warning file=ledger.json,line=1,title=bonsai-lint::baseline: src/a.php: busy is baselined \
+         at 21 but matched nothing in this scan\n"
     );
 }

@@ -16,11 +16,10 @@ pub(crate) enum Level {
     Warning,
 }
 
-/// A command without a file lands in the run's summary; one with a file, on that file.
+/// A command without a place lands in the run's summary; one with a file and line, on that line.
 struct Annotation<'a> {
     level: Level,
-    file: Option<&'a str>,
-    line: Option<usize>,
+    place: Option<(&'a str, usize)>,
     message: &'a str,
 }
 
@@ -30,11 +29,9 @@ impl fmt::Display for Annotation<'_> {
             Level::Error => "error",
             Level::Warning => "warning",
         };
-        let place = match (self.file, self.line) {
-            (Some(file), Some(line)) => format!("file={},line={line},", escape_property(file)),
-            (Some(file), None) => format!("file={},", escape_property(file)),
-            (None, _) => String::new(),
-        };
+        let place = self.place.map_or_else(String::new, |(file, line)| {
+            format!("file={},line={line},", escape_property(file))
+        });
         write!(
             f,
             "::{command} {place}title=bonsai-lint::{}",
@@ -47,8 +44,7 @@ impl fmt::Display for Annotation<'_> {
 pub(crate) fn annotation(level: Level, message: &str) -> String {
     Annotation {
         level,
-        file: None,
-        line: None,
+        place: None,
         message,
     }
     .to_string()
@@ -64,20 +60,19 @@ pub(crate) fn annotation_at(level: Level, path: &Path, line: usize, message: &st
     let message = format!("{shown}:{line}: {message}");
     Annotation {
         level,
-        file: file.as_deref(),
-        line: Some(line),
+        place: file.as_deref().map(|file| (file, line)),
         message: &message,
     }
     .to_string()
 }
 
-/// An annotation on a whole file, which GitHub shows on its first line.
+/// An annotation on a whole file, placed on its first line: without a line the runner files it on
+/// line 0, which no diff shows.
 pub(crate) fn annotation_on(level: Level, path: &Path, message: &str) -> String {
     let file = file(path);
     Annotation {
         level,
-        file: file.as_deref(),
-        line: None,
+        place: file.as_deref().map(|file| (file, 1)),
         message,
     }
     .to_string()
