@@ -257,14 +257,44 @@ fn stale_entries_are_reported_for_each_domain_that_has_them() {
     let output = project.run(&["--jobs", "8", "."]);
 
     assert_eq!(code(&output), 0, "{}", stderr(&output));
+    for domain in ["apps/strict", "packages/plain"] {
+        let line = format!(
+            "{domain}: ghost.php: ghost is baselined at 99 but matched nothing in this scan"
+        );
+        assert!(stderr(&output).contains(&line), "{}", stderr(&output));
+    }
+}
+
+/// A monorepo adopts strictness one domain at a time, so each baseline answers to its own
+/// domain's setting.
+#[test]
+fn a_loose_entry_fails_the_run_only_in_a_strict_domain() {
+    let project = Project::new();
+    project
+        .file(
+            "bonsai-lint.toml",
+            "domains = [\"apps/*\"]\nstrict-baseline = true\n",
+        )
+        .file("apps/legacy/bonsai-lint.toml", "strict-baseline = false\n")
+        .file("apps/legacy/a.php", &nested_php("old", 6))
+        .file("apps/web/a.php", &nested_php("new", 6));
+    assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
+
+    inject_ghost(&project, "apps/legacy");
+    let lenient = project.run(&["."]);
+    assert_eq!(code(&lenient), 0, "{}", stderr(&lenient));
     assert!(
-        stderr(&output).contains("apps/strict: 1 baseline entr(ies) matched nothing"),
+        stderr(&lenient).contains("apps/legacy: ghost.php: ghost is baselined at 99"),
         "{}",
-        stderr(&output)
+        stderr(&lenient)
     );
+
+    inject_ghost(&project, "apps/web");
+    let strict = project.run(&["."]);
+    assert_eq!(code(&strict), 1, "{}", stderr(&strict));
     assert!(
-        stderr(&output).contains("packages/plain: 1 baseline entr(ies) matched nothing"),
+        stderr(&strict).contains("1 entr(ies) of a strict baseline looser than the code"),
         "{}",
-        stderr(&output)
+        stderr(&strict)
     );
 }

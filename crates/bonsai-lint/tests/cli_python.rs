@@ -198,6 +198,11 @@ fn a_def_redefined_under_if_else_is_adopted_by_its_baseline() {
 
     let rerun = project.run(&["."]);
     assert_eq!(code(&rerun), 0, "{}", stdout(&rerun));
+    assert!(
+        !stderr(&rerun).contains("baselined at"),
+        "{}",
+        stderr(&rerun)
+    );
 }
 
 #[test]

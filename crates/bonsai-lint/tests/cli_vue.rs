@@ -128,7 +128,12 @@ fn a_stale_vue_baseline_entry_is_reported() {
     let rerun = project.run(&["."]);
 
     assert!(
-        stderr(&rerun).contains("matched nothing"),
+        stderr(&rerun).contains("root: src/Panel.vue: busy is baselined at"),
+        "{}",
+        stderr(&rerun)
+    );
+    assert!(
+        stderr(&rerun).contains("but matched nothing in this scan"),
         "{}",
         stderr(&rerun)
     );

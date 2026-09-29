@@ -112,7 +112,11 @@ Two separate things sit inside that 0.24s, and neither has been measured on its 
 - **`--write-baseline` on a subset empties the rest.** With file arguments, `--domain` or
   `--lang`, every domain's baseline is rebuilt from that subset's findings alone, dropping the
   entries it did not scan. Merging into the existing file, or refusing the combination, would
-  fix it.
+  fix it. `--strict-baseline` now sends people to `--write-baseline`, which is why its hint says
+  to run it over the whole workspace.
+- **`--domain` never judges a baseline.** Only a scan covering a whole domain names loose
+  entries, and `--domain` is excluded outright, although `--domain web .` covers all of `web`.
+  Judging that domain's own baseline would let a per-team CI job enforce `--strict-baseline`.
 - **Checksum verification in the npm wrapper.** The npm package downloads the release archive
   without checking it, while the installer script, the Homebrew formula and the Go and Composer
   launchers all check a sha256 recorded before the download. dist already publishes one per archive.

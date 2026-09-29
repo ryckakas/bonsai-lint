@@ -9,9 +9,11 @@ use std::process::ExitCode;
 use bonsai_core::Suppression;
 use bonsai_engine::config::{self, Workspace};
 use bonsai_engine::finding::normalize_key;
-use bonsai_engine::report::{Report, ReportedFinding};
+use bonsai_engine::report::{Report, ReportedFinding, ReportedLooseEntry};
 use bonsai_engine::scan::{decode, display_path, rank, resolve};
-use bonsai_engine::{Baseline, Located, STACK_SIZE, ScanOutcome, ScanStats, Scanner, registry};
+use bonsai_engine::{
+    Baseline, Located, Looseness, STACK_SIZE, ScanOutcome, ScanStats, Scanner, registry,
+};
 use clap::{CommandFactory, FromArgMatches, Parser as ClapParser, ValueEnum};
 
 // musl's malloc serialises threads on one lock, which made a parallel scan over 15 times slower
@@ -50,6 +52,10 @@ struct Args {
     /// Use one baseline file, keyed from the workspace root, instead of each domain's own
     #[arg(long, value_name = "PATH")]
     baseline: Option<PathBuf>,
+
+    /// Fail when a baseline entry is looser than the code
+    #[arg(long)]
+    strict_baseline: bool,
 
     /// Restrict the scan to these languages
     #[arg(long, value_delimiter = ',', value_name = "ID")]
@@ -210,7 +216,8 @@ fn run(args: &Args) -> Result<ExitCode, String> {
     }
 
     let baselines = load_baselines(args, &workspace)?;
-    report_stale_entries(&baselines, &located, &workspace, args, &scan_roots);
+    let loose = report_loose_entries(&baselines, &located, &workspace, args, &scan_roots);
+    let strict_loose = loose.iter().filter(|entry| entry.strict).count();
 
     let breaches: Vec<&Located> = over_threshold
         .iter()
@@ -227,28 +234,50 @@ fn run(args: &Args) -> Result<ExitCode, String> {
             &baselines,
             breaches.len(),
             gated_by,
+            loose,
         ),
     };
     tolerate_closed_pipe(printed)?;
 
-    if breaches.is_empty() {
-        return Ok(ExitCode::SUCCESS);
-    }
+    let accepted = over_threshold.len() - breaches.len();
+    Ok(verdict(breaches.len(), accepted, strict_loose, args))
+}
 
+/// A strict baseline fails on entries looser than the code, but the hint must never teach anyone
+/// to rewrite the baseline over a run that still has breaches, which would accept them too.
+fn verdict(breaches: usize, accepted: usize, strict_loose: usize, args: &Args) -> ExitCode {
+    if breaches == 0 && strict_loose == 0 {
+        return ExitCode::SUCCESS;
+    }
     if args.format == Format::Text {
-        let accepted = over_threshold.len() - breaches.len();
-        eprintln!(
-            "\n{} unit(s) over the threshold{}",
-            breaches.len(),
-            if accepted > 0 {
-                format!(", {accepted} accepted by a baseline")
-            } else {
-                String::new()
-            }
-        );
+        eprintln!();
+        if breaches > 0 {
+            eprintln!("{}", breach_summary(breaches, accepted));
+        }
+        if strict_loose > 0 {
+            eprintln!("{}", tighten_hint(strict_loose, breaches > 0));
+        }
     }
+    ExitCode::FAILURE
+}
 
-    Ok(ExitCode::FAILURE)
+fn breach_summary(breaches: usize, accepted: usize) -> String {
+    if accepted == 0 {
+        return format!("{breaches} unit(s) over the threshold");
+    }
+    format!("{breaches} unit(s) over the threshold, {accepted} accepted by a baseline")
+}
+
+fn tighten_hint(strict_loose: usize, breached: bool) -> String {
+    let when = if breached {
+        "once nothing else fails, "
+    } else {
+        ""
+    };
+    format!(
+        "{strict_loose} entr(ies) of a strict baseline looser than the code; {when}tighten them \
+         with --write-baseline over the whole workspace, with this run's other flags"
+    )
 }
 
 fn reject_unknown_languages(args: &Args, known: &[&str]) -> Result<(), String> {
@@ -370,6 +399,9 @@ fn apply_overrides(args: &Args, workspace: &mut Workspace) -> Result<(), String>
         if args.no_toplevel {
             domain.toplevel = false;
         }
+        if args.strict_baseline {
+            domain.strict_baseline = true;
+        }
     }
 
     Ok(())
@@ -390,9 +422,14 @@ fn rekey_to_workspace(located: &mut [Located], workspace: &Workspace) {
     }
 }
 
+/// Writing a baseline, counting breaches and judging a baseline's entries must agree on what a
+/// unit is held to, or a freshly written baseline could read as loose.
+fn threshold_of(item: &Located, workspace: &Workspace) -> u32 {
+    workspace.domains[item.domain].threshold_for(item.finding.language)
+}
+
 fn is_over_threshold(item: &Located, workspace: &Workspace) -> bool {
-    let threshold = workspace.domains[item.domain].threshold_for(item.finding.language);
-    item.finding.score > threshold && !item.finding.is_suppressed()
+    item.finding.score > threshold_of(item, workspace) && !item.finding.is_suppressed()
 }
 
 fn baseline_index(item: &Located, args: &Args) -> usize {
@@ -496,41 +533,68 @@ fn report_written(baseline: &Baseline, path: &Path) -> Result<(), String> {
 
 /// Only a scan that saw a whole domain can tell that an entry has gone stale. One editor buffer,
 /// one language or one sub-directory would report everything else as stale.
-fn report_stale_entries(
+fn report_loose_entries(
     baselines: &BTreeMap<usize, Baseline>,
     located: &[Located],
     workspace: &Workspace,
     args: &Args,
     scan_roots: &[PathBuf],
-) {
-    if args.stdin || args.domain.is_some() || !args.lang.is_empty() {
-        return;
-    }
-    let covered = |root: &Path| scan_roots.iter().any(|path| root.starts_with(path));
+) -> Vec<ReportedLooseEntry> {
+    let partial = args.stdin || args.domain.is_some() || !args.lang.is_empty();
+    let covered = |root: &Path| !partial && scan_roots.iter().any(|path| root.starts_with(path));
+    let shared = args.baseline.is_some();
 
+    let mut loose = Vec::new();
+    let mut unjudged = 0;
     for (index, baseline) in baselines {
-        let (name, root, scoped) = if args.baseline.is_some() {
-            ("baseline", workspace.root.as_path(), located.to_vec())
+        let domain = &workspace.domains[*index];
+        let (name, root) = if shared {
+            ("baseline", workspace.root.as_path())
         } else {
-            let domain = &workspace.domains[*index];
-            let scoped = located
-                .iter()
-                .filter(|item| item.domain == *index)
-                .cloned()
-                .collect();
-            (domain.name.as_str(), domain.root.as_path(), scoped)
+            (domain.name.as_str(), domain.root.as_path())
         };
-
         if !covered(root) {
+            unjudged += 1;
             continue;
         }
-        let stale = baseline.unmatched(&scoped);
-        if !stale.is_empty() {
+
+        let scoped = located
+            .iter()
+            .filter(|item| shared || item.domain == *index);
+        for entry in baseline.loose(scoped, |item| threshold_of(item, workspace)) {
             eprintln!(
-                "{name}: {} baseline entr(ies) matched nothing in this scan",
-                stale.len()
+                "{name}: {}: {} is baselined at {} but {}",
+                entry.key_path,
+                entry.unit,
+                entry.recorded,
+                describe(entry.reason)
             );
+            let owner = (!shared).then(|| name.to_string());
+            loose.push(ReportedLooseEntry::new(
+                owner,
+                &entry,
+                domain.strict_baseline,
+            ));
         }
+    }
+
+    if args.strict_baseline && unjudged > 0 {
+        eprintln!(
+            "--strict-baseline: {unjudged} baseline(s) not judged; only a scan of a whole domain, \
+             without --stdin, --domain or --lang, judges its baseline"
+        );
+    }
+    loose
+}
+
+fn describe(reason: Looseness) -> String {
+    match reason {
+        Looseness::Unmatched => "matched nothing in this scan".to_string(),
+        Looseness::Suppressed => "is suppressed".to_string(),
+        Looseness::AtOrUnderThreshold { score, threshold } => {
+            format!("scores {score}, not over its threshold of {threshold}")
+        }
+        Looseness::Lower { score } => format!("scores {score}"),
     }
 }
 
@@ -538,8 +602,8 @@ fn report_stale_entries(
 /// otherwise the author would believe the finding was silenced.
 fn warn_about_unreasoned_suppressions(located: &[Located], workspace: &Workspace) {
     for item in located {
-        let threshold = workspace.domains[item.domain].threshold_for(item.finding.language);
-        if item.finding.score > threshold && item.finding.suppression == Suppression::MissingReason
+        if item.finding.score > threshold_of(item, workspace)
+            && item.finding.suppression == Suppression::MissingReason
         {
             eprintln!(
                 "{}:{}: `{}` needs a reason, e.g. `// {}: why this has to stay complex` — \
@@ -616,6 +680,7 @@ fn print_json(
     baselines: &BTreeMap<usize, Baseline>,
     breaches: usize,
     gated_by: usize,
+    loose_entries: Vec<ReportedLooseEntry>,
 ) -> io::Result<()> {
     let findings: Vec<ReportedFinding> = located
         .iter()
@@ -643,6 +708,7 @@ fn print_json(
         thresholds,
         breaches,
         findings,
+        loose_entries,
     };
 
     let json = serde_json::to_string_pretty(&report)

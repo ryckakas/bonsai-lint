@@ -434,3 +434,59 @@ fn without_a_declaring_config_the_nearest_one_is_the_root() {
     assert_eq!(workspace.root, root.join("packages/own"));
     assert_eq!(workspace.domains[0].threshold, 1);
 }
+
+#[test]
+fn strict_baseline_is_inherited_and_a_domain_can_override_it() {
+    let (_dir, root) = project();
+    write(
+        &root,
+        "bonsai-lint.toml",
+        "domains = [\"apps/*\"]\nstrict-baseline = true\n",
+    );
+    write(&root, "apps/web/index.ts", "");
+    write(
+        &root,
+        "apps/legacy/bonsai-lint.toml",
+        "strict-baseline = false\n",
+    );
+    write(&root, "apps/legacy/index.ts", "");
+
+    let workspace = discover(&root);
+    let strict: Vec<(&str, bool)> = workspace
+        .domains
+        .iter()
+        .map(|domain| (domain.name.as_str(), domain.strict_baseline))
+        .collect();
+
+    assert_eq!(
+        strict,
+        [("root", true), ("apps/legacy", false), ("apps/web", true)]
+    );
+}
+
+#[test]
+fn zero_config_is_not_strict() {
+    let (_dir, root) = project();
+    write(&root, "index.ts", "");
+
+    let workspace = discover(&root);
+
+    assert!(
+        workspace
+            .domains
+            .iter()
+            .all(|domain| !domain.strict_baseline)
+    );
+}
+
+/// Every other key is one word, so the snake-case spelling is the likely slip.
+#[test]
+fn a_snake_case_strict_baseline_suggests_the_key() {
+    let (_dir, root) = project();
+    write(&root, "bonsai-lint.toml", "strict_baseline = true\n");
+
+    let error = error_of(&root);
+
+    assert!(error.contains("unknown key `strict_baseline`"), "{error}");
+    assert!(error.contains("did you mean `strict-baseline`?"), "{error}");
+}
