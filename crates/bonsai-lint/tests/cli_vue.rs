@@ -279,6 +279,8 @@ fn top_level_code_from_both_blocks_is_summed_by_the_driver() {
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0]["name"], "<toplevel>");
     assert_eq!(findings[0]["score"], 4);
+    assert_eq!(findings[0]["line"], 1);
+    assert_eq!(findings[0]["end_line"], 5, "the last block's last line");
 }
 
 /// A marker in any script block applies to the one `<toplevel>` the component reports.

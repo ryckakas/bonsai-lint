@@ -83,6 +83,17 @@ fn a_parallel_scan_finds_the_same_breaches_a_serial_one_finds() {
     let parallel = project.run(&["--format", "json", "--jobs", "8", "."]);
     assert_eq!(stdout(&parallel), stdout(&serial));
     assert_eq!(stderr(&parallel), stderr(&serial));
+
+    let annotate = |jobs| {
+        project
+            .command(&["--format", "github", "--jobs", jobs, "."])
+            .env_remove("GITHUB_WORKSPACE")
+            .output()
+            .expect("binary runs")
+    };
+    let (serial, parallel) = (annotate("1"), annotate("8"));
+    assert_eq!(stdout(&parallel), stdout(&serial));
+    assert_eq!(stderr(&parallel), stderr(&serial));
 }
 
 #[test]

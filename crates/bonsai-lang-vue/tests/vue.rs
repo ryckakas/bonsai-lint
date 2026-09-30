@@ -171,6 +171,16 @@ fn top_level_code_is_reported_on_the_line_its_script_block_starts() {
     assert_eq!(find(&found, TOPLEVEL_UNIT).line, 5);
 }
 
+#[test]
+fn a_function_in_a_script_block_ends_on_its_closing_line() {
+    let found = findings(
+        "<template>\n  <p/>\n</template>\n<script setup lang=\"ts\">\n\
+         function f(n) {\n  if (n) { return 1 }\n  return 0\n}\n</script>\n",
+    );
+    let f = find(&found, "f");
+    assert_eq!((f.line, f.end_line), (5, 8));
+}
+
 /// A template is not scored, but a `render()` is: it is ordinary script code. Moving logic out of
 /// a template and into `render()` therefore makes it visible rather than hiding it.
 #[test]

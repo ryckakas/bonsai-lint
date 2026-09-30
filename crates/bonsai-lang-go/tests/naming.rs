@@ -21,11 +21,25 @@ fn origin_of(source: &str, qualified: &str) -> NameOrigin {
         .origin
 }
 
+fn span_of(source: &str, qualified: &str) -> (usize, usize) {
+    let finding = findings(source)
+        .into_iter()
+        .find(|finding| finding.qualified_name() == qualified)
+        .unwrap_or_else(|| panic!("no unit named {qualified} in:\n{source}"));
+    (finding.line, finding.end_line)
+}
+
 #[test]
 fn a_declared_function_uses_its_own_name() {
     let source = "package p\nfunc declared() {}\n";
     assert_eq!(names(source), ["declared"]);
     assert_eq!(origin_of(source, "declared"), NameOrigin::Declared);
+}
+
+#[test]
+fn a_method_ends_on_its_closing_line() {
+    let source = "package p\n\ntype T struct{}\n\nfunc (t *T) run() {\n\tif a {\n\t\tf()\n\t}\n}\n";
+    assert_eq!(span_of(source, "T::run"), (5, 9));
 }
 
 #[test]

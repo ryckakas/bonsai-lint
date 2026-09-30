@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use bonsai_engine::Scanner;
 use bonsai_engine::config;
-use bonsai_engine::scan::{ScanOutcome, display_path};
+use bonsai_engine::scan::{ScanOutcome, display_path, resolve};
 
 const KNOWN: &[&str] = &["php", "typescript", "vue", "go", "java", "python"];
 const PHP_UNIT: &str = "<?php\nfunction f() { return 1; }\n";
@@ -122,6 +122,24 @@ fn unreadable_paths_are_errors_that_taint_the_scan() {
 
     assert_eq!(outcome.stats.errors, 1);
     assert_eq!(outcome.stats.files, 0);
+}
+
+/// A temporary directory is rarely canonical: `/var` is `/private/var` on macOS, and Windows
+/// hands out short names. A buffer in a directory that does not exist yet must still resolve to
+/// the form a domain root takes.
+#[test]
+fn an_unsaved_file_in_a_new_directory_resolves_through_the_nearest_existing_one() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let buffer = dir.path().join("new").join("deeper").join("a.php");
+
+    let expected = dir
+        .path()
+        .canonicalize()
+        .expect("temp dir exists")
+        .join("new")
+        .join("deeper")
+        .join("a.php");
+    assert_eq!(resolve(&buffer), expected);
 }
 
 #[test]

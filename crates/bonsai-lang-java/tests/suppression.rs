@@ -22,6 +22,14 @@ fn line_of(source: &str, qualified: &str) -> usize {
         .line
 }
 
+fn span_of(source: &str, qualified: &str) -> (usize, usize) {
+    let finding = findings(source)
+        .into_iter()
+        .find(|finding| finding.qualified_name() == qualified)
+        .unwrap_or_else(|| panic!("no finding keyed {qualified} in:\n{source}"));
+    (finding.line, finding.end_line)
+}
+
 fn reasoned(reason: &str) -> Suppression {
     Suppression::Reasoned(reason.to_string())
 }
@@ -127,6 +135,12 @@ fn a_trailing_marker_on_a_closing_brace_line_suppresses_nothing() {
 fn an_annotation_does_not_move_the_reported_line() {
     let source = "class C {\n  @Override\n  @Transactional(readOnly = true)\n  public void target() { if (a) { f(); } }\n}\n";
     assert_eq!(line_of(source, "C::target()"), 4);
+}
+
+#[test]
+fn a_unit_ends_on_its_closing_line() {
+    let source = "class C {\n  @Override\n  public void target() {\n    if (a) { f(); }\n  }\n}\n";
+    assert_eq!(span_of(source, "C::target()"), (3, 5));
 }
 
 /// File-level code is reported on line 1, so its marker sits in the comment block at the top of

@@ -140,6 +140,11 @@ pub struct Finding {
     /// [`TOPLEVEL_UNIT`] is reported where its parsed region starts, line 1 unless the file embeds
     /// its code in a host syntax.
     pub line: usize,
+    /// The 1-based line the unit ends on, never before [`line`](Self::line).
+    ///
+    /// [`TOPLEVEL_UNIT`] ends where its parsed region does: the file's last line, or the last line
+    /// of the host syntax's last code region.
+    pub end_line: usize,
     /// The unit's cognitive complexity, nested function-likes included.
     pub score: u32,
     /// Whether a [`SUPPRESSION_MARKER`] comment covers the unit, and with what reason.

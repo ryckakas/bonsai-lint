@@ -66,3 +66,18 @@ fn leading_blank_lines_do_not_move_the_toplevel_line() {
         .expect("top-level code scores");
     assert_eq!(toplevel.line, 1);
 }
+
+#[test]
+fn the_toplevel_ends_on_the_last_line_with_or_without_a_final_newline() {
+    for source in [
+        "if (a) { b(); }\n\nif (c) { d(); }\n",
+        "if (a) { b(); }\n\nif (c) { d(); }",
+    ] {
+        let findings = findings(source);
+        let toplevel = findings
+            .iter()
+            .find(|finding| finding.name == bonsai_core::TOPLEVEL_UNIT)
+            .expect("top-level code scores");
+        assert_eq!((toplevel.line, toplevel.end_line), (1, 3), "{source:?}");
+    }
+}

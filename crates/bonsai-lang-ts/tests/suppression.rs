@@ -22,6 +22,14 @@ fn line_of(source: &str, name: &str) -> usize {
         .line
 }
 
+fn span_of(source: &str, name: &str) -> (usize, usize) {
+    let finding = findings(source)
+        .into_iter()
+        .find(|finding| finding.name == name)
+        .unwrap_or_else(|| panic!("no finding named {name} in:\n{source}"));
+    (finding.line, finding.end_line)
+}
+
 #[test]
 fn a_reasoned_marker_above_the_declaration_is_honoured() {
     let source =
@@ -133,6 +141,20 @@ fn a_trailing_marker_on_a_closing_brace_line_suppresses_nothing() {
 fn a_decorator_does_not_move_the_reported_line() {
     let source = "class A {\n  @Get('/x')\n  @Auth()\n  handler() { if (a) { f(); } }\n}\n";
     assert_eq!(line_of(source, "handler"), 4);
+}
+
+#[test]
+fn a_unit_ends_on_its_closing_line() {
+    let source = "class A {\n  @Get('/x')\n  handler() {\n    if (a) { f(); }\n  }\n}\nconst run = () => {\n  if (a) { f(); }\n};\n";
+    assert_eq!(span_of(source, "handler"), (3, 5));
+    assert_eq!(span_of(source, "run"), (7, 9));
+}
+
+/// A file mid-edit still scores, and the `}` the parser invents is zero-width at the file's end.
+#[test]
+fn a_unit_missing_its_closing_brace_ends_on_the_last_line() {
+    let source = "function broken() {\n  if (a) { f(); }\n";
+    assert_eq!(span_of(source, "broken"), (1, 2));
 }
 
 /// File-level code is reported on line 1, so its marker sits in the comment block at the top of

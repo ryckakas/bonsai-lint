@@ -45,11 +45,14 @@ fn merge_toplevel(findings: &mut Vec<Finding>) {
     let Some(first) = findings.iter().position(is_toplevel) else {
         return;
     };
-    findings[first].score = findings
+    let (score, end_line) = findings
         .iter()
         .filter(|f| is_toplevel(f))
-        .map(|f| f.score)
-        .sum();
+        .fold((0, 0), |(score, end_line), f| {
+            (score + f.score, end_line.max(f.end_line))
+        });
+    findings[first].score = score;
+    findings[first].end_line = end_line;
     let mut kept = false;
     findings.retain(|finding| {
         if !is_toplevel(finding) {
