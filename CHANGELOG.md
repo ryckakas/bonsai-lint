@@ -46,6 +46,12 @@ what a user reads on the GitHub release page.
   - `Finding` and `ReportedFinding` gain `end_line`, and `Baseline::recorded` returns the score a
     baseline accepts for a unit.
 
+### Fixed
+
+- **An unsaved file in a directory that does not exist yet** now finds its domain like a saved
+  file would. `--stdin-path` used to be resolved through its parent directory alone, so a path
+  whose parent was new kept a symlink or a Windows short name, and missed the domain root.
+
 ## [0.4.3] - 2026-09-27
 
 ### Added

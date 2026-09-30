@@ -9,7 +9,7 @@ use std::process::{Output, Stdio};
 
 mod common;
 
-use common::{CALM_PHP, Project, code, nested_php, stderr, stdout};
+use common::{CALM_PHP, Project, code, nested_php, nested_ts, stderr, stdout};
 
 /// This repository's own CI defines `GITHUB_WORKSPACE`, so every run pins it one way or the other.
 fn run_in_actions(project: &Project, args: &[&str], workspace: Option<&Path>) -> Output {
@@ -472,4 +472,104 @@ fn an_empty_github_workspace_is_no_workspace() {
         "{}",
         stdout(&output)
     );
+}
+
+/// Two domains with their own thresholds and baselines, two languages, top-level code, a unit
+/// worse than its baseline and a baselined unit since deleted: every flag has something to change.
+fn flagged_project() -> Project {
+    let project = Project::new();
+    project
+        .file(
+            "bonsai-lint.toml",
+            "domains = [\"apps/*\"]\nthreshold = 15\n",
+        )
+        .file(
+            "apps/web/bonsai-lint.toml",
+            "name = \"web\"\nthreshold = 10\n",
+        )
+        .file("src/a.php", &nested_php("worse", 6))
+        .file("src/b.php", &nested_php("calm", 4))
+        .file("src/gone.php", &nested_php("gone", 6))
+        .file("apps/web/c.php", &nested_php("web", 5))
+        .file("apps/web/d.ts", &nested_ts("script", 6))
+        .file(
+            "src/boot.php",
+            "<?php\nif ($a) { if ($a) { if ($a) { if ($a) { if ($a) { if ($a) { f(); } } } } } }\n",
+        )
+        .file("docs/notes.txt", "nothing to score\n");
+    assert_eq!(code(&project.run(&["--write-baseline", "."])), 0);
+    project.file("src/a.php", &nested_php("worse", 7));
+    fs::remove_file(project.root.join("src/gone.php")).expect("remove");
+    project
+}
+
+/// `path:line` of each unit the text report prints.
+fn text_places(output: &Output) -> Vec<String> {
+    stdout(output)
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1).map(str::to_string))
+        .collect()
+}
+
+/// `path:line` of each breach annotation, leaving out loose entries filed on a baseline.
+fn annotated_places(output: &Output) -> Vec<String> {
+    stdout(output)
+        .lines()
+        .filter(|line| !line.contains("is baselined at"))
+        .filter_map(|line| {
+            let place = line.strip_prefix("::error file=")?;
+            let (file, rest) = place.split_once(",line=")?;
+            let (line, _) = rest.split_once(',')?;
+            Some(format!("{file}:{line}"))
+        })
+        .collect()
+}
+
+/// Switching a CI step to `github` must never change what passes, whatever else it is told.
+#[test]
+fn github_selects_and_exits_as_text_does_under_every_flag() {
+    let project = flagged_project();
+    let runs: [&[&str]; 11] = [
+        &["."],
+        &["--over", "5", "."],
+        &["--over", "php=5,typescript=30", "."],
+        &["--lang", "php", "."],
+        &["--domain", "web", "."],
+        &["--no-toplevel", "."],
+        &["--strict-baseline", "."],
+        &["--baseline", "shared.json", "."],
+        &["--config", "apps/web", "apps/web"],
+        &["--jobs", "1", "src"],
+        &["--allow-no-files", "docs"],
+    ];
+
+    let mut breaching = 0;
+    for args in runs {
+        let text = run_in_actions(&project, args, None);
+        let github = run_in_actions(&project, &[&["--format", "github"], args].concat(), None);
+
+        assert_eq!(code(&github), code(&text), "{args:?}: {}", stderr(&github));
+        assert_eq!(annotated_places(&github), text_places(&text), "{args:?}");
+        breaching += usize::from(code(&text) == 1);
+    }
+    assert!(breaching >= 8, "most runs must have something to report");
+}
+
+#[test]
+fn writing_a_baseline_prints_what_text_prints() {
+    let project = Project::new();
+    project.file("src/a.php", &nested_php("busy", 6));
+
+    let github = run_in_actions(
+        &project,
+        &["--format", "github", "--write-baseline", "."],
+        None,
+    );
+    let written = project.read(".bonsai-lint-baseline.json");
+    let text = run_in_actions(&project, &["--write-baseline", "."], None);
+
+    assert_eq!(stdout(&github), stdout(&text));
+    assert!(stdout(&github).starts_with("recorded 1 finding(s) in "));
+    assert_eq!(project.read(".bonsai-lint-baseline.json"), written);
+    assert_eq!(code(&github), 0);
 }

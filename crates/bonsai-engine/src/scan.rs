@@ -496,17 +496,20 @@ pub fn decode(bytes: Vec<u8>, path: &Path, warnings: &mut Vec<String>) -> String
 ///
 /// Every path that is compared against a domain root goes through here, so `/tmp` and
 /// `/private/tmp` cannot end up on opposite sides of a `starts_with`. A file that does not exist
-/// yet, an unsaved editor buffer, resolves through its directory.
+/// yet, an unsaved editor buffer perhaps in a new directory, resolves through the nearest
+/// directory above it that does.
 #[must_use]
 pub fn resolve(path: &Path) -> PathBuf {
     if let Ok(canonical) = path.canonicalize() {
         return canonical;
     }
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    match (absolute.parent(), absolute.file_name()) {
-        (Some(parent), Some(name)) => parent
+    let resolved = absolute.ancestors().skip(1).find_map(|existing| {
+        let rest = absolute.strip_prefix(existing).ok()?;
+        existing
             .canonicalize()
-            .map_or_else(|_| absolute.clone(), |parent| parent.join(name)),
-        _ => absolute,
-    }
+            .ok()
+            .map(|canonical| canonical.join(rest))
+    });
+    resolved.unwrap_or(absolute)
 }
