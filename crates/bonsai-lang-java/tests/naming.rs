@@ -109,7 +109,8 @@ fn same_signature_in_two_classes_is_not_suffixed() {
 #[test]
 fn a_bodyless_declaration_is_not_a_unit() {
     let source = "abstract class A {\n  abstract void m();\n  native void n();\n}\ninterface I { void m(); }\n";
-    assert!(names(source).is_empty());
+    let units = names(source);
+    assert!(units.is_empty(), "{units:?}");
 }
 
 #[test]
