@@ -27,7 +27,6 @@ updates:
   # comment; Dependabot moves both. The actions below are ignored because dist pins them too, in
   # the generated release.yml from dist-workspace.toml, and its `dist plan` check fails the moment
   # they differ. They move by hand when dist moves, in ci.yml and dist-workspace.toml together.
-  # dtolnay/rust-toolchain has no releases to move to, so its pin is by hand as well.
   - package-ecosystem: github-actions
     directory: /
     schedule:

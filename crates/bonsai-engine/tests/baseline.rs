@@ -184,8 +184,10 @@ fn an_improved_unit_still_over_is_loose() {
 fn an_unchanged_or_worse_unit_is_not_loose() {
     let baseline = Baseline::from_findings(&[located("src/a.php", "busy", 20)]);
 
-    assert!(loose(&baseline, &[located("src/a.php", "busy", 20)]).is_empty());
-    assert!(loose(&baseline, &[located("src/a.php", "busy", 25)]).is_empty());
+    let unchanged = loose(&baseline, &[located("src/a.php", "busy", 20)]);
+    let worse = loose(&baseline, &[located("src/a.php", "busy", 25)]);
+    assert!(unchanged.is_empty(), "{unchanged:?}");
+    assert!(worse.is_empty(), "{worse:?}");
 }
 
 /// A reasoned marker keeps the unit out of any baseline written from now on, so its entry is dead
@@ -211,7 +213,8 @@ fn a_marker_without_a_reason_does_not() {
     let baseline = Baseline::from_findings(&[located("src/a.php", "busy", 20)]);
     let unreasoned = marked("src/a.php", "busy", 20, Suppression::MissingReason);
 
-    assert!(loose(&baseline, &[unreasoned]).is_empty());
+    let found = loose(&baseline, &[unreasoned]);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 /// Two accessors the namer cannot tell apart share one entry holding the higher score, so the
@@ -315,7 +318,8 @@ fn a_freshly_written_baseline_is_never_loose() {
     let baseline = Baseline::from_findings(&recorded);
 
     assert_eq!(baseline.len(), 3);
-    assert!(loose(&baseline, &scanned).is_empty());
+    let found = loose(&baseline, &scanned);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]

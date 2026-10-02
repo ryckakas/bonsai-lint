@@ -48,7 +48,8 @@ fn a_file_without_module_level_logic_reports_nothing() {
 fn a_package_init_of_imports_reports_nothing() {
     let source =
         "\"\"\"Package.\"\"\"\nfrom .a import b\nfrom .c import d\n\n__all__ = [\"b\", \"d\"]\n";
-    assert!(findings(source).is_empty());
+    let found = findings(source);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
