@@ -93,7 +93,7 @@
     "test": "npm run compile && node --test \"out/*.test.js\""
   },
   "devDependencies": {
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.2",
     "@types/vscode": "^1.90.0",
     "typescript": "^7.0.2"
   },
