@@ -26,7 +26,8 @@ fn stdin_respects_the_workspace_excludes() {
     );
 
     assert_eq!(code(&output), 0, "{}", stderr(&output));
-    assert!(scores(&output).is_empty());
+    let scored = scores(&output);
+    assert!(scored.is_empty(), "{scored:?}");
 }
 
 #[test]

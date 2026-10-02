@@ -39,7 +39,8 @@ fn a_file_without_class_level_logic_reports_nothing() {
 #[test]
 fn a_package_info_file_reports_nothing() {
     let source = "/** Docs. */\n@NonNullApi\npackage com.example;\n";
-    assert!(findings(source).is_empty());
+    let found = findings(source);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]

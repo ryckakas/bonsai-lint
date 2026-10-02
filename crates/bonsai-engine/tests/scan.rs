@@ -410,7 +410,7 @@ fn a_vue_component_without_a_script_block_is_read_without_error() {
     let outcome = scan(&root, &["."], None);
 
     assert_eq!(outcome.stats.errors, 0);
-    assert!(outcome.warnings.is_empty());
+    assert!(outcome.warnings.is_empty(), "{:?}", outcome.warnings);
     assert!(outcome.located.is_empty());
 }
 
