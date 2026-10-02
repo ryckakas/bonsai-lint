@@ -68,14 +68,14 @@ fn attribute_order_and_quoting_do_not_matter() {
 #[test]
 fn a_block_with_src_has_no_inline_body_and_is_not_a_failure() {
     let extraction = extract("<script src=\"./x.ts\"></script>\n<template><p/></template>\n");
-    assert!(extraction.ranges.is_empty());
+    assert!(extraction.ranges.is_empty(), "{:?}", extraction.ranges);
     assert!(extraction.warning.is_none());
 }
 
 #[test]
 fn a_template_only_component_scores_nothing_quietly() {
     let extraction = extract("<template><div>only</div></template>\n");
-    assert!(extraction.ranges.is_empty());
+    assert!(extraction.ranges.is_empty(), "{:?}", extraction.ranges);
     assert!(extraction.warning.is_none());
 }
 
@@ -109,7 +109,7 @@ fn a_nested_slot_template_does_not_hide_the_real_block() {
 #[test]
 fn text_that_looks_like_a_script_but_yields_no_block_warns() {
     let extraction = extract("<template><p/></template>\n<!-- <script setup> was here -->\n");
-    assert!(extraction.ranges.is_empty());
+    assert!(extraction.ranges.is_empty(), "{:?}", extraction.ranges);
     assert!(extraction.warning.is_some());
 }
 
@@ -132,7 +132,7 @@ fn an_unclosed_template_does_not_hide_the_script_block() {
 fn an_unreadable_component_warns_rather_than_scoring_zero() {
     let extraction =
         extract("<template><p class=\"x></p></template>\n<script setup>\nconst a = 1\n</script>\n");
-    assert!(extraction.ranges.is_empty());
+    assert!(extraction.ranges.is_empty(), "{:?}", extraction.ranges);
     assert!(extraction.warning.is_some());
 }
 

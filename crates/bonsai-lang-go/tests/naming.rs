@@ -126,7 +126,8 @@ fn a_blank_binding_falls_through_to_a_positional_key() {
 #[test]
 fn a_bodyless_declaration_is_not_a_unit() {
     let source = "package p\nfunc assembly(x int) int\n";
-    assert!(names(source).is_empty());
+    let units = names(source);
+    assert!(units.is_empty(), "{units:?}");
 }
 
 #[test]
