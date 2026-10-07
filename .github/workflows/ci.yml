@@ -50,12 +50,34 @@ jobs:
       - name: Spelling
         uses: crate-ci/typos@00f422f3b19c57bc6338715ebfe3316d38768461 # v1.50.3
 
+      # shellcheck is an exact release, like typos, not the image's older one, which an image update
+      # could move. actionlint finds it on the PATH and runs it over every `run:` block.
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
-          tool: taplo
+          tool: taplo,shellcheck@0.11.0
 
       - name: TOML formatting
         run: taplo fmt --check
+
+      - name: Shell scripts
+        run: git ls-files -z '*.sh' | xargs -0 shellcheck
+
+      # install-action has no actionlint, so the release archive is pinned by its hash, the way the
+      # actions are pinned by commit.
+      - name: Install actionlint
+        working-directory: ${{ runner.temp }}
+        run: |
+          archive=actionlint_1.7.12_linux_amd64.tar.gz
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v1.7.12/$archive"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" \
+            | sha256sum --check
+          mkdir bin
+          tar -xzf "$archive" -C bin actionlint
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      # .github/actionlint.yml lists what dist decides.
+      - name: Workflows
+        run: actionlint
 
   dependencies:
     # deny.toml holds the policy: advisories, licenses, duplicate crates and allowed sources.

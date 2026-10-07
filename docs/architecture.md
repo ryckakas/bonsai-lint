@@ -225,6 +225,8 @@ cargo shear
 typos
 taplo fmt --check
 zizmor .github
+git ls-files -z '*.sh' | xargs -0 shellcheck
+actionlint
 ```
 
 CI runs exactly these on every pull request, plus the feature subsets below, a build on the
@@ -237,8 +239,13 @@ checks spelling, with the deliberate misspellings the tests feed in listed in `_
 the publishing tokens: every action pinned to a commit, least-privilege tokens, no template
 injection. `.github/zizmor.yml` lists the findings that only dist can change in the `release.yml`
 it generates, each pinned to its line and column, so a regenerated `release.yml` fails the job
-until each finding in it is reviewed again. They, and `cargo hack` below, are separate tools:
-`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor`.
+until each finding in it is reviewed again. `shellcheck` checks the shell scripts, and
+`actionlint` checks the workflows for mistakes GitHub would only report when a run fails,
+running shellcheck over every `run:` block. `.github/actionlint.yml` ignores shellcheck's style
+findings in `release.yml` by code, so a new kind of finding there still fails the job. They, and
+`cargo hack` below, are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor` and
+`brew install shellcheck actionlint`.
 
 Every language is behind a cargo feature, and the registry has to keep compiling with any
 subset — including none. CI builds every combination with `cargo-hack`, which reads the features
