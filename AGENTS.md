@@ -25,12 +25,15 @@ cargo hack build -p bonsai-lint --feature-powerset    # every language subset, i
 typos                                                 # spelling; deliberate misspellings: _typos.toml
 taplo fmt --check                                     # TOML formatting: .taplo.toml
 zizmor .github                                        # workflow security: .github/zizmor.yml
+git ls-files -z '*.sh' | xargs -0 shellcheck          # shell scripts
+actionlint                                            # workflows, shellcheck on run: blocks too
 cargo llvm-cov --workspace --all-features --summary-only   # test coverage, per file
 ```
 
-The last seven are separate tools:
-`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor cargo-llvm-cov`,
-and coverage also needs `rustup component add llvm-tools-preview`.
+The last nine are separate tools:
+`cargo install --locked cargo-deny cargo-shear cargo-hack typos-cli taplo-cli zizmor cargo-llvm-cov`
+and `brew install shellcheck actionlint`, and coverage also needs
+`rustup component add llvm-tools-preview`.
 
 Every action in the workflows is pinned to a commit, with its version in a comment, and every
 workflow but `release.yml` defaults to a read-only token. A new `uses:` line follows the same
@@ -316,12 +319,14 @@ Composer package and PyPI wheels.
 extension version is independent of the CLI's and is published manually via `vsce` (needs an
 Azure DevOps PAT).
 
-Upgrading dist takes two more steps:
+Upgrading dist takes three more steps:
 - **Re-pin its actions.** They are pinned in `[dist.github-action-commits]`, so point them at the
   commits behind the tags the new version uses.
 - **Review `.github/zizmor.yml` again.** Its exceptions name `release.yml`'s findings by line and
   column, so the Workflow security job fails until they match the regenerated file.
   `zizmor --no-config .github/workflows/release.yml` lists the findings with their new positions.
+- **Run `actionlint`.** `.github/actionlint.yml` ignores shellcheck's findings in `release.yml` by
+  code, so a kind the regenerated file adds fails the Format and lint job until it is reviewed.
 
 `CHANGELOG.md` is not decoration: `dist` reads the section whose heading matches the tag and
 publishes it as that release's notes, so a missing or misnamed section ships an empty release

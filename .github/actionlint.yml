@@ -1,0 +1,13 @@
+# actionlint, run by CI's "Format and lint" job, which also has it run shellcheck over every `run:`
+# block. release.yml is written by `dist generate`, so shellcheck's style findings in it are dist's
+# template and cannot be fixed by hand. They are ignored by code rather than wholesale, so a
+# regenerated release.yml that brings a new kind of finding fails the job until it is looked at.
+paths:
+  .github/workflows/release.yml:
+    ignore:
+      # Unquoted `$GITHUB_PATH`, `$RUNNER_TEMP` and `$PRERELEASE_FLAG`, the last on purpose.
+      - 'shellcheck reported issue in this script: SC2086:'
+      # Consecutive `>> "$GITHUB_OUTPUT"` lines rather than one grouped redirect.
+      - 'shellcheck reported issue in this script: SC2129:'
+      # `sed` where a parameter expansion would do.
+      - 'shellcheck reported issue in this script: SC2001:'
