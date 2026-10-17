@@ -316,8 +316,13 @@ builds every target and publishes a GitHub Release, npm package, Homebrew formul
 Composer package and PyPI wheels.
 `.github/workflows/release.yml` is generated from `dist-workspace.toml` — edit the latter and run
 `dist generate`, don't hand-edit the workflow. `dist plan` previews a release. The VS Code
-extension version is independent of the CLI's and is published manually via `vsce` (needs an
-Azure DevOps PAT).
+extension version is independent of the CLI's. It is published to the VS Code Marketplace by hand
+via `vsce` (needs an Azure DevOps PAT), and to Open VSX by dispatching
+`.github/workflows/publish-openvsx.yml` from `main`, which publishes the version in its
+`package.json`. That workflow needs no secret: Open VSX's trusted publisher for
+`RicardasKauneckas.bonsai-lint` names owner `ryckakas`, repository `bonsai-lint`, workflow
+`publish-openvsx.yml` and environment `openvsx`. The registration holds at any ref, so the
+environment's deployment-branch rule (`main` only) is what keeps a branch from publishing.
 
 Upgrading dist takes three more steps:
 - **Re-pin its actions.** They are pinned in `[dist.github-action-commits]`, so point them at the
