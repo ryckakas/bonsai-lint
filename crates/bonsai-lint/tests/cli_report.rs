@@ -1,8 +1,10 @@
 //! Exit codes, output shapes and the flags that change what a scan means.
 
+#[cfg(unix)]
 use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
+#[cfg(unix)]
 use std::process::Stdio;
 
 mod common;
