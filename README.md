@@ -23,7 +23,7 @@ guides, and a [playground](https://bonsai.kauneckas.dev/play/) that scores code 
 [![dependencies](https://deps.rs/repo/github/ryckakas/bonsai-lint/status.svg)](https://deps.rs/repo/github/ryckakas/bonsai-lint)
 ![Rust 1.90+](https://img.shields.io/badge/rust-1.90%2B-CE422B)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
-[![YouTube](https://img.shields.io/badge/YouTube-Prune%20It%20Back-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=st8fDgFV964)
+[![YouTube](https://img.shields.io/badge/YouTube-Prune%20It%20Back-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=sfbWmRKeFCs)
 
 ## Why this one
 
