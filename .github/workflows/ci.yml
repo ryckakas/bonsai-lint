@@ -32,7 +32,7 @@ jobs:
             --component rustfmt,clippy
           rustup default stable
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -209,7 +209,7 @@ jobs:
           rustup toolchain install stable --profile minimal --no-self-update
           rustup default stable
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Test
         run: cargo test --all-features
@@ -230,7 +230,7 @@ jobs:
             --target x86_64-unknown-linux-musl
           rustup default stable
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Install musl-tools
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -254,7 +254,7 @@ jobs:
           rustup toolchain install stable --profile minimal --no-self-update
           rustup default stable
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
         with:
@@ -281,7 +281,7 @@ jobs:
             --target wasm32-unknown-unknown --component llvm-tools
           rustup default stable
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       # vendor-grammars.py patches the grammars from the local registry rather than the network.
       - name: Fetch dependencies
@@ -316,7 +316,7 @@ jobs:
           rustup toolchain install "$msrv" --profile minimal --no-self-update
           rustup default "$msrv"
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       # Build only: the lint config targets current stable, so clippy on an old toolchain would
       # fail on lints that did not exist yet.
@@ -353,7 +353,7 @@ jobs:
           rustup toolchain install stable --profile minimal --no-self-update
           rustup default stable
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
