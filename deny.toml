@@ -8,7 +8,7 @@ yanked = "deny"
 
 [licenses]
 # What the dependency tree uses today. A dependency under anything else fails until it is added.
-allow = ["Apache-2.0", "MIT", "Unicode-3.0"]
+allow = ["Apache-2.0", "MIT", "Unicode-3.0", "Zlib"]
 
 [bans]
 # None today. A second copy of a crate costs compile time and binary size, so it has to be chosen.
