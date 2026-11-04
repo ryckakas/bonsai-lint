@@ -19,11 +19,13 @@ from __future__ import annotations
 import glob
 import os
 import pathlib
+import re
 import shutil
 import sys
 
 HERE = pathlib.Path(__file__).parent
 VENDOR = HERE / "vendor"
+LOCKFILE = HERE.parent.parent / "Cargo.lock"
 
 # The wasm32 branch, written to match each crate's own local variable name for the cc::Build.
 PATCH = """
@@ -45,42 +47,36 @@ PATCH = """
 GRAMMARS = [
     {
         "crate": "tree-sitter-go",
-        "version": "0.25",
         "build": "bindings/rust/build.rs",
         "anchor": '    c_config.std("c11").include(src_dir);\n',
         "config": "c_config",
     },
     {
         "crate": "tree-sitter-java",
-        "version": "0.23",
         "build": "bindings/rust/build.rs",
         "anchor": '    c_config.std("c11").include(src_dir);\n',
         "config": "c_config",
     },
     {
         "crate": "tree-sitter-typescript",
-        "version": "0.23",
         "build": "bindings/rust/build.rs",
         "anchor": '        .flag_if_supported("-Wno-unused-parameter");\n',
         "config": "config",
     },
     {
         "crate": "tree-sitter-html",
-        "version": "0.23",
         "build": "bindings/rust/build.rs",
         "anchor": '        .flag_if_supported("-Wno-implicit-fallthrough");\n',
         "config": "c_config",
     },
     {
         "crate": "tree-sitter-php",
-        "version": "0.24",
         "build": "bindings/rust/build.rs",
         "anchor": '    c_config.std("c11").include(&php_dir);\n',
         "config": "c_config",
     },
     {
         "crate": "tree-sitter-python",
-        "version": "0.25",
         "build": "bindings/rust/build.rs",
         "anchor": '        .flag_if_supported("-Wno-unused-value");\n',
         "config": "c_config",
@@ -88,22 +84,36 @@ GRAMMARS = [
 ]
 
 
-def registry_source(crate: str, version: str) -> pathlib.Path:
-    pattern = os.path.expanduser(
-        f"~/.cargo/registry/src/*/{crate}-{version}.*"
+def locked_version(crate: str) -> str:
+    # A regex rather than tomllib, which needs Python 3.11 and macOS's python3 is older.
+    versions = re.findall(
+        rf'^name = "{re.escape(crate)}"\nversion = "([^"]+)"$',
+        LOCKFILE.read_text(),
+        re.MULTILINE,
     )
+    if len(versions) != 1:
+        sys.exit(
+            f"{crate}: expected one version in {LOCKFILE.name}, found {versions or 'none'}.\n"
+            f"vendor/ holds one copy per grammar, so the workspace must lock exactly one."
+        )
+    return versions[0]
+
+
+def registry_source(crate: str, version: str) -> pathlib.Path:
+    pattern = os.path.expanduser(f"~/.cargo/registry/src/*/{crate}-{version}")
     matches = sorted(p for p in glob.glob(pattern) if pathlib.Path(p).is_dir())
     if not matches:
         sys.exit(
-            f"{crate} {version}.* is not in the cargo registry.\n"
+            f"{crate} {version} is not in the cargo registry.\n"
             f"Run `cargo fetch` from the repository root first."
         )
     return pathlib.Path(matches[-1])
 
 
 def vendor(grammar: dict) -> None:
-    source = registry_source(grammar["crate"], grammar["version"])
-    target = VENDOR / grammar["crate"]
+    crate = grammar["crate"]
+    source = registry_source(crate, locked_version(crate))
+    target = VENDOR / crate
 
     if target.exists():
         shutil.rmtree(target)
