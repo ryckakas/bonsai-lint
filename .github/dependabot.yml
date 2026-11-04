@@ -16,12 +16,16 @@ updates:
       default-days: 7
 
   # The extension's devDependencies only — the CLI it drives is the Rust binary above.
+  # @types/vscode is the API surface of the oldest editor in engines.vscode, so it moves only
+  # with engines, by hand: newer types compile calls that older editors lack at runtime.
   - package-ecosystem: npm
     directory: /editors/vscode
     schedule:
       interval: monthly
     cooldown:
       default-days: 7
+    ignore:
+      - dependency-name: "@types/vscode"
 
   # Covers the hand-written workflows, whose actions are pinned to a commit with the version in a
   # comment; Dependabot moves both. The actions below are ignored because dist pins them too, in
