@@ -13,14 +13,14 @@ dependencies = [
 
 [[package]]
 name = "bonsai-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "tree-sitter",
 ]
 
 [[package]]
 name = "bonsai-lang-go"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bonsai-core",
  "tree-sitter",
@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-java"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bonsai-core",
  "tree-sitter",
@@ -38,7 +38,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-php"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bonsai-core",
  "tree-sitter",
@@ -47,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-python"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bonsai-core",
  "tree-sitter",
@@ -56,7 +56,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-ts"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bonsai-core",
  "tree-sitter",
@@ -65,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "bonsai-lang-vue"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bonsai-core",
  "bonsai-lang-ts",
@@ -296,7 +296,7 @@ checksum = "ca0d1bf6fdd806e43ae5198f82f527056d359def39e54e67a0f478ac09dac081"
 
 [[package]]
 name = "tree-sitter-php"
-version = "0.24.2"
+version = "0.25.1"
 dependencies = [
  "cc",
  "tree-sitter-language",

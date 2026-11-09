@@ -12,6 +12,13 @@ what a user reads on the GitHub release page.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-09
+
+### Changed
+
+- **Updated dependencies.** PHP is now parsed with tree-sitter-php 0.25, and tree-sitter, `ignore`,
+  `globset`, `serde_json` and `toml` are updated. Nothing else in the tool changed.
+
 ## [0.5.0] - 2026-09-30
 
 ### Added
@@ -344,7 +351,8 @@ Initial release.
 - Published as a GitHub release, an npm package, and a Homebrew formula, alongside a VS Code
   extension versioned independently.
 
-[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/ryckakas/bonsai-lint/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/ryckakas/bonsai-lint/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/ryckakas/bonsai-lint/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/ryckakas/bonsai-lint/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/ryckakas/bonsai-lint/compare/v0.4.1...v0.4.2
